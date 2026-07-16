@@ -61,6 +61,15 @@ const readQueue = async (s, showroomId) => {
 const writeQueue = async (s, showroomId, list) =>
   s.setJSON(queueKey(showroomId), { list, updatedAt: Date.now() });
 
+/**
+ * Read one showroom's queue from another server module.
+ *
+ * The seed uses this to avoid enqueueing a quote it has already enqueued: it can
+ * re-run (it replaces legacy order blobs), and a duplicate row for one quote is
+ * something the account manager would see and have to reason about.
+ */
+export const readQueueFor = async (showroomId) => readQueue(queueStore(), showroomId);
+
 /** Newest first. An item with no timestamp sorts last rather than disappearing. */
 const byNewest = (a, b) => (b.submittedAt || 0) - (a.submittedAt || 0);
 

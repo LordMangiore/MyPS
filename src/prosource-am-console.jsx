@@ -385,6 +385,13 @@ const styles = {
     borderRadius: 8,
     color: colors.gray500,
     fontSize: 14,
+    // textAlign centres the text but cannot centre the icon: Tailwind's preflight
+    // sets svg{display:block}, so it is a block element and sits hard against the
+    // left edge. Flex-centre the column so the icon lines up with its own text.
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   stateTitle: {
     fontSize: 16,

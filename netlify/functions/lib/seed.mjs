@@ -581,6 +581,132 @@ const buildDoc = (soldTo, showroom) => ({
   };
 };
 
+/**
+ * A quote the member has sent in that nobody has priced yet.
+ *
+ * Deliberately NOT built with `buildDoc`: that derives every money field from
+ * the lines, and the defining property of a requested quote is that it has no
+ * money on it at all. null means "not priced yet" (0 would mean "free"), which
+ * is precisely the state the account manager's work queue exists to resolve.
+ * The lines are still here, because that is what the member asked for and what
+ * the account manager needs to see in order to price it.
+ *
+ * Seeding one of these is what gives the AM console something to do on a fresh
+ * demo. Without it the queue opens empty, which is a truthful but useless
+ * first impression of a screen whose whole point is pricing work.
+ */
+const buildRequestedQuote = (now, displayName, showroom) => ({
+  id: 'Q10024417',
+  docType: 'estimate',
+  projectId: null,
+  jobName: 'Cart quote, 3 items',
+  client: '',
+  orderDate: usDate(now - days(1)),
+  orderDateTs: now - days(1),
+  submittedAt: now - days(1),
+  expectedDelivery: null,
+  status: 'requested',
+  statusText: 'Quote Requested',
+  soldTo: (displayName || 'You').toUpperCase(),
+  showroom,
+  material: null,
+  salesTax: null,
+  service: null,
+  invoiceTotal: null,
+  totalPaid: null,
+  balanceDue: null,
+  referralBonus: null,
+  notes: 'Client wants to see pricing before we commit to the hardwood.',
+  lineItems: [
+    orderLine({
+      category: 'HARDWOOD', product: 'Factory Direct Pier Engineered Oak',
+      color: 'Strawthorne Oak', brand: 'Factory Direct',
+      qty: 320, unit: 'sq ft', unitPrice: 7.6, status: 'pending',
+    }),
+    orderLine({
+      category: 'COUNTERTOPS', product: 'Silestone Calacatta Gold Quartz',
+      color: 'Calacatta Gold', brand: 'Silestone',
+      qty: 48, unit: 'sq ft', unitPrice: 72.0, status: 'pending',
+    }),
+    orderLine({
+      category: 'CABINET HARDWARE', product: 'Top Knobs Garrison Knob',
+      color: 'Polished Nickel', brand: 'Top Knobs',
+      qty: 24, unit: 'ea', unitPrice: 11.25, status: 'pending',
+    }),
+  ],
+});
+
+/**
+ * Put any seeded unpriced quote on the showroom's work queue.
+ *
+ * The queue lives in its own store (`ps-am-queue`, one blob per showroom),
+ * separate from per-user data, because an account manager works across members.
+ * So seeding a member's quote is only half the job: without a queue item the
+ * document exists but no account manager can find it, and the console opens
+ * empty on a fresh demo.
+ *
+ * Idempotent by `docId`: seedNewUser can re-run (it replaces legacy order blobs),
+ * and a duplicate row for the same quote would be a bug the AM would see.
+ * Best-effort: a queue failure must never take seeding down, because the member's
+ * own data is the more important half.
+ */
+const enqueueSeededQuotes = async (userId, orders, now, memberName) => {
+  try {
+    const { enqueueItem, readQueueFor } = await import("../am-queue.mjs");
+    const pending = (orders?.list || []).filter((d) => d?.status === "requested");
+    if (!pending.length) return;
+
+    const showroomId = "st-louis";
+    const existing = await readQueueFor(showroomId).catch(() => []);
+    const already = new Set(existing.map((i) => i?.docId).filter(Boolean));
+
+    for (const doc of pending) {
+      if (already.has(doc.id)) continue;
+      await enqueueItem({
+        type: "quote",
+        showroomId,
+        memberUserId: userId,
+        // The account manager needs a person's name here. The document's own
+        // `soldTo` is written from the member's point of view ("YOU"), which is
+        // right on their own orders page and useless on somebody else's queue.
+        memberName: memberName || "Member",
+        memberEmail: "",
+        docId: doc.id,
+        projectId: doc.projectId || null,
+        summary: doc.jobName || "Cart quote",
+        itemCount: (doc.lineItems || []).length || null,
+        submittedAt: doc.submittedAt || doc.orderDateTs || now,
+      });
+    }
+  } catch (err) {
+    console.warn("enqueueSeededQuotes failed:", err.message);
+  }
+};
+
+/**
+ * Make sure an already-seeded account has the demo's unpriced quote.
+ *
+ * The orders blob is only written when it is absent or pre-v2, and once a v2
+ * blob exists it is never touched again, because the member's own approvals and
+ * payments live in it. That is the right rule, but it means an account seeded
+ * before this quote existed would never get it, and the account manager's queue
+ * would open empty on every demo that has been clicked even once. Resetting
+ * would fix it and throw away whatever scenario the account has been set up
+ * with, which is the opposite of the persistence the demo accounts promise.
+ *
+ * So: insert, never replace. Idempotent on the document id rather than its
+ * status, so a quote that has since been priced or approved is not resurrected
+ * as a fresh request every time somebody signs in.
+ */
+const ensureRequestedQuote = async (store, ordersKey, blob, now, displayName) => {
+  if (!blob || !Array.isArray(blob.list)) return blob;
+  const quote = buildRequestedQuote(now, displayName, 'ProSource of St. Louis');
+  if (blob.list.some((d) => d?.id === quote.id)) return blob;
+  const next = { ...blob, list: [quote, ...blob.list] };
+  await store.setJSON(ordersKey, { value: next, updatedAt: now });
+  return next;
+};
+
 const buildSeedOrders = (now, projectIds, displayName) => {
   const soldTo = (displayName || 'You').toUpperCase();
   const doc = buildDoc(soldTo, 'ProSource of St. Louis');
@@ -588,6 +714,9 @@ const buildSeedOrders = (now, projectIds, displayName) => {
   return {
     schemaVersion: ORDERS_SCHEMA_VERSION,
     list: [
+      // One quote waiting on the showroom, so the account manager's queue has
+      // real work in it the first time anyone opens it.
+      buildRequestedQuote(now, displayName, 'ProSource of St. Louis'),
       // --- Estimates: quotes awaiting a decision ---
       doc({
         id: 'ES-2041',
@@ -1577,6 +1706,13 @@ const buildAmAppointments = (now) => {
  */
 const WORLD_BY_PERSONA = {
   tradepro: {
+    // `displayName` is who this account is to OTHER people. Orders are written
+    // from the member's own point of view ("SOLD TO: YOU"), which is right on
+    // their page and meaningless on an account manager's queue.
+    displayName: 'Justin Reyes',
+    // Carries an unpriced quote, so the account manager's queue has real work
+    // in it on a fresh demo. See ensureRequestedQuote.
+    requestedQuote: true,
     projects: buildSeedProjects,
     messages: buildSeedMessages,
     carts: buildSeedCarts,
@@ -1585,6 +1721,8 @@ const WORLD_BY_PERSONA = {
     connections: buildSeedConnections,
   },
   homeowner: {
+    displayName: 'Alicia Navarro',
+    requestedQuote: false,
     projects: buildHomeownerProjects,
     messages: buildHomeownerMessages,
     carts: buildHomeownerCarts,
@@ -1593,6 +1731,10 @@ const WORLD_BY_PERSONA = {
     connections: buildHomeownerConnections,
   },
   am: {
+    // Showroom staff, so no projects, carts or orders of her own: those belong
+    // to her members.
+    displayName: 'Tessa Brandt',
+    requestedQuote: false,
     projects: null,
     messages: buildAmMessages,
     carts: null,
@@ -1702,9 +1844,24 @@ export async function seedNewUser(userId, persona = DEFAULT_PERSONA) {
     // the user's approvals and payments live in it and we never touch it again.
     const ordersAreLegacy =
       existingOrders && existingOrders?.value?.schemaVersion !== ORDERS_SCHEMA_VERSION;
-    if ((!existingOrders || ordersAreLegacy) && world.orders) {
-      const orders = world.orders(now, projectIds, "You");
-      await store.setJSON(ordersKey, { value: orders, updatedAt: now });
+    if (world.orders) {
+      let orders;
+      if (!existingOrders || ordersAreLegacy) {
+        orders = world.orders(now, projectIds, "You");
+        await store.setJSON(ordersKey, { value: orders, updatedAt: now });
+      } else if (world.requestedQuote) {
+        // Already seeded and current: leave it alone apart from making sure the
+        // demo's unpriced quote is present. See ensureRequestedQuote.
+        orders = await ensureRequestedQuote(
+          store, ordersKey, existingOrders.value, now, world.displayName
+        );
+      } else {
+        orders = existingOrders.value;
+      }
+      // Outside the seeding branch on purpose: the queue lives in its own store,
+      // so an account seeded before the queue existed still needs its pending
+      // work put in front of an account manager. Idempotent by document id.
+      await enqueueSeededQuotes(userId, orders, now, world.displayName);
     }
 
     if (!existingConns && world.connections) {
