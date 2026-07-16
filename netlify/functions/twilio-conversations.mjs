@@ -20,6 +20,13 @@ import {
  *
  *   body: { action: "post", conversationSid, identity, body }
  *     → post a message into a conversation (used to seed demo history)
+ *
+ * Demo-contact auto-replies: the seeded demo identities have no client behind
+ * them, so they never answer on their own. src/twilio-client.js watches for a
+ * user send into a `demo-*` conversation, asks /api/ai-reply for an in-character
+ * line, then posts it back through the `post` action above authored as that demo
+ * identity — so it fans out over the same websocket as any other message and the
+ * sender sees it arrive live.
  */
 
 // Demo participants we seed conversations with. In production these would be
@@ -171,6 +178,9 @@ export default async function handler(req) {
           counterpartyInitials: details.initials,
           counterpartyRole: details.role,
           counterpartyType: details.type,
+          // The client reads this to decide whether the other side is a
+          // scripted demo contact or a real signed-in user.
+          counterpartyIdentity: identity,
           projectId: projectIds[projectKey] || null,
         };
         const convo = await ensureConversation({
@@ -222,7 +232,9 @@ export default async function handler(req) {
       const convo = await ensureConversation({
         uniqueName: uniqueNameFor(userId, otherIdentity),
         friendlyName: friendlyName || otherIdentity,
-        attributes: attributes || {},
+        // Always stamp the counterparty identity so the client can tell a
+        // scripted demo contact from a real user without parsing uniqueName.
+        attributes: { ...(attributes || {}), counterpartyIdentity: otherIdentity },
         participants: [userId, otherIdentity],
       });
       return Response.json({ enabled: true, sid: convo.sid });

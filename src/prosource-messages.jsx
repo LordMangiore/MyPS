@@ -1,24 +1,40 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Link } from 'react-router-dom';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import {
   ArrowLeft,
-  Search,
   MessageCircle,
   Send,
-  Paperclip,
+  Loader2,
+  AlertCircle,
+  X,
 } from 'lucide-react';
 import { useAuth } from './auth-context';
-import { initTwilioClient } from './twilio-client';
+import {
+  initTwilioClient,
+  identityForConnection,
+  demoContactForSlug,
+  fmtDate,
+  fmtPreviewTimestamp,
+} from './twilio-client';
 
 const ProSourceMessages = () => {
   const { loadUserData, saveUserData, userId } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [selectedThread, setSelectedThread] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [messageInput, setMessageInput] = useState('');
   // 'twilio' once Twilio Conversations is up; 'blob' is the fallback that
   // persists threads to ps-user-data. Probed on mount.
   const [transport, setTransport] = useState('blob');
+  // 'loading' until we know which transport we're on and have real threads —
+  // otherwise mock threads flash and then hard-swap under the user.
+  const [status, setStatus] = useState('loading');
+  const [sendError, setSendError] = useState('');
+  const [notice, setNotice] = useState('');
+  // Thread sid -> true while a demo contact is composing a reply.
+  const [typingSid, setTypingSid] = useState(null);
   const twilioRef = useRef(null);
+  const messagesEndRef = useRef(null);
 
   const colors = {
     red: '#BA0C2F',
@@ -239,14 +255,27 @@ const ProSourceMessages = () => {
       fontSize: 14,
       outline: 'none',
     },
-    attachBtn: {
-      background: 'none',
-      border: 'none',
-      color: colors.gray400,
-      cursor: 'pointer',
-      padding: 4,
+    banner: (kind) => ({
       display: 'flex',
       alignItems: 'center',
+      gap: 8,
+      padding: '10px 14px',
+      marginBottom: kind === 'notice' ? 16 : 0,
+      borderTop: kind === 'error' ? `1px solid ${colors.gray200}` : 'none',
+      border: kind === 'notice' ? `1px solid ${kind === 'error' ? '#fecaca' : '#fed7aa'}` : 'none',
+      borderRadius: kind === 'notice' ? 8 : 0,
+      background: kind === 'error' ? '#fef2f2' : '#fff7ed',
+      color: kind === 'error' ? '#991b1b' : '#9a3412',
+      fontSize: 13,
+    }),
+    bannerClose: {
+      background: 'none',
+      border: 'none',
+      cursor: 'pointer',
+      color: 'inherit',
+      display: 'flex',
+      alignItems: 'center',
+      padding: 2,
     },
     sendBtn: {
       padding: '10px 16px',
@@ -272,89 +301,20 @@ const ProSourceMessages = () => {
     },
   };
 
-  const DEFAULT_THREADS = [
-    {
-      id: 1,
-      name: 'Kim Marks',
-      initials: 'KM',
-      type: 'prosource',
-      role: 'Account Manager',
-      lastMessage: 'Hi Suzie! The tile samples for the Wilson project are ready for pickup at the showroom.',
-      timestamp: '10:32 AM',
-      unread: true,
-      messages: [
-        { id: 1, sender: 'Kim Marks', isMe: false, text: 'Hi Suzie! Just wanted to let you know the Shaw LVP samples came in.', time: '9:15 AM', date: 'Today' },
-        { id: 2, sender: 'Me', isMe: true, text: 'Great! Can you hold a few for the Beans kitchen project?', time: '9:45 AM', date: 'Today' },
-        { id: 3, sender: 'Kim Marks', isMe: false, text: 'Absolutely! I also have the tile samples for the Wilson project ready for pickup at the showroom.', time: '10:32 AM', date: 'Today' },
-      ],
-    },
-    {
-      id: 2,
-      name: 'Bubba Beans',
-      initials: 'BB',
-      type: 'client',
-      role: 'Homeowner',
-      lastMessage: 'Sounds good, I will be at the showroom Saturday morning.',
-      timestamp: 'Yesterday',
-      unread: false,
-      messages: [
-        { id: 1, sender: 'Me', isMe: true, text: 'Hi Bubba, wanted to share some flooring options for your kitchen remodel.', time: '2:00 PM', date: 'Jan 28' },
-        { id: 2, sender: 'Bubba Beans', isMe: false, text: 'Thanks Suzie! Those look great. When can I see them in person?', time: '3:15 PM', date: 'Jan 28' },
-        { id: 3, sender: 'Me', isMe: true, text: 'The samples are at the ProSource showroom now. Want to stop by this weekend?', time: '3:30 PM', date: 'Jan 28' },
-        { id: 4, sender: 'Bubba Beans', isMe: false, text: 'Sounds good, I will be at the showroom Saturday morning.', time: '4:00 PM', date: 'Jan 28' },
-      ],
-    },
-    {
-      id: 3,
-      name: "Ryan O'Toole",
-      initials: 'RO',
-      type: 'tradepro',
-      role: 'Flooring Installer',
-      lastMessage: 'I can start the install on the 15th. Does that work for the client?',
-      timestamp: 'Jan 27',
-      unread: true,
-      messages: [
-        { id: 1, sender: 'Me', isMe: true, text: 'Hey Ryan, got a new flooring install for the Beans kitchen. Are you available mid-February?', time: '11:00 AM', date: 'Jan 27' },
-        { id: 2, sender: "Ryan O'Toole", isMe: false, text: 'I can start the install on the 15th. Does that work for the client?', time: '1:30 PM', date: 'Jan 27' },
-      ],
-    },
-    {
-      id: 4,
-      name: 'Sarah Chen',
-      initials: 'SC',
-      type: 'client',
-      role: 'Homeowner',
-      lastMessage: 'Thank you for the estimate! We will review and get back to you.',
-      timestamp: 'Jan 25',
-      unread: false,
-      messages: [
-        { id: 1, sender: 'Me', isMe: true, text: 'Hi Sarah, I put together the estimate for your master bathroom. Take a look when you get a chance.', time: '10:00 AM', date: 'Jan 25' },
-        { id: 2, sender: 'Sarah Chen', isMe: false, text: 'Thank you for the estimate! We will review and get back to you.', time: '11:45 AM', date: 'Jan 25' },
-      ],
-    },
-    {
-      id: 5,
-      name: 'Heather Yager',
-      initials: 'HY',
-      type: 'prosource',
-      role: 'Designer',
-      lastMessage: 'I uploaded the room visualization for the Chen bathroom. Let me know what you think!',
-      timestamp: 'Jan 22',
-      unread: false,
-      messages: [
-        { id: 1, sender: 'Heather Yager', isMe: false, text: 'I uploaded the room visualization for the Chen bathroom. Let me know what you think!', time: '3:00 PM', date: 'Jan 22' },
-      ],
-    },
-  ];
-
-  const [threads, setThreads] = useState(DEFAULT_THREADS);
+  // No mock threads: an account with no conversations shows a real empty
+  // state. Blob mode gets its seeded threads from the server (seed.mjs).
+  const [threads, setThreads] = useState([]);
 
   // Try Twilio Conversations first. If the backend reports `enabled: false`
   // (no API key, test creds, etc.) silently fall back to the blob-backed
   // messaging we already had working.
   useEffect(() => {
-    if (!userId) return;
+    if (!userId) {
+      setStatus('ready');
+      return;
+    }
     let cancelled = false;
+    setStatus('loading');
 
     (async () => {
       // Look up the user's project IDs so seeded conversations can reference
@@ -374,6 +334,10 @@ const ProSourceMessages = () => {
           if (cancelled) return;
           setThreads(next);
         },
+        onDemoTyping: (sid, isTyping) => {
+          if (cancelled) return;
+          setTypingSid(isTyping ? sid : null);
+        },
       }).catch((err) => ({ enabled: false, reason: err.message }));
 
       if (cancelled) return;
@@ -382,6 +346,7 @@ const ProSourceMessages = () => {
         twilioRef.current = result;
         setTransport('twilio');
         setThreads(result.threads);
+        setStatus('ready');
         return;
       }
 
@@ -389,7 +354,8 @@ const ProSourceMessages = () => {
       setTransport('blob');
       const stored = await loadUserData('messages', null);
       if (cancelled) return;
-      if (stored?.threads) setThreads(stored.threads);
+      if (Array.isArray(stored?.threads)) setThreads(stored.threads);
+      setStatus('ready');
     })();
 
     return () => { cancelled = true; };
@@ -401,6 +367,54 @@ const ProSourceMessages = () => {
     saveUserData('messages', { threads: next })
       .catch((err) => console.warn('Messages save failed:', err.message));
   };
+
+  /**
+   * Mirror Twilio threads into the `messages` blob.
+   *
+   * Twilio stays the source of truth for the chat UI, but the Notifications
+   * page and the dashboard activity feed read ONLY this blob — so with Twilio
+   * on they'd otherwise show stale seed data or nothing at all. Write a
+   * blob-shaped copy (exactly the shape seed.mjs writes) so those surfaces keep
+   * working, without either of them needing to know Twilio exists.
+   */
+  const lastMirrorRef = useRef('');
+  useEffect(() => {
+    if (transport !== 'twilio' || !userId || status !== 'ready') return;
+    if (!threads.length) return;
+
+    // Strip `_conv` — it's a live SDK object and would blow up JSON.stringify.
+    const mirror = threads.map((t) => ({
+      id: t.id,
+      sid: t.sid,
+      connectionId: t.connectionId ?? null,
+      projectId: t.projectId ?? null,
+      name: t.name,
+      initials: t.initials,
+      type: t.type,
+      role: t.role,
+      lastMessage: t.lastMessage,
+      timestamp: t.timestamp,
+      unread: t.unread,
+      updatedAt: t.updatedAt,
+      messages: (t.messages || []).map((m) => ({
+        id: m.id,
+        sender: m.sender,
+        isMe: m.isMe,
+        text: m.text,
+        time: m.time,
+        date: m.date,
+        timestamp: m.timestamp,
+      })),
+    }));
+
+    const serialized = JSON.stringify({ threads: mirror });
+    if (serialized === lastMirrorRef.current) return; // nothing changed
+    lastMirrorRef.current = serialized;
+
+    saveUserData('messages', { threads: mirror })
+      .catch((err) => console.warn('Messages mirror failed:', err.message));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [threads, transport, userId, status]);
 
   // Mark the active thread as read once it's open.
   useEffect(() => {
@@ -420,31 +434,46 @@ const ProSourceMessages = () => {
   const sendMessage = async () => {
     const text = messageInput.trim();
     if (!text || !selectedThread) return;
+    setSendError('');
 
     if (transport === 'twilio') {
+      const pending = messageInput;
+      setMessageInput('');
       try {
         await twilioRef.current.sendMessage(selectedThread, text);
-        setMessageInput('');
       } catch (err) {
-        console.error('Twilio send failed:', err);
+        // Put the text back so the user doesn't lose what they typed, and
+        // actually tell them — this used to be console.error only.
+        setMessageInput(pending);
+        setSendError(`Message not sent: ${err.message}. Check your connection and try again.`);
       }
       return;
     }
 
-    const now = new Date();
-    const time = now.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-    const date = 'Today';
+    // Blob mode. Store a real numeric timestamp: the literal 'Today' string
+    // never ages, and notifications/activity sort it to epoch 0.
+    const ts = Date.now();
+    const time = new Date(ts).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
     const next = threads.map((t) => {
       if (t.id !== selectedThread) return t;
-      const lastId = t.messages.reduce((m, x) => Math.max(m, x.id || 0), 0);
+      const lastId = (t.messages || []).reduce((m, x) => Math.max(m, x.id || 0), 0);
       return {
         ...t,
         lastMessage: text,
-        timestamp: time,
+        timestamp: fmtPreviewTimestamp(ts),
         unread: false,
+        updatedAt: ts,
         messages: [
-          ...t.messages,
-          { id: lastId + 1, sender: 'Me', isMe: true, text, time, date },
+          ...(t.messages || []),
+          {
+            id: lastId + 1,
+            sender: 'Me',
+            isMe: true,
+            text,
+            time,
+            date: fmtDate(ts),
+            timestamp: ts,
+          },
         ],
       };
     });
@@ -470,20 +499,26 @@ const ProSourceMessages = () => {
 
   const startConversationWith = async (connection) => {
     setNewConvoOpen(false);
+    setNotice('');
 
     if (transport === 'twilio' && twilioRef.current?.startConversation) {
       try {
         const sid = await twilioRef.current.startConversation(connection);
         setSelectedThread(sid);
       } catch (err) {
-        alert(`Could not start conversation: ${err.message}`);
+        // Was a raw alert(). Inline notice instead.
+        setNotice(err.message);
       }
       return;
     }
 
     // Blob fallback: append a new local thread if one doesn't already exist
-    // for this connection.
-    const existing = threads.find((t) => t.connectionId === connection.id);
+    // for this connection. Match on name too — the seeded blob threads predate
+    // connectionId, and without this the demo contacts get a second, empty
+    // thread the first time you message them from the connections page.
+    const existing = threads.find(
+      (t) => t.connectionId === connection.id || t.name === connection.name
+    );
     if (existing) {
       setSelectedThread(existing.id);
       return;
@@ -507,14 +542,106 @@ const ProSourceMessages = () => {
     setSelectedThread(nextId);
   };
 
-  const filteredThreads = threads.filter(t =>
-    t.name.toLowerCase().includes(searchQuery.toLowerCase())
+  /**
+   * Deep links. Two shapes, both land on the right conversation:
+   *
+   *   ?connection=<id>  — from the connections page. Resolved through the
+   *                       identity contract, creating the thread if needed.
+   *   ?thread=<slug>    — legacy dashboard chat bubbles ("kim"/"heather"/...).
+   *                       Ids are sids/numbers so the slug could never match a
+   *                       thread id; map the slug to the demo contact instead.
+   *
+   * Runs once per param value, and only after threads have actually loaded —
+   * otherwise we'd resolve against an empty list and create a duplicate.
+   */
+  const deepLinkRef = useRef('');
+  useEffect(() => {
+    if (status !== 'ready') return;
+
+    const connectionParam = searchParams.get('connection');
+    const threadParam = searchParams.get('thread');
+    if (!connectionParam && !threadParam) return;
+
+    const key = `${connectionParam || ''}|${threadParam || ''}`;
+    if (deepLinkRef.current === key) return;
+
+    // ?connection= needs the connections list to resolve an identity; wait for
+    // it rather than giving up (it loads in a parallel effect).
+    if (connectionParam && connections.length === 0) return;
+    deepLinkRef.current = key;
+
+    const clearParam = () => {
+      const next = new URLSearchParams(searchParams);
+      next.delete('connection');
+      next.delete('thread');
+      setSearchParams(next, { replace: true });
+    };
+
+    (async () => {
+      if (connectionParam) {
+        const connection = connections.find(
+          (c) => String(c.id) === String(connectionParam)
+        );
+        if (!connection) {
+          setNotice("That connection isn't in your list.");
+          clearParam();
+          return;
+        }
+        // startConversationWith already handles both transports, the identity
+        // contract, and the "invitation pending" case.
+        await startConversationWith(connection);
+        clearParam();
+        return;
+      }
+
+      // Legacy ?thread=<slug>.
+      const contact = demoContactForSlug(threadParam);
+      if (!contact) {
+        // 'john'/'jane' on the dashboard are placeholder people who exist in no
+        // dataset. Say so rather than silently dead-ending on a blank panel.
+        setNotice(
+          "That contact isn't set up for messaging yet. Pick a conversation below."
+        );
+        clearParam();
+        return;
+      }
+
+      const match = threads.find(
+        (t) =>
+          t.counterpartyIdentity === contact.identity ||
+          t.name === contact.name // blob mode threads carry no identity
+      );
+      if (match) {
+        setSelectedThread(match.id);
+      } else {
+        const connection = connections.find((c) => c.name === contact.name);
+        if (connection) await startConversationWith(connection);
+        else setNotice(`No conversation with ${contact.name} yet.`);
+      }
+      clearParam();
+    })();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status, searchParams, threads, connections]);
+
+  const filteredThreads = useMemo(
+    () =>
+      threads.filter((t) =>
+        (t.name || '').toLowerCase().includes(searchQuery.toLowerCase())
+      ),
+    [threads, searchQuery]
   );
 
   const activeThread = threads.find(t => t.id === selectedThread);
 
+  // Keep the newest message (and the typing bubble) in view.
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+  }, [activeThread?.messages?.length, typingSid]);
+
   return (
     <div style={styles.wrapper}>
+    {/* Keyframes for the init spinner — inline styles can't express these. */}
+    <style>{'@keyframes ps-spin { to { transform: rotate(360deg); } }'}</style>
     <div style={styles.container}>
       <Link to="/settings" style={styles.backLink}>
         <ArrowLeft size={18} /> Back to Dashboard
@@ -540,6 +667,45 @@ const ProSourceMessages = () => {
         >+ New Message</button>
       </div>
 
+      {notice && (
+        <div style={styles.banner('notice')}>
+          <AlertCircle size={16} style={{ flexShrink: 0 }} />
+          <span style={{ flex: 1 }}>{notice}</span>
+          <button onClick={() => setNotice('')} style={styles.bannerClose} aria-label="Dismiss">
+            <X size={14} />
+          </button>
+        </div>
+      )}
+
+      {/* Loading: transport is still being probed. Showing mock threads here is
+          what used to make them flash and then hard-swap. */}
+      {status === 'loading' ? (
+        <div style={{ ...styles.chatContainer, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, color: colors.gray500 }}>
+            <Loader2 size={28} style={{ animation: 'ps-spin 1s linear infinite' }} />
+            <div style={{ fontSize: 14 }}>Loading your conversations…</div>
+          </div>
+        </div>
+      ) : threads.length === 0 ? (
+        /* True empty state — this account genuinely has no conversations. */
+        <div style={{ ...styles.chatContainer, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, color: colors.gray500, textAlign: 'center', padding: 24 }}>
+            <MessageCircle size={48} style={{ color: colors.gray300 }} />
+            <div style={{ fontSize: 16, fontWeight: 600, color: colors.gray900 }}>No conversations yet</div>
+            <div style={{ fontSize: 14, maxWidth: 340, lineHeight: 1.6 }}>
+              Start a conversation with your account manager, a client, or a trade pro to see it here.
+            </div>
+            <button
+              onClick={() => setNewConvoOpen(true)}
+              style={{
+                marginTop: 4, padding: '10px 16px', background: colors.darkBlue,
+                color: '#fff', border: 'none', borderRadius: 6, fontSize: 14,
+                fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
+              }}
+            >+ New Message</button>
+          </div>
+        </div>
+      ) : (
       <div style={styles.chatContainer} className="grid grid-cols-1 md:grid-cols-[360px_1fr]">
         {/* Thread List */}
         <div style={styles.threadList} className={`${selectedThread ? 'hidden md:flex' : 'flex'}`}>
@@ -553,6 +719,11 @@ const ProSourceMessages = () => {
             />
           </div>
           <div style={styles.threadScroll}>
+            {filteredThreads.length === 0 && (
+              <div style={{ padding: 24, textAlign: 'center', color: colors.gray500, fontSize: 13 }}>
+                No conversations match “{searchQuery}”.
+              </div>
+            )}
             {filteredThreads.map(thread => (
               <div
                 key={thread.id}
@@ -596,7 +767,12 @@ const ProSourceMessages = () => {
               </div>
 
               <div style={styles.messagesArea}>
-                {activeThread.messages.map((msg, i) => {
+                {(activeThread.messages || []).length === 0 && (
+                  <div style={{ margin: 'auto', textAlign: 'center', color: colors.gray400, fontSize: 13 }}>
+                    No messages yet — say hello.
+                  </div>
+                )}
+                {(activeThread.messages || []).map((msg, i) => {
                   const showDate = i === 0 || activeThread.messages[i - 1].date !== msg.date;
                   return (
                     <React.Fragment key={msg.id}>
@@ -608,12 +784,29 @@ const ProSourceMessages = () => {
                     </React.Fragment>
                   );
                 })}
+                {/* The demo contact is composing. The reply itself arrives over
+                    the websocket like any other message. */}
+                {typingSid === activeThread.sid && (
+                  <div style={styles.messageRow(false)}>
+                    <div style={{ ...styles.messageBubble(false), color: colors.gray500, fontStyle: 'italic' }}>
+                      {activeThread.name.split(' ')[0]} is typing…
+                    </div>
+                  </div>
+                )}
+                <div ref={messagesEndRef} />
               </div>
 
+              {sendError && (
+                <div style={styles.banner('error')}>
+                  <AlertCircle size={16} style={{ flexShrink: 0 }} />
+                  <span style={{ flex: 1 }}>{sendError}</span>
+                  <button onClick={() => setSendError('')} style={styles.bannerClose} aria-label="Dismiss">
+                    <X size={14} />
+                  </button>
+                </div>
+              )}
+
               <div style={styles.inputBar} className="min-w-0">
-                <button style={styles.attachBtn}>
-                  <Paperclip size={18} />
-                </button>
                 <input
                   type="text"
                   placeholder="Type a message..."
@@ -642,6 +835,7 @@ const ProSourceMessages = () => {
           )}
         </div>
       </div>
+      )}
     </div>
 
     {/* New Conversation picker */}
@@ -677,26 +871,41 @@ const ProSourceMessages = () => {
               </div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                {connections.map((c) => (
-                  <button
-                    key={c.id}
-                    onClick={() => startConversationWith(c)}
-                    style={{
-                      display: 'flex', alignItems: 'center', gap: 12,
-                      padding: 10, border: `1px solid ${colors.gray200}`,
-                      borderRadius: 8, background: '#fff', cursor: 'pointer',
-                      textAlign: 'left', fontFamily: 'inherit',
-                    }}
-                    onMouseEnter={(e) => { e.currentTarget.style.background = '#f8faff'; e.currentTarget.style.borderColor = colors.darkBlue; }}
-                    onMouseLeave={(e) => { e.currentTarget.style.background = '#fff'; e.currentTarget.style.borderColor = colors.gray200; }}
-                  >
-                    <div style={styles.avatar(c.type)}>{c.initials}</div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontWeight: 600, color: colors.gray900, fontSize: 14, marginBottom: 2 }}>{c.name}</div>
-                      <div style={{ fontSize: 12, color: colors.gray500 }}>{c.role}</div>
-                    </div>
-                  </button>
-                ))}
+                {connections.map((c) => {
+                  // Identity contract: no demoIdentity and no userId means this
+                  // person was invited but never joined — there is nobody to
+                  // deliver to, so don't offer a thread that can't exist.
+                  const messageable = !!identityForConnection(c);
+                  return (
+                    <button
+                      key={c.id}
+                      onClick={() => messageable && startConversationWith(c)}
+                      disabled={!messageable}
+                      title={messageable ? undefined : `${c.name} hasn't accepted their invitation yet`}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: 12,
+                        padding: 10, border: `1px solid ${colors.gray200}`,
+                        borderRadius: 8, background: '#fff',
+                        cursor: messageable ? 'pointer' : 'not-allowed',
+                        opacity: messageable ? 1 : 0.55,
+                        textAlign: 'left', fontFamily: 'inherit',
+                      }}
+                      onMouseEnter={(e) => { if (!messageable) return; e.currentTarget.style.background = '#f8faff'; e.currentTarget.style.borderColor = colors.darkBlue; }}
+                      onMouseLeave={(e) => { if (!messageable) return; e.currentTarget.style.background = '#fff'; e.currentTarget.style.borderColor = colors.gray200; }}
+                    >
+                      <div style={styles.avatar(c.type)}>{c.initials}</div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontWeight: 600, color: colors.gray900, fontSize: 14, marginBottom: 2 }}>{c.name}</div>
+                        <div style={{ fontSize: 12, color: colors.gray500 }}>{c.role}</div>
+                      </div>
+                      {!messageable && (
+                        <span style={{ fontSize: 11, color: colors.gray500, background: colors.gray100, padding: '3px 8px', borderRadius: 999, flexShrink: 0 }}>
+                          Invitation pending
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
               </div>
             )}
           </div>
