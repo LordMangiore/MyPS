@@ -1,0 +1,74 @@
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+[functions]
+  directory = "netlify/functions"
+  node_bundler = "esbuild"
+
+# SPA routing: send every unmatched path to index.html so react-router can handle it.
+# Function routes are matched before this catch-all.
+[[redirects]]
+  from = "/api/otp-send"
+  to = "/.netlify/functions/otp-send"
+  status = 200
+
+[[redirects]]
+  from = "/api/otp-verify"
+  to = "/.netlify/functions/otp-verify"
+  status = 200
+
+[[redirects]]
+  from = "/api/lookup-showroom"
+  to = "/.netlify/functions/lookup-showroom"
+  status = 200
+
+[[redirects]]
+  from = "/api/save-profile"
+  to = "/.netlify/functions/save-profile"
+  status = 200
+
+[[redirects]]
+  from = "/api/get-profile"
+  to = "/.netlify/functions/get-profile"
+  status = 200
+
+[[redirects]]
+  from = "/api/user-data"
+  to = "/.netlify/functions/user-data"
+  status = 200
+
+[[redirects]]
+  from = "/api/twilio-token"
+  to = "/.netlify/functions/twilio-token"
+  status = 200
+
+[[redirects]]
+  from = "/api/twilio-conversations"
+  to = "/.netlify/functions/twilio-conversations"
+  status = 200
+
+[[redirects]]
+  from = "/api/lookup-user"
+  to = "/.netlify/functions/lookup-user"
+  status = 200
+
+[[redirects]]
+  from = "/api/send-invite"
+  to = "/.netlify/functions/send-invite"
+  status = 200
+
+[[redirects]]
+  from = "/api/consultation-request"
+  to = "/.netlify/functions/consultation-request"
+  status = 200
+
+[[redirects]]
+  from = "/api/submit-quote"
+  to = "/.netlify/functions/submit-quote"
+  status = 200
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200

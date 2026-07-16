@@ -1,0 +1,16 @@
+# Local Netlify folder
+.netlify
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# Dependencies
+node_modules
+
+# Build output
+dist
+
+# OS / editor
+.DS_Store

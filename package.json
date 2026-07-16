@@ -1,0 +1,34 @@
+{
+  "name": "pswork",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "@netlify/blobs": "^10.7.5",
+    "@twilio/conversations": "^3.0.0",
+    "@vitejs/plugin-react": "^5.1.2",
+    "lucide-react": "^0.562.0",
+    "react": "^19.2.3",
+    "react-dom": "^19.2.3",
+    "react-router-dom": "^7.12.0",
+    "resend": "^6.12.3",
+    "twilio": "^6.0.2",
+    "vite": "^7.3.1"
+  },
+  "devDependencies": {
+    "autoprefixer": "^10.5.0",
+    "netlify-cli": "^26.0.1",
+    "postcss": "^8.5.14",
+    "tailwindcss": "^3.4.19"
+  }
+}
