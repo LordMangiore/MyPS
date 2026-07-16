@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react'
 import { Link, Outlet, useLocation } from 'react-router-dom'
 import { Bell, MessageCircle, Menu, X, ShoppingCart } from 'lucide-react'
 import { useAuth } from './auth-context'
-import { guestCartCount, subscribeGuestCart } from './guest-cart'
+import { guestCartCount, subscribeGuestCart, syncActiveCartToAccount } from './guest-cart'
 
 const categories = [
   { label: 'Flooring', dept: 'Flooring' },
@@ -67,16 +67,30 @@ const Layout = () => {
     threads.filter((t) => t.unread).length,
   [threads])
 
+  // One active cart, one badge. The local store is the guest's cart before
+  // sign-in and the account's cart after (finalizeSession merges the two and
+  // mirrors the result to the carts blob), so reading it is correct either way.
   const [cartItemCount, setCartItemCount] = useState(0)
   useEffect(() => {
-    // For logged-out visitors the count comes from localStorage. For signed-in
-    // users we surface the number of items in their most recent saved cart
-    // so the icon stays meaningful even after migration.
-    const updateGuest = () => setCartItemCount(guestCartCount())
-    updateGuest()
-    const unsub = subscribeGuestCart(updateGuest)
-    return () => unsub()
+    const update = () => setCartItemCount(guestCartCount())
+    update()
+    return subscribeGuestCart(update)
   }, [])
+
+  // Mirror every change to the account so the cart survives to the next
+  // device. Debounced: qty steppers fire a burst of writes, and this blob is
+  // replaced wholesale on each one. Best-effort: syncActiveCartToAccount
+  // swallows failures and no-ops until sign-in adoption has run.
+  useEffect(() => {
+    if (!userId) return
+    let timer = null
+    const schedule = () => {
+      clearTimeout(timer)
+      timer = setTimeout(() => syncActiveCartToAccount(userId), 800)
+    }
+    const unsub = subscribeGuestCart(schedule)
+    return () => { clearTimeout(timer); unsub() }
+  }, [userId])
 
   const isMessagesActive = location.pathname === '/messages'
   const isNotificationsActive = location.pathname === '/notifications'

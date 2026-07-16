@@ -60,15 +60,18 @@ const AppRouter = () => {
           category nav + cart icon are always present. The login form only
           appears on /sign-in and /create-account (or when a logged-out user
           hits a protected route). Logged-out / lands on the marketing page so
-          visitors can immediately start browsing — the Thumbtack-style funnel. */}
+          visitors can immediately start browsing, the Thumbtack-style funnel. */}
       <Route element={<Layout />}>
-        {/* Public routes — guests can browse, view pros, and manage a cart. */}
+        {/* Public routes: guests can browse, view pros, and manage a cart. */}
         <Route path="/shop" element={<ProSourceShop />} />
+        {/* Canonical, shareable product page. `/shop?product=<id>` still works;
+            the shop resolves the legacy id and redirects here. */}
+        <Route path="/shop/:sku" element={<ProSourceShop />} />
         <Route path="/cart" element={<ProSourceShop />} />
         <Route path="/profile" element={<ProSourcePublicProfile />} />
         <Route path="/carts" element={<ProSourceCarts />} />
 
-        {/* Protected routes — only mounted when logged in */}
+        {/* Protected routes: only mounted when logged in */}
         {isLoggedIn && (
           <>
             <Route path="/" element={<ProSourceSettings />} />
@@ -87,13 +90,13 @@ const AppRouter = () => {
         )}
       </Route>
 
-      {/* Logged-out / shows the marketing landing page — value pitch +
+      {/* Logged-out / shows the marketing landing page: value pitch plus
           sign-up form. ProSourceLogin renders its own header so it doesn't
           inherit Layout. */}
       {!isLoggedIn && <Route path="/" element={<ProSourceLogin key="landing" />} />}
 
       {/* Both auth entry points mount the same component straight onto the
-          email/OTP form — one flow, two intents. The `key` matters: without it
+          email/OTP form: one flow, two intents. The `key` matters: without it
           React reconciles /sign-in ↔ /create-account as a prop update and the
           initialMode useState never re-runs, stranding the wrong copy. */}
       <Route

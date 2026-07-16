@@ -1,18 +1,23 @@
 import React, { useState, useEffect } from 'react';
-import { Link, useSearchParams, useNavigate, useLocation } from 'react-router-dom';
+import { Link, useSearchParams, useNavigate, useLocation, useParams } from 'react-router-dom';
 import {
   Search, Filter, ChevronRight, ChevronDown, ChevronLeft,
   Heart, ShoppingCart, Star, Info, X, Check, Minus, Plus,
   Grid, List, SlidersHorizontal, Home, Send, MessageCircle,
-  Trash2, Truck, MapPin, Package,
+  Trash2, Truck, MapPin, Package, AlertTriangle, Save,
 } from 'lucide-react';
 import {
   getGuestCart, addToGuestCart, removeFromGuestCart, updateGuestCartQty,
-  clearGuestCart, subscribeGuestCart,
+  clearGuestCart, subscribeGuestCart, migrateActiveCartKeys, saveActiveAsNewCart,
 } from './guest-cart';
 import { useAuth } from './auth-context';
 import QuoteWizard from './prosource-quote-wizard';
+import Select from './components/Select';
 import { normalizeStored, mergeCartItemsIntoProducts } from './project-model';
+import {
+  fetchCatalog, CATEGORIES, DEPARTMENTS, resolveProduct, migrateItemKeys,
+  colorVariants,
+} from './shop-catalog';
 
 const colors = {
   red: '#BA0C2F',
@@ -30,186 +35,76 @@ const colors = {
   gray900: '#171717',
 };
 
-// Demo product catalog
-const allProducts = [
-  {
-    id: 'prod-001',
-    name: 'Factory Direct Pier Engineered 6-3/8" Oak Hardwood Flooring',
-    brand: 'Factory Direct',
-    colorName: 'Strawthorne Oak',
-    colorsAvailable: 6,
-    category: 'Hardwood',
-    subcategory: 'Engineered Hardwood',
-    listPrice: 7.60,
-    unit: 'SF',
-    sfPerBox: 32.81,
-    image: 'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=500&h=500&fit=crop',
-    colorSwatches: ['#8B7355', '#6B4226', '#A0855B', '#D2B48C', '#C4A882', '#5C4033'],
-    specs: {
-      'Application': 'Commercial, Residential',
-      'Length': 'Random',
-      'Width': '6.384 Inches',
-      'Construction': 'Engineered',
-      'Country Of Origin': 'US',
-      'Finish': 'UV-Cured Aluminum Oxide',
-      'Grade Level': 'On,Above,Below Grade',
-      'Installation': 'Floating, Glue, Nail, Staple',
-      'Is ADA Compliant': 'No',
-      'Is Recommended Outdoors': 'No',
-      'Shade Variation': 'V3 - High Variation',
-      'Appearance': 'Wire Brushed',
-      'Edge Profile': 'Micro Bevel',
-      'End Profile': 'Micro Bevel',
-      'Gloss Level': 'Low',
-      'Style': 'Plank',
-      'Type': 'Pre-Finished',
-      'Wood Type': 'Oak',
-      'Thickness': '0.375 Inches',
-      'Size': '6-3/8"',
-    },
-    badge: 'ProSource Price Protection',
-  },
-  {
-    id: 'prod-002',
-    name: 'COREtec Pro Plus Enhanced Luxury Vinyl Plank',
-    brand: 'COREtec',
-    colorName: 'Pembroke Pine',
-    colorsAvailable: 8,
-    category: 'LVP / LVT',
-    subcategory: 'Luxury Vinyl Plank',
-    listPrice: 4.99,
-    unit: 'SF',
-    sfPerBox: 36.64,
-    image: 'https://images.unsplash.com/photo-1581858726788-75bc0f6a952d?w=500&h=500&fit=crop',
-    colorSwatches: ['#C4A882', '#8B7355', '#A0855B', '#D2C4B0', '#6B4226', '#B8A590', '#7A6652', '#E8DDD0'],
-    specs: {
-      'Application': 'Commercial, Residential',
-      'Width': '7 Inches',
-      'Length': '48 Inches',
-      'Thickness': '6.5mm',
-      'Wear Layer': '20mil',
-      'Construction': 'Rigid Core',
-      'Installation': 'Floating',
-      'Attached Pad': 'Yes - Cork',
-      'Waterproof': 'Yes',
-    },
-    badge: 'Best Seller',
-  },
-  {
-    id: 'prod-003',
-    name: 'Daltile Perpetuo Porcelain Floor Tile 12x24',
-    brand: 'Daltile',
-    colorName: 'Brilliant White',
-    colorsAvailable: 4,
-    category: 'Tile & Stone',
-    subcategory: 'Porcelain Tile',
-    listPrice: 6.49,
-    unit: 'SF',
-    sfPerBox: 15.6,
-    image: 'https://images.unsplash.com/photo-1600566753190-17f0baa2a6c3?w=500&h=500&fit=crop',
-    colorSwatches: ['#F5F5F5', '#E0D5C7', '#C4B8A8', '#8A8279'],
-    specs: {
-      'Application': 'Commercial, Residential',
-      'Size': '12x24',
-      'Thickness': '3/8 Inches',
-      'Finish': 'Polished',
-      'PEI Rating': '4',
-      'Water Absorption': '<0.5%',
-    },
-    badge: null,
-  },
-  {
-    id: 'prod-004',
-    name: 'Shaw Floorigami Carpet Tile - Peel & Stick',
-    brand: 'Shaw',
-    colorName: 'Cozy Taupe',
-    colorsAvailable: 12,
-    category: 'Carpet',
-    subcategory: 'Carpet Tile',
-    listPrice: 3.29,
-    unit: 'SF',
-    sfPerBox: 36.0,
-    image: 'https://images.unsplash.com/photo-1615529182904-14819c35db37?w=500&h=500&fit=crop',
-    colorSwatches: ['#C4B8A8', '#8B7355', '#A0855B', '#6B6B6B', '#3D3D3D', '#D2C4B0'],
-    specs: {
-      'Application': 'Residential',
-      'Size': '18x18',
-      'Fiber': 'PET Polyester',
-      'Weight': '24 oz',
-      'Installation': 'Peel & Stick',
-      'Backing': 'Pressure Sensitive Adhesive',
-    },
-    badge: null,
-  },
-  {
-    id: 'prod-005',
-    name: 'Silestone Calacatta Gold Quartz Countertop',
-    brand: 'Silestone',
-    colorName: 'Calacatta Gold',
-    colorsAvailable: 1,
-    category: 'Countertops',
-    subcategory: 'Quartz',
-    listPrice: 72.00,
-    unit: 'SF',
-    sfPerBox: null,
-    image: 'https://images.unsplash.com/photo-1600585152220-90363fe7e115?w=500&h=500&fit=crop',
-    colorSwatches: ['#F5F0E8'],
-    specs: {
-      'Application': 'Residential, Commercial',
-      'Thickness': '2cm / 3cm',
-      'Finish': 'Polished',
-      'Stain Resistant': 'Yes',
-      'Heat Resistant': 'Yes',
-    },
-    badge: 'New',
-  },
-  {
-    id: 'prod-006',
-    name: 'KraftMaid Durham Maple Shaker Cabinet',
-    brand: 'KraftMaid',
-    colorName: 'Dove White',
-    colorsAvailable: 6,
-    category: 'Cabinets',
-    subcategory: 'Base Cabinet',
-    listPrice: 485.00,
-    unit: 'EA',
-    sfPerBox: null,
-    image: 'https://images.unsplash.com/photo-1600489000022-c2086d79f9d4?w=500&h=500&fit=crop',
-    colorSwatches: ['#F5F0E8', '#D2C4B0', '#8B7355', '#3D3D3D', '#A0855B', '#C4A882'],
-    specs: {
-      'Style': 'Shaker',
-      'Material': 'Maple',
-      'Construction': 'All Plywood',
-      'Door Type': 'Full Overlay',
-      'Soft Close': 'Yes',
-      'Width Options': '12" - 36"',
-    },
-    badge: null,
-  },
+// The catalog is served by /api/products and bundled as FALLBACK_PRODUCTS in
+// shop-catalog.js, which also owns SKU resolution for legacy stored cart keys.
+const categories = CATEGORIES;
+const departments = DEPARTMENTS;
+
+const SORT_OPTIONS = [
+  { value: 'featured', label: 'Featured' },
+  { value: 'price-asc', label: 'Price: Low to High' },
+  { value: 'price-desc', label: 'Price: High to Low' },
+  { value: 'name', label: 'Name: A-Z' },
 ];
 
-const categories = ['All', 'Hardwood', 'LVP / LVT', 'Tile & Stone', 'Carpet', 'Cabinets', 'Countertops'];
-
-const departments = {
-  Flooring: ['Hardwood', 'LVP / LVT', 'Tile & Stone', 'Carpet'],
-  Cabinets: ['Cabinets'],
-  Countertops: ['Countertops'],
-  Kitchen: ['Cabinets', 'Countertops', 'Tile & Stone'],
-  Bath: ['Tile & Stone', 'Cabinets', 'Countertops'],
+const sortProducts = (list, sortBy) => {
+  const out = [...list];
+  // Products with no list price sort last in both price directions: a null
+  // price means "call for pricing", not "free".
+  const byPrice = (dir) => (a, b) => {
+    if (a.listPrice == null && b.listPrice == null) return 0;
+    if (a.listPrice == null) return 1;
+    if (b.listPrice == null) return -1;
+    return (a.listPrice - b.listPrice) * dir;
+  };
+  if (sortBy === 'price-asc') out.sort(byPrice(1));
+  else if (sortBy === 'price-desc') out.sort(byPrice(-1));
+  else if (sortBy === 'name') out.sort((a, b) => a.name.localeCompare(b.name));
+  return out;
 };
 
 export default function ProSourceShop() {
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
   const location = useLocation();
+  const params = useParams();
   const { userId, userName, userEmail, showroom, accountManager, loadUserData, saveUserData } = useAuth();
-  const selectedProductId = searchParams.get('product');
+  // Canonical PDP route is /shop/:sku. `?product=<id>` is the old link shape.
+  // Still honored, resolved through the catalog and redirected below so old
+  // bookmarks and stored links don't rot.
+  const routeSku = params.sku ? decodeURIComponent(params.sku) : null;
+  const legacyProductId = searchParams.get('product');
   // Rich quote/cart page is the same view whether you're on /cart or the legacy ?view=quote URL.
   const viewQuotePage = location.pathname === '/cart' || searchParams.get('view') === 'quote';
   const activeDept = searchParams.get('dept');
   const deptCategories = activeDept && departments[activeDept] ? departments[activeDept] : null;
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
+  const [sortBy, setSortBy] = useState('featured');
+
+  // ---- Catalog ----
+  // Fetched from /api/products, with a bundled fallback so the shop never
+  // renders empty just because a function hiccuped. `catalogSource` drives an
+  // honest banner when we're showing the bundled copy.
+  const [products, setProducts] = useState([]);
+  const [catalogLoading, setCatalogLoading] = useState(true);
+  const [catalogSource, setCatalogSource] = useState(null);
+  const [catalogError, setCatalogError] = useState(null);
+  const [catalogReloadKey, setCatalogReloadKey] = useState(0);
+
+  useEffect(() => {
+    let cancelled = false;
+    setCatalogLoading(true);
+    fetchCatalog().then(({ products: list, source, error }) => {
+      if (cancelled) return;
+      setProducts(list);
+      setCatalogSource(source);
+      setCatalogError(error);
+      setCatalogLoading(false);
+    });
+    return () => { cancelled = true; };
+  }, [catalogReloadKey]);
+
   // Mirror the shared active-cart store. All mutations go through the store
   // helpers so the nav badge and /carts page stay in sync.
   const [quoteCart, setQuoteCart] = useState(() => getGuestCart().items);
@@ -218,10 +113,23 @@ export default function ProSourceShop() {
     sync();
     return subscribeGuestCart(sync);
   }, []);
+
+  // Stored carts predate SKUs, so they hold the synthesized `sku-prod-001`.
+  // Re-key them onto whatever the catalog calls those products now, so adding
+  // the same product again bumps the qty instead of forking a second line.
+  //
+  // Keyed on the cart, not just the catalog: sign-in adoption pulls the
+  // account's stored cart down *after* the first pass would have run, and those
+  // items can still be on legacy keys. Terminates because the helper doesn't
+  // write when nothing changed.
+  useEffect(() => {
+    if (products.length === 0) return;
+    migrateActiveCartKeys(migrateItemKeys, products);
+  }, [products, quoteCart]);
   const [showCart, setShowCart] = useState(false);
   const [cartSubmitted, setCartSubmitted] = useState(false);
-  const [selectedColor, setSelectedColor] = useState(0);
   const [activeSpecTab, setActiveSpecTab] = useState('specifications');
+  const [zoom, setZoom] = useState({ on: false, x: 50, y: 50 });
   const [sfNeeded, setSfNeeded] = useState('');
   const [boxQty, setBoxQty] = useState(1);
   const [hoveredProduct, setHoveredProduct] = useState(null);
@@ -238,25 +146,53 @@ export default function ProSourceShop() {
   //             rather than a hot lead.
   const [quoteWizardOpen, setQuoteWizardOpen] = useState(false);
   const [wizardIntent, setWizardIntent] = useState('quote');
-  // Quote form fields. Pickup-only — no delivery address. Members rely on
-  // what's already on their account; the guest contact fields are kept as
-  // state in case we want to pre-fill the wizard later.
-  const [quoteFirstName, setQuoteFirstName] = useState('');
-  const [quoteLastName, setQuoteLastName] = useState('');
-  const [quoteEmail, setQuoteEmail] = useState('');
-  const [quoteCompany, setQuoteCompany] = useState('');
-  const [quotePhone, setQuotePhone] = useState('');
-  const [quoteZip, setQuoteZip] = useState('');
+  // Members annotate their submission for their AM. Guests answer the same
+  // question inside the QuoteWizard (its own `notes` step), so this is the
+  // member-only field. The guest contact fields that used to live here
+  // (name/email/company/phone/zip) were never rendered and never passed to the
+  // wizard; the wizard collects contact details itself. Deleted rather than
+  // wired: duplicating them here would just be a second source of truth.
   const [quoteNotes, setQuoteNotes] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState('');
+  const [submittedQuoteId, setSubmittedQuoteId] = useState(null);
 
-  const selectedProduct = selectedProductId ? allProducts.find(p => p.id === selectedProductId) : null;
+  // PDP target: the canonical /shop/:sku route first, then a legacy
+  // `?product=<id>` link resolved through the catalog.
+  const selectedProduct = React.useMemo(() => {
+    if (products.length === 0) return null;
+    const key = routeSku || legacyProductId;
+    if (!key) return null;
+    return resolveProduct(key, products);
+  }, [products, routeSku, legacyProductId]);
 
-  const filteredProducts = allProducts.filter(p => {
-    const matchSearch = !searchTerm || p.name.toLowerCase().includes(searchTerm.toLowerCase()) || p.brand.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchDept = !deptCategories || deptCategories.includes(p.category);
-    const matchCategory = selectedCategory === 'All' || p.category === selectedCategory;
-    return matchSearch && matchDept && matchCategory;
-  });
+  // A key we can't resolve is a real 404, not a silent fall-through to the
+  // catalog. Only assert that once the catalog has actually loaded.
+  const productNotFound =
+    !catalogLoading && !selectedProduct && !!(routeSku || legacyProductId);
+
+  // Old `?product=` links get upgraded to the canonical URL in place, so a
+  // share from this page is always the shareable form.
+  useEffect(() => {
+    if (!legacyProductId || routeSku || !selectedProduct) return;
+    navigate(`/shop/${encodeURIComponent(selectedProduct.sku)}`, { replace: true });
+  }, [legacyProductId, routeSku, selectedProduct, navigate]);
+
+  const filteredProducts = React.useMemo(() => {
+    const term = searchTerm.trim().toLowerCase();
+    const hits = products.filter(p => {
+      if (p.status === 'inactive') return false;
+      // Search across the fields people actually type: name, brand, sku,
+      // category/subcategory and colour, not just name+brand.
+      const matchSearch = !term || [
+        p.name, p.brand, p.sku, p.category, p.subcategory, p.colorName,
+      ].some((f) => f && String(f).toLowerCase().includes(term));
+      const matchDept = !deptCategories || deptCategories.includes(p.category);
+      const matchCategory = selectedCategory === 'All' || p.category === selectedCategory;
+      return matchSearch && matchDept && matchCategory;
+    });
+    return sortProducts(hits, sortBy);
+  }, [products, searchTerm, deptCategories, selectedCategory, sortBy]);
 
   // Build a flat, self-contained cart item from a product so it renders on
   // /carts without re-fetching the product catalog.
@@ -273,7 +209,11 @@ export default function ProSourceShop() {
     unit: product.unit,
     qty,
     image: product.image,
+    // Colour is part of the order, so it belongs in the snapshot. In this
+    // catalog a colour IS a SKU (see `parentSku`), so `colorName` identifies
+    // exactly what was ordered; the hex rides along for rendering a chip.
     colorName: product.colorName,
+    colorHex: (product.colorSwatches || [])[0] || null,
     sfPerBox: product.sfPerBox,
   });
 
@@ -284,7 +224,7 @@ export default function ProSourceShop() {
 
   const addSampleToQuote = (product) => {
     const sku = `sample-${productSku(product)}`;
-    // One sample per product — bail if it's already in the cart.
+    // One sample per product, so bail if it's already in the cart.
     if (getGuestCart().items.some((i) => i.sku === sku)) {
       setShowCart(true);
       return;
@@ -293,12 +233,14 @@ export default function ProSourceShop() {
       id: `sample-${product.id}`,
       sku,
       name: `${product.name} (sample)`,
+      brand: product.brand,
       category: product.category,
       price: 0,
       qty: 1,
       isSample: true,
       image: product.image,
       colorName: product.colorName,
+      colorHex: (product.colorSwatches || [])[0] || null,
     });
     setShowCart(true);
   };
@@ -322,7 +264,20 @@ export default function ProSourceShop() {
     navigate('/cart');
   };
 
-  const submitQuote = () => {
+  /**
+   * Member quote submit.
+   *
+   * This used to flip a local flag and clear the cart. The "your account
+   * manager will review your cart" confirmation was a lie, and `quoteNotes`
+   * went in the bin. It now writes a real quote record into the user's
+   * `orders` blob (the same collection Estimates & Orders reads), carrying the
+   * notes and the full item snapshot, and only clears the cart once the write
+   * has actually landed.
+   *
+   * The record is read back before writing because three pages write this
+   * blob; `user-data` replaces it wholesale.
+   */
+  const submitQuote = async () => {
     // Guests go through the wizard: project type, zip, timing, OTP. The
     // wizard creates their account + project and clears the cart on success.
     if (!userId) {
@@ -330,8 +285,115 @@ export default function ProSourceShop() {
       setQuoteWizardOpen(true);
       return;
     }
-    setCartSubmitted(true);
-    clearGuestCart();
+    if (submitting || quoteCart.length === 0) return;
+    setSubmitting(true);
+    setSubmitError('');
+    try {
+      const now = Date.now();
+      const quoteId = `Q${String(now).slice(-8)}`;
+      // A quote has no invoice yet; the AM sets pricing. Everything money-ish
+      // stays null rather than being faked as 0, which would render as "$0.00".
+      const quote = {
+        id: quoteId,
+        kind: 'quote',
+        projectId: null,
+        jobName: `Cart quote · ${quoteCart.length} item${quoteCart.length !== 1 ? 's' : ''}`,
+        orderDate: new Date(now).toLocaleDateString('en-US'),
+        submittedAt: now,
+        // 'ready' is the customer-facing "quote" state in order-status.js; a
+        // freshly submitted request isn't ready to approve yet, so it gets the
+        // pre-state the taxonomy calls "In progress".
+        status: 'requested',
+        statusText: 'Quote Requested',
+        soldTo: (userName || 'You').toUpperCase(),
+        showroom: showroom?.name || null,
+        accountManager: accountManager?.name || null,
+        notes: quoteNotes.trim() || null,
+        invoiceTotal: null,
+        material: null,
+        salesTax: null,
+        service: null,
+        totalPaid: null,
+        balanceDue: null,
+        // Full snapshot: what was actually in the cart at submit time, prices
+        // and colours included. The cart gets cleared, so this is the record.
+        items: quoteCart.map((i) => ({ ...i })),
+        listSubtotal: quoteCart.reduce(
+          (sum, i) => sum + (Number(i.price) || 0) * (i.qty || 1), 0
+        ),
+      };
+      const stored = await loadUserData('orders', null);
+      const list = Array.isArray(stored?.list) ? stored.list : [];
+      await saveUserData('orders', { ...(stored || {}), list: [quote, ...list] });
+      setSubmittedQuoteId(quoteId);
+      setCartSubmitted(true);
+      setQuoteNotes('');
+      clearGuestCart();
+    } catch (err) {
+      console.warn('Quote submit failed:', err.message);
+      setSubmitError("Couldn't send your quote request. Please try again.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  /**
+   * Snapshot the active cart into the saved-carts library. The store helper
+   * existed but nothing imported it, so there was no way to save a cart at all.
+   */
+  const [savingCart, setSavingCart] = useState(false);
+  const [savedCartMsg, setSavedCartMsg] = useState('');
+  const saveCartForLater = async () => {
+    if (!userId || savingCart || quoteCart.length === 0) return;
+    setSavingCart(true);
+    try {
+      const saved = await saveActiveAsNewCart({
+        userId, userName, loadUserData, saveUserData,
+      });
+      setSavedCartMsg(saved ? `Saved as "${saved.name}"` : '');
+      setTimeout(() => setSavedCartMsg(''), 4000);
+    } catch (err) {
+      console.warn('Save cart failed:', err.message);
+      setSavedCartMsg('Could not save this cart.');
+      setTimeout(() => setSavedCartMsg(''), 4000);
+    } finally {
+      setSavingCart(false);
+    }
+  };
+
+  /**
+   * What a quantity actually means for a product.
+   *
+   * The PDP used to assume every product was boxed: the SF→box conversion only
+   * fired when `sfPerBox` existed, so a slab countertop priced per SF showed an
+   * "Enter Total Square Feet" box that did nothing to the qty. Three real cases:
+   *   boxed: unit SF *and* sfPerBox, so qty is boxes and SF drives the count
+   *   area:  unit SF, no sfPerBox, so qty *is* the SF, entered directly
+   *   each:  unit EA/BOX, so qty is a plain count with no SF input
+   */
+  const qtyMode = (product) => {
+    if (product.unit === 'SF') return product.sfPerBox ? 'boxed' : 'area';
+    return 'each';
+  };
+
+  const qtyLabel = (product) => {
+    const mode = qtyMode(product);
+    if (mode === 'boxed') return 'Boxes';
+    if (mode === 'area') return 'Square feet';
+    return product.unit === 'BOX' ? 'Boxes' : 'Quantity';
+  };
+
+  /** Sub-caption under a cart line's stepper: the real-world amount. */
+  const qtyCaption = (item) => {
+    if (item.sfPerBox) return `${(item.sfPerBox * (item.qty || 1)).toFixed(2)} SF`;
+    if (item.unit === 'SF') return `${item.qty || 1} SF`;
+    return `${item.qty || 1} ${item.unit === 'BOX' ? 'boxes' : 'ea'}`;
+  };
+
+  /** Canonical PDP link for a cart line, resolved through the catalog. */
+  const pdpHref = (item) => {
+    const product = resolveProduct(item.sku || item.id, products, item);
+    return product ? `/shop/${encodeURIComponent(product.sku)}` : null;
   };
 
   // Guest version of "Save to a project". Same wizard, no quote signal.
@@ -376,7 +438,7 @@ export default function ProSourceShop() {
   /**
    * Append items to a project, optionally pinned to one of its rooms.
    * Re-reads the collection right before writing (three pages write this blob)
-   * and keeps the FULL item snapshot — image, colorName, sfPerBox and all.
+   * and keeps the FULL item snapshot: image, colorName, sfPerBox and all.
    */
   const saveItemsToProject = async (project, roomId, items, { clearCart = false } = {}) => {
     if (!userId || !project || !items || items.length === 0) return;
@@ -390,7 +452,16 @@ export default function ProSourceShop() {
           ? p
           : {
               ...p,
-              products: mergeCartItemsIntoProducts(p.products, items, roomId),
+              // Re-key this project's existing products onto canonical SKUs
+              // before merging. Products saved before the catalog had SKUs hold
+              // the synthesized `sku-prod-001`; without this, adding the same
+              // product again would append a second line instead of bumping
+              // the qty on the one that's already there.
+              products: mergeCartItemsIntoProducts(
+                migrateItemKeys(p.products, products).items,
+                migrateItemKeys(items, products).items,
+                roomId
+              ),
               updatedAt: Date.now(),
             }
       );
@@ -410,7 +481,7 @@ export default function ProSourceShop() {
   const saveCartToProject = (project, roomId) =>
     saveItemsToProject(project, roomId, quoteCart, { clearCart: true });
 
-  // "Add To Project" on the product detail page — this one product, at the
+  // "Add To Project" on the product detail page: this one product, at the
   // quantity currently in the stepper.
   const addProductToProject = (project, roomId) => {
     if (!selectedProduct) return;
@@ -601,33 +672,41 @@ export default function ProSourceShop() {
               <div style={{ fontSize: 26, fontWeight: 700, color: colors.gray900, marginBottom: 8 }}>
                 Quote request sent
               </div>
+              {submittedQuoteId && (
+                <div style={{ fontSize: 13, color: colors.gray500, marginBottom: 12 }}>
+                  Reference <strong style={{ color: colors.gray900 }}>{submittedQuoteId}</strong>
+                </div>
+              )}
               <div style={{ fontSize: 15, color: colors.gray500, lineHeight: 1.7, maxWidth: 480, margin: '0 auto 28px' }}>
                 {userId ? (
                   <>
+                    Your request is saved to your account and waiting on{' '}
                     {accountManager?.name ? (
-                      <>Your account manager <strong style={{ color: colors.gray900 }}>{accountManager.name}</strong> will review your cart and reach out within 1 business day with member pricing and a pickup time.</>
+                      <>your account manager <strong style={{ color: colors.gray900 }}>{accountManager.name}</strong></>
                     ) : (
-                      <>Your account manager will review your cart and reach out within 1 business day with member pricing and a pickup time.</>
+                      <>your account manager</>
                     )}
+                    , who reviews it with member pricing and a pickup time. You can see it any
+                    time under Estimates &amp; Orders.
                   </>
                 ) : (
                   <>We'll match you to the nearest ProSource showroom and an account manager will reach out within 1 business day with pricing and a pickup time.</>
                 )}
               </div>
-              <div style={{ display: 'flex', gap: 12, justifyContent: 'center' }}>
+              <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
                 <button
                   style={{ ...s.addToQuoteBtn, width: 'auto', padding: '12px 24px' }}
-                  onClick={() => { clearGuestCart(); setCartSubmitted(false); navigate('/shop'); }}
+                  onClick={() => { setCartSubmitted(false); setSubmittedQuoteId(null); navigate('/shop'); }}
                 >
                   Continue Shopping
                 </button>
                 {userId && (
-                  <Link to="/" style={{
+                  <Link to="/orders" style={{
                     padding: '12px 24px', border: `1.5px solid ${colors.gray200}`, borderRadius: 6,
                     fontSize: 14, fontWeight: 500, color: colors.gray700, textDecoration: 'none',
                     display: 'flex', alignItems: 'center', gap: 8, background: '#fff',
                   }}>
-                    Back to Dashboard
+                    View in Estimates &amp; Orders
                   </Link>
                 )}
               </div>
@@ -688,41 +767,63 @@ export default function ProSourceShop() {
                       )}
                       <div style={{ flex: 1 }}>
                         <div style={{ fontSize: 14, fontWeight: 600, color: colors.gray900, lineHeight: 1.4, marginBottom: 2 }}>
-                          {item.isSample ? '🔲 SAMPLE · ' : ''}{item.name}
+                          {item.isSample ? '🔲 SAMPLE · ' : ''}
+                          {/* Names link to the product they came from. Falls back
+                              to plain text for a line the catalog no longer has. */}
+                          {pdpHref(item) ? (
+                            <Link to={pdpHref(item)} style={{ color: colors.gray900, textDecoration: 'none' }}
+                              onMouseOver={(e) => e.currentTarget.style.color = colors.darkBlue}
+                              onMouseOut={(e) => e.currentTarget.style.color = colors.gray900}
+                            >{item.name}</Link>
+                          ) : item.name}
                         </div>
-                        <div style={{ fontSize: 12, color: colors.gray500 }}>
-                          {item.colorName}
-                          {item.isSample ? ' · Sample' : item.sfPerBox ? ` (${item.sfPerBox} SF/Box)` : ''}
+                        <div style={{ fontSize: 12, color: colors.gray500, display: 'flex', alignItems: 'center', gap: 6 }}>
+                          {item.colorHex && (
+                            <span style={{
+                              width: 10, height: 10, borderRadius: 2, background: item.colorHex,
+                              border: `1px solid ${colors.gray300}`, display: 'inline-block',
+                            }} />
+                          )}
+                          <span>
+                            {item.colorName}
+                            {item.isSample ? ' · Sample' : item.sfPerBox ? ` (${item.sfPerBox} SF/Box)` : ''}
+                          </span>
                         </div>
                       </div>
                     </div>
 
-                    {/* Availability removed — placeholder shipping data; the
+                    {/* Availability removed: it was placeholder shipping data. The
                         real fulfillment timeline gets set by the AM during quote. */}
                     <div />
 
 
-                    {/* Quantity */}
+                    {/* Quantity. Samples are one-per-product; the drawer always
+                        knew that, but this table used to offer a stepper that let
+                        you "order" 4 of the same free sample. */}
                     <div style={{ textAlign: 'center' }}>
-                      <div style={{ display: 'inline-flex', alignItems: 'center', border: `1px solid ${colors.gray200}`, borderRadius: 6, overflow: 'hidden' }}>
-                        <button
-                          onClick={() => updateQty(item.sku || item.id, -1)}
-                          style={{ width: 32, height: 36, border: 'none', background: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRight: `1px solid ${colors.gray200}` }}
-                        >
-                          <Minus size={14} color={colors.gray500} />
-                        </button>
-                        <span style={{ width: 40, fontSize: 14, fontWeight: 600, color: colors.gray900, textAlign: 'center' }}>{item.qty}</span>
-                        <button
-                          onClick={() => updateQty(item.sku || item.id, 1)}
-                          style={{ width: 32, height: 36, border: 'none', background: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', borderLeft: `1px solid ${colors.gray200}` }}
-                        >
-                          <Plus size={14} color={colors.gray500} />
-                        </button>
-                      </div>
-                      {item.sfPerBox && (
-                        <div style={{ fontSize: 12, color: colors.gray500, marginTop: 4 }}>
-                          {(item.sfPerBox * item.qty).toFixed(2)} SF
-                        </div>
+                      {item.isSample ? (
+                        <div style={{ fontSize: 13, color: colors.gray500 }}>Qty 1</div>
+                      ) : (
+                        <>
+                          <div style={{ display: 'inline-flex', alignItems: 'center', border: `1px solid ${colors.gray200}`, borderRadius: 6, overflow: 'hidden' }}>
+                            <button
+                              onClick={() => updateQty(item.sku || item.id, -1)}
+                              style={{ width: 32, height: 36, border: 'none', background: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRight: `1px solid ${colors.gray200}` }}
+                            >
+                              <Minus size={14} color={colors.gray500} />
+                            </button>
+                            <span style={{ width: 40, fontSize: 14, fontWeight: 600, color: colors.gray900, textAlign: 'center' }}>{item.qty}</span>
+                            <button
+                              onClick={() => updateQty(item.sku || item.id, 1)}
+                              style={{ width: 32, height: 36, border: 'none', background: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', borderLeft: `1px solid ${colors.gray200}` }}
+                            >
+                              <Plus size={14} color={colors.gray500} />
+                            </button>
+                          </div>
+                          <div style={{ fontSize: 12, color: colors.gray500, marginTop: 4 }}>
+                            {qtyCaption(item)}
+                          </div>
+                        </>
                       )}
                       <button
                         onClick={() => removeFromCart(item.sku || item.id)}
@@ -769,37 +870,75 @@ export default function ProSourceShop() {
                     />
                     <button
                       onClick={submitQuote}
+                      disabled={submitting}
                       style={{
-                        width: '100%', padding: '14px 24px', background: colors.darkBlue, color: '#fff',
-                        border: 'none', borderRadius: 6, fontSize: 15, fontWeight: 700, cursor: 'pointer',
+                        width: '100%', padding: '14px 24px',
+                        background: submitting ? colors.gray400 : colors.darkBlue, color: '#fff',
+                        border: 'none', borderRadius: 6, fontSize: 15, fontWeight: 700,
+                        cursor: submitting ? 'default' : 'pointer',
                         fontFamily: 'inherit', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
                       }}
                     >
-                      Send to my account manager <ChevronRight size={18} />
+                      {submitting ? (
+                        <>Sending…</>
+                      ) : (
+                        <>Send to my account manager <ChevronRight size={18} /></>
+                      )}
                     </button>
-                    {/* Lightweight save-for-later. Pops a project → room picker
-                        so the user doesn't have to commit to a quote right now. */}
-                    <div style={{ position: 'relative', textAlign: 'center', marginTop: 14 }}>
+                    {submitError && (
+                      <div style={{
+                        fontSize: 13, color: colors.red, marginTop: 10, textAlign: 'center',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                      }}>
+                        <AlertTriangle size={14} /> {submitError}
+                      </div>
+                    )}
+                    {/* Two ways to not-commit-yet: park the cart in the saved
+                        library, or file it against a project. The library one
+                        had no entry point anywhere in the app until now. */}
+                    <div style={{
+                      display: 'flex', gap: 16, justifyContent: 'center', marginTop: 14,
+                      flexWrap: 'wrap', alignItems: 'center',
+                    }}>
                       <button
-                        onClick={() => {
-                          setPickerProject(null);
-                          setSaveProjectOpen((v) => !v);
-                        }}
+                        onClick={saveCartForLater}
+                        disabled={savingCart}
                         style={{
-                          background: 'none', border: 'none', cursor: 'pointer',
+                          background: 'none', border: 'none',
+                          cursor: savingCart ? 'default' : 'pointer',
                           color: colors.darkBlue, fontSize: 13, fontWeight: 500,
-                          fontFamily: 'inherit',
+                          fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: 6,
                         }}
                       >
-                        Save to a project instead
+                        <Save size={14} /> {savingCart ? 'Saving…' : 'Save this cart for later'}
                       </button>
-                      {saveProjectOpen && renderProjectRoomPicker(saveCartToProject, {
-                        top: '100%', left: '50%', transform: 'translateX(-50%)',
-                      })}
-                      {saveError && (
-                        <div style={{ fontSize: 12, color: colors.red, marginTop: 6 }}>{saveError}</div>
-                      )}
+                      <div style={{ position: 'relative' }}>
+                        <button
+                          onClick={() => {
+                            setPickerProject(null);
+                            setSaveProjectOpen((v) => !v);
+                          }}
+                          style={{
+                            background: 'none', border: 'none', cursor: 'pointer',
+                            color: colors.darkBlue, fontSize: 13, fontWeight: 500,
+                            fontFamily: 'inherit',
+                          }}
+                        >
+                          Save to a project instead
+                        </button>
+                        {saveProjectOpen && renderProjectRoomPicker(saveCartToProject, {
+                          top: '100%', left: '50%', transform: 'translateX(-50%)',
+                        })}
+                      </div>
                     </div>
+                    {savedCartMsg && (
+                      <div style={{ fontSize: 12, color: colors.green, marginTop: 8, textAlign: 'center' }}>
+                        {savedCartMsg} · <Link to="/carts" style={{ color: colors.darkBlue }}>View saved carts</Link>
+                      </div>
+                    )}
+                    {saveError && (
+                      <div style={{ fontSize: 12, color: colors.red, marginTop: 6, textAlign: 'center' }}>{saveError}</div>
+                    )}
                   </>
                 ) : (
                   <>
@@ -864,22 +1003,73 @@ export default function ProSourceShop() {
     );
   }
 
+  // ========== PRODUCT NOT FOUND ==========
+  // An unknown sku used to fall through and silently render the whole catalog,
+  // so a dead link looked like a working shop page.
+  if (productNotFound) {
+    return (
+      <div style={s.wrapper}>
+        <div style={s.container}>
+          <div style={{ textAlign: 'center', padding: '80px 16px' }}>
+            <div style={{
+              width: 64, height: 64, borderRadius: '50%', background: colors.gray100,
+              display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px',
+            }}>
+              <Package size={30} color={colors.gray400} />
+            </div>
+            <div style={{ fontSize: 22, fontWeight: 700, color: colors.gray900, marginBottom: 8 }}>
+              We couldn't find that product
+            </div>
+            <div style={{ fontSize: 14, color: colors.gray500, lineHeight: 1.7, maxWidth: 460, margin: '0 auto 24px' }}>
+              <code style={{ background: colors.gray100, padding: '2px 6px', borderRadius: 4 }}>
+                {routeSku || legacyProductId}
+              </code>{' '}
+              isn't in the catalog. It may have been discontinued or re-numbered.
+              {catalogSource === 'fallback' && (
+                <> We're also showing a cached catalog right now, so it may just be temporarily missing.</>
+              )}
+            </div>
+            <button
+              onClick={() => navigate('/shop')}
+              style={{ ...s.addToQuoteBtn, width: 'auto', padding: '12px 24px', display: 'inline-flex' }}
+            >
+              Browse all products
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   // ========== PRODUCT DETAIL VIEW ==========
   if (selectedProduct) {
     const p = selectedProduct;
     const specEntries = Object.entries(p.specs);
     const halfSpecs = Math.ceil(specEntries.length / 2);
+    const mode = qtyMode(p);
+    // Colour variants are sibling SKUs (`parentSku`). When the catalog has
+    // them the swatches are real navigation; when it doesn't, they're a
+    // read-only palette. See the swatch block below.
+    const variants = colorVariants(p, products);
+    // Tabs only exist when there's real content behind them. Warranty and
+    // Overview used to render the same hardcoded blurb for every product.
+    const tabs = [
+      { id: 'specifications', label: 'Specifications', has: specEntries.length > 0 },
+      { id: 'warranty', label: 'Warranty', has: !!(p.warranty || p.specs.Warranty) },
+      { id: 'overview', label: 'Overview', has: !!(p.description || p.overview) },
+    ].filter((t) => t.has);
+    const tabId = tabs.some((t) => t.id === activeSpecTab) ? activeSpecTab : tabs[0]?.id;
 
     return (
       <div style={s.wrapper}>
         <div style={s.container}>
           {/* Breadcrumb */}
           <div style={s.breadcrumb}>
-            <span style={s.breadcrumbLink} onClick={() => setSearchParams({})}>
+            <span style={s.breadcrumbLink} onClick={() => navigate('/shop')}>
               <Home size={14} style={{ marginBottom: -2 }} />
             </span>
             <ChevronRight size={12} />
-            <span style={s.breadcrumbLink} onClick={() => { setSelectedCategory(p.category); setSearchParams({}); }}>{p.category}</span>
+            <span style={s.breadcrumbLink} onClick={() => { setSelectedCategory(p.category); navigate('/shop'); }}>{p.category}</span>
             <ChevronRight size={12} />
             <span style={{ color: colors.gray700 }}>{p.name}</span>
           </div>
@@ -899,33 +1089,102 @@ export default function ProSourceShop() {
 
           {/* Detail layout */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-10" style={s.detailLayout}>
-            {/* Left - Image */}
+            {/* Left - Image. The caption promised zoom and nothing zoomed;
+                now it's a real magnifier: hover scales the image around the
+                cursor via background-position. */}
             <div>
-              <img src={p.image} alt={p.name} style={s.detailImage} />
+              <div
+                onMouseMove={(e) => {
+                  const r = e.currentTarget.getBoundingClientRect();
+                  setZoom({
+                    on: true,
+                    x: ((e.clientX - r.left) / r.width) * 100,
+                    y: ((e.clientY - r.top) / r.height) * 100,
+                  });
+                }}
+                onMouseLeave={() => setZoom({ on: false, x: 50, y: 50 })}
+                style={{
+                  ...s.detailImage,
+                  backgroundImage: `url(${p.image})`,
+                  backgroundRepeat: 'no-repeat',
+                  backgroundSize: zoom.on ? '220%' : 'cover',
+                  backgroundPosition: zoom.on ? `${zoom.x}% ${zoom.y}%` : 'center',
+                  cursor: p.image ? 'zoom-in' : 'default',
+                  transition: 'background-size 0.15s ease',
+                }}
+                role="img"
+                aria-label={p.name}
+              />
               <div style={{ textAlign: 'center', fontSize: 12, color: colors.gray400, marginTop: 8 }}>
-                Hover Over Image to Zoom
+                Hover over image to zoom
               </div>
             </div>
 
             {/* Right - Info */}
             <div>
               <div style={s.detailName}>{p.name}</div>
-              <div style={s.detailColorName}>{p.colorName} · {p.colorsAvailable} colors available</div>
+              <div style={s.detailColorName}>
+                {p.colorName}
+                {p.colorsAvailable > 1 ? ` · ${p.colorsAvailable} colors available` : ''}
+              </div>
 
               <div style={s.detailPriceLabel}>List Price</div>
               <div style={s.detailPrice}>
-                US$ {p.listPrice.toFixed(2)} <span style={s.detailUnit}>/{p.unit}</span>
+                {p.listPrice != null ? (
+                  <>US$ {p.listPrice.toFixed(2)} <span style={s.detailUnit}>/{p.unit}</span></>
+                ) : (
+                  <span style={{ fontSize: 22, color: colors.gray500 }}>Call for pricing</span>
+                )}
               </div>
 
-              {/* Color swatches */}
+              {/* Colour.
+                  In this catalog a colour IS a SKU. That's what `parentSku` is
+                  for. So when the catalog gives us sibling SKUs, each swatch is
+                  a real link to that colour's own page, and the colour you
+                  ordered is recorded because the SKU records it.
+                  When it doesn't (every product below is its own family), the
+                  swatches are NOT options: there are no SKUs behind them and
+                  no names for them. They used to be clickable and moved a
+                  border and nothing else, which is exactly the kind of control
+                  that lies. They're now a read-only palette. */}
               <div style={{ fontSize: 13, color: colors.gray700, marginBottom: 8 }}>
                 Color: <strong>{p.colorName}</strong>
               </div>
-              <div style={s.swatchRow}>
-                {p.colorSwatches.map((c, i) => (
-                  <div key={i} style={s.swatch(c, i === selectedColor)} onClick={() => setSelectedColor(i)} />
-                ))}
-              </div>
+              {variants.length > 1 ? (
+                <div style={s.swatchRow}>
+                  {variants.map((v) => (
+                    <Link
+                      key={v.sku}
+                      to={`/shop/${encodeURIComponent(v.sku)}`}
+                      title={v.colorName}
+                      aria-label={v.colorName}
+                      style={s.swatch((v.colorSwatches || [])[0] || colors.gray200, v.sku === p.sku)}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <>
+                  <div style={{ ...s.swatchRow, marginBottom: 6 }}>
+                    {p.colorSwatches.map((c, i) => (
+                      <div
+                        key={i}
+                        style={{
+                          ...s.swatch(c, false),
+                          cursor: 'default',
+                          ...(i === 0 ? { border: `2px solid ${colors.darkBlue}` } : {}),
+                        }}
+                        title={i === 0 ? p.colorName : undefined}
+                      />
+                    ))}
+                  </div>
+                  {p.colorsAvailable > 1 && (
+                    <div style={{ fontSize: 12, color: colors.gray500, marginBottom: 20 }}>
+                      {p.colorsAvailable} colors in this range. Your account manager can
+                      quote any of them, and samples are on hand at the showroom.
+                    </div>
+                  )}
+                </>
+              )}
 
               {/* Size */}
               {p.specs.Size && (
@@ -937,38 +1196,46 @@ export default function ProSourceShop() {
                 </div>
               )}
 
-              {/* Shipping/Pickup placeholders removed — we don't have real
+              {/* Shipping/Pickup placeholders removed: we don't have real
                   fulfillment data for products yet, and "Request a Quote" is
                   redundant with the primary CTA below. */}
 
-              {/* SF Needed + Quantity */}
+              {/* Quantity.
+                  Only boxed products get an SF→box calculator. An SF-priced
+                  slab has no boxes, so the SF field IS the quantity; an EA
+                  product gets a plain counter and no SF field at all. */}
               <div style={{ marginBottom: 16 }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                  <span style={{ fontSize: 13, fontWeight: 600, color: colors.gray900 }}>Enter Total Square Feet</span>
-                  <input
-                    type="number"
-                    placeholder="SF needed"
-                    value={sfNeeded}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      setSfNeeded(val);
-                      if (val && Number(val) > 0 && p.sfPerBox) {
-                        setBoxQty(Math.max(1, Math.ceil(Number(val) / p.sfPerBox)));
-                      }
-                    }}
-                    style={{
-                      width: 110, padding: '8px 12px', border: `1.5px solid ${colors.gray200}`, borderRadius: 6,
-                      fontSize: 13, fontFamily: 'inherit', textAlign: 'right', outline: 'none',
-                    }}
-                  />
-                </div>
+                {mode === 'boxed' && (
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                    <span style={{ fontSize: 13, fontWeight: 600, color: colors.gray900 }}>Enter Total Square Feet</span>
+                    <input
+                      type="number"
+                      min="0"
+                      placeholder="SF needed"
+                      value={sfNeeded}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setSfNeeded(val);
+                        if (val && Number(val) > 0) {
+                          setBoxQty(Math.max(1, Math.ceil(Number(val) / p.sfPerBox)));
+                        }
+                      }}
+                      style={{
+                        width: 110, padding: '8px 12px', border: `1.5px solid ${colors.gray200}`, borderRadius: 6,
+                        fontSize: 13, fontFamily: 'inherit', textAlign: 'right', outline: 'none',
+                      }}
+                    />
+                  </div>
+                )}
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
                   <span style={{ fontSize: 12, color: colors.gray500 }}>
-                    {p.sfPerBox ? `1 box covers ${p.sfPerBox} SF` : ''}
+                    {mode === 'boxed'
+                      ? `${qtyLabel(p)} · 1 box covers ${p.sfPerBox} SF`
+                      : qtyLabel(p)}
                   </span>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 0 }}>
                     <button
-                      onClick={() => { const nq = Math.max(1, boxQty - 1); setBoxQty(nq); setSfNeeded(''); }}
+                      onClick={() => { setBoxQty(Math.max(1, boxQty - 1)); setSfNeeded(''); }}
                       style={{
                         width: 36, height: 36, border: `1.5px solid ${colors.gray200}`, borderRight: 'none',
                         borderRadius: '6px 0 0 6px', background: '#fff', cursor: 'pointer',
@@ -991,6 +1258,11 @@ export default function ProSourceShop() {
                   </div>
                 </div>
                 <div style={{ textAlign: 'right', fontSize: 14, color: colors.gray700 }}>
+                  {mode === 'boxed' && (
+                    <div style={{ fontSize: 12, color: colors.gray500, marginBottom: 2 }}>
+                      Covers {(p.sfPerBox * boxQty).toFixed(2)} SF
+                    </div>
+                  )}
                   Total: <strong style={{ color: colors.gray900, fontSize: 15 }}>TO BE QUOTED</strong>
                 </div>
               </div>
@@ -1015,14 +1287,14 @@ export default function ProSourceShop() {
                 </button>
               </div>
 
-              {/* Add to Project — members get a project → room picker; guests
+              {/* Add to Project. Members get a project → room picker; guests
                   go through the wizard, which creates the project for them. */}
               <div style={{ position: 'relative' }}>
                 <button
                   style={s.addToProjectBtn}
                   onClick={() => {
                     if (!userId) {
-                      // No account yet — carry this product into the wizard,
+                      // No account yet, so carry this product into the wizard,
                       // which creates the account + project on submit.
                       addToGuestCart(snapshotProduct(p, boxQty));
                       guestSaveToProject();
@@ -1045,29 +1317,40 @@ export default function ProSourceShop() {
                 )}
               </div>
 
-              {/* Compare */}
-              <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: colors.gray700, cursor: 'pointer' }}>
-                <input type="checkbox" style={{ accentColor: colors.darkBlue }} />
-                Compare
-              </label>
+              {/* "Compare" used to live here: a checkbox wired to nothing, with
+                  no compare tray, no compare page, and no second product to
+                  compare against. Removed rather than faked: building a real
+                  comparison surface is its own piece of work. */}
             </div>
           </div>
 
-          {/* Specifications */}
+          {/* Specifications.
+              Warranty and Overview used to render one hardcoded blurb for every
+              product: the same "limited lifetime residential warranty" claim on
+              a quartz slab as on a carpet tile. A warranty claim we haven't got
+              data for is worse than no tab, so each tab now only appears when
+              the product record actually carries that content. */}
+          {tabs.length > 0 && (
           <div style={{ background: '#fff', borderRadius: 10, border: `1px solid ${colors.gray200}`, padding: '0 24px 24px', marginBottom: 48 }}>
-            <div style={s.specTabs}>
-              {['Specifications', 'Warranty', 'Overview'].map(tab => (
-                <button
-                  key={tab}
-                  style={s.specTab(activeSpecTab === tab.toLowerCase())}
-                  onClick={() => setActiveSpecTab(tab.toLowerCase())}
-                >
-                  {tab}
-                </button>
-              ))}
-            </div>
+            {tabs.length > 1 ? (
+              <div style={s.specTabs}>
+                {tabs.map(tab => (
+                  <button
+                    key={tab.id}
+                    style={s.specTab(tabId === tab.id)}
+                    onClick={() => setActiveSpecTab(tab.id)}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <div style={{ ...s.specTabs, gap: 0 }}>
+                <div style={{ ...s.specTab(true), cursor: 'default' }}>{tabs[0].label}</div>
+              </div>
+            )}
 
-            {activeSpecTab === 'specifications' && (
+            {tabId === 'specifications' && (
               <div className="grid grid-cols-1 md:grid-cols-2" style={{ gap: 0 }}>
                 <table style={s.specTable}>
                   <tbody>
@@ -1092,28 +1375,28 @@ export default function ProSourceShop() {
               </div>
             )}
 
-            {activeSpecTab === 'warranty' && (
+            {tabId === 'warranty' && (
               <div style={{ padding: '20px 0', fontSize: 14, color: colors.gray700, lineHeight: 1.7 }}>
-                <p style={{ marginBottom: 12 }}><strong>Limited Lifetime Residential Warranty</strong></p>
-                <p>This product is covered by the manufacturer's limited lifetime residential warranty and a 10-year light commercial warranty. Contact your ProSource account manager for full warranty details and documentation.</p>
+                <p>{p.warranty || p.specs.Warranty}</p>
               </div>
             )}
 
-            {activeSpecTab === 'overview' && (
+            {tabId === 'overview' && (
               <div style={{ padding: '20px 0', fontSize: 14, color: colors.gray700, lineHeight: 1.7 }}>
-                <p>This premium product is available through your local ProSource showroom. Visit to see samples, get expert advice, and take advantage of your member pricing. Your account manager can help with product selection, quantity calculations, and installation coordination.</p>
+                <p>{p.description || p.overview}</p>
               </div>
             )}
           </div>
+          )}
         </div>
 
-        {/* The top-nav cart icon already shows the count and links to /carts —
-            no need for a duplicate floating button on this page. */}
+        {/* The top-nav cart icon already shows the count and links to /carts,
+            so there's no need for a duplicate floating button on this page. */}
 
         {/* Cart drawer */}
         {showCart && renderCartDrawer()}
 
-        {/* Guests reach this from "Add To Project" — the wizard is what turns
+        {/* Guests reach this from "Add To Project". The wizard is what turns
             them into a member with a real project. */}
         <QuoteWizard
           isOpen={quoteWizardOpen}
@@ -1127,7 +1410,7 @@ export default function ProSourceShop() {
 
   /**
    * Two-stage dropdown: project → room. Rooms are optional, so "Unassigned" is
-   * always an offer — a product with no room still lands in the project and
+   * always an offer: a product with no room still lands in the project and
    * shows up in the Unassigned group on the Products tab.
    */
   function renderProjectRoomPicker(onPick, panelStyle) {
@@ -1258,14 +1541,21 @@ export default function ProSourceShop() {
                     <div style={{ flex: 1 }}>
                       <div style={s.cartItemName}>
                         {item.isSample && <span style={{ fontSize: 11, fontWeight: 700, color: colors.darkBlue, background: '#e8f0fe', padding: '2px 6px', borderRadius: 3, marginRight: 6 }}>SAMPLE</span>}
-                        {item.name}
+                        {pdpHref(item) ? (
+                          <Link
+                            to={pdpHref(item)}
+                            onClick={() => setShowCart(false)}
+                            style={{ color: colors.gray900, textDecoration: 'none' }}
+                          >{item.name}</Link>
+                        ) : item.name}
                       </div>
                       <div style={s.cartItemPrice}>
                         {item.isSample
                           ? 'Product sample'
                           : item.price != null
-                            ? `List: $${Number(item.price).toFixed(2)}`
+                            ? `List: $${Number(item.price).toFixed(2)}${item.unit ? `/${item.unit}` : ''}`
                             : 'To be quoted'}
+                        {item.colorName ? ` · ${item.colorName}` : ''}
                       </div>
                       {item.isSample ? (
                         <div style={s.cartQtyRow}>
@@ -1336,18 +1626,48 @@ export default function ProSourceShop() {
             >Clear filter ×</button>
           </div>
         )}
+        {/* Catalog degraded to the bundled copy, so say so rather than quietly
+            serving stale data as if it were live. */}
+        {catalogSource === 'fallback' && !catalogLoading && (
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 10, margin: '16px 0 0',
+            padding: '10px 14px', borderRadius: 6, background: '#fef3c7',
+            border: '1px solid #fde68a', fontSize: 13, color: '#92400e',
+          }}>
+            <AlertTriangle size={16} style={{ flexShrink: 0 }} />
+            <span style={{ flex: 1 }}>
+              Showing our saved catalog. Live pricing and availability couldn't be reached
+              {catalogError ? ` (${catalogError})` : ''}.
+            </span>
+            <button
+              onClick={() => setCatalogReloadKey((k) => k + 1)}
+              style={{
+                background: 'none', border: '1px solid #d97706', color: '#92400e',
+                borderRadius: 4, padding: '4px 10px', fontSize: 12, fontWeight: 600,
+                cursor: 'pointer', fontFamily: 'inherit', flexShrink: 0,
+              }}
+            >Retry</button>
+          </div>
+        )}
+
         {/* Search */}
         <div style={s.searchBar}>
           <div style={{ position: 'relative', flex: 1, minWidth: 200 }}>
             <Search size={16} color={colors.gray400} style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)' }} />
             <input
               style={s.searchInput}
-              placeholder="Search products by name, brand, or category..."
+              placeholder="Search by name, brand, SKU, category, or color…"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
           </div>
-          {/* Cart count lives in the top nav now — no inline button needed here. */}
+          <Select
+            value={sortBy}
+            onChange={setSortBy}
+            options={SORT_OPTIONS}
+            className="shrink-0 min-w-[170px]"
+          />
+          {/* Cart count lives in the top nav now, so no inline button is needed here. */}
         </div>
 
         {/* Category tabs */}
@@ -1361,21 +1681,55 @@ export default function ProSourceShop() {
 
         {/* Results count */}
         <div style={{ fontSize: 13, color: colors.gray500, paddingBottom: 8 }}>
-          {filteredProducts.length} product{filteredProducts.length !== 1 ? 's' : ''}
+          {catalogLoading
+            ? 'Loading catalog…'
+            : `${filteredProducts.length} product${filteredProducts.length !== 1 ? 's' : ''}`}
         </div>
 
         {/* Product grid */}
+        {catalogLoading ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5" style={s.productGrid}>
+            {[0, 1, 2, 3, 4, 5].map((i) => (
+              <div key={i} style={{ ...s.productCard, cursor: 'default' }}>
+                <div style={{ ...s.productImage, background: colors.gray100 }} />
+                <div style={s.productInfo}>
+                  <div style={{ height: 10, width: '40%', background: colors.gray100, borderRadius: 3, marginBottom: 10 }} />
+                  <div style={{ height: 12, width: '90%', background: colors.gray100, borderRadius: 3, marginBottom: 6 }} />
+                  <div style={{ height: 12, width: '60%', background: colors.gray100, borderRadius: 3 }} />
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : filteredProducts.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '64px 16px', color: colors.gray500 }}>
+            <Search size={32} color={colors.gray300} style={{ marginBottom: 12 }} />
+            <div style={{ fontSize: 16, fontWeight: 600, color: colors.gray900, marginBottom: 6 }}>
+              No products match
+            </div>
+            <div style={{ fontSize: 14, marginBottom: 20 }}>
+              {searchTerm ? <>Nothing for "{searchTerm}" in this category.</> : 'Try a different category.'}
+            </div>
+            {(searchTerm || selectedCategory !== 'All' || activeDept) && (
+              <button
+                onClick={() => { setSearchTerm(''); setSelectedCategory('All'); setSearchParams({}); }}
+                style={{ ...s.addToQuoteBtn, width: 'auto', padding: '10px 20px', display: 'inline-flex' }}
+              >
+                Clear filters
+              </button>
+            )}
+          </div>
+        ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5" style={s.productGrid}>
           {filteredProducts.map(product => (
             <div
-              key={product.id}
+              key={product.sku}
               style={{
                 ...s.productCard,
-                ...(hoveredProduct === product.id ? s.productCardHover : {}),
+                ...(hoveredProduct === product.sku ? s.productCardHover : {}),
               }}
-              onMouseEnter={() => setHoveredProduct(product.id)}
+              onMouseEnter={() => setHoveredProduct(product.sku)}
               onMouseLeave={() => setHoveredProduct(null)}
-              onClick={() => setSearchParams({ product: product.id })}
+              onClick={() => navigate(`/shop/${encodeURIComponent(product.sku)}`)}
             >
               <div style={{ position: 'relative' }}>
                 <img src={product.image} alt={product.name} style={s.productImage} />
@@ -1383,21 +1737,31 @@ export default function ProSourceShop() {
                 <button
                   style={{
                     ...s.heartBtn,
-                    color: savedProducts.includes(product.id) ? colors.red : colors.gray400,
+                    color: savedProducts.includes(product.sku) ? colors.red : colors.gray400,
                   }}
-                  onClick={(e) => { e.stopPropagation(); toggleSaved(product.id); }}
+                  onClick={(e) => { e.stopPropagation(); toggleSaved(product.sku); }}
+                  aria-label="Save product"
                 >
-                  <Heart size={16} fill={savedProducts.includes(product.id) ? colors.red : 'none'} />
+                  <Heart size={16} fill={savedProducts.includes(product.sku) ? colors.red : 'none'} />
                 </button>
               </div>
               <div style={s.productInfo}>
                 <div style={s.productBrand}>{product.brand}</div>
                 <div style={s.productName}>{product.name}</div>
-                <div style={s.productColor}>{product.colorName} · {product.colorsAvailable} colors</div>
+                <div style={s.productColor}>
+                  {product.colorName}
+                  {product.colorsAvailable > 1 ? ` · ${product.colorsAvailable} colors` : ''}
+                </div>
                 <div style={s.productPriceRow}>
                   <div>
-                    <span style={s.productPrice}>${product.listPrice.toFixed(2)}</span>
-                    <span style={s.productUnit}> / {product.unit}</span>
+                    {product.listPrice != null ? (
+                      <>
+                        <span style={s.productPrice}>${product.listPrice.toFixed(2)}</span>
+                        <span style={s.productUnit}> / {product.unit}</span>
+                      </>
+                    ) : (
+                      <span style={{ ...s.productPrice, fontSize: 14, color: colors.gray500 }}>Call for pricing</span>
+                    )}
                   </div>
                   <button
                     onClick={(e) => { e.stopPropagation(); addToQuote(product); }}
@@ -1413,6 +1777,7 @@ export default function ProSourceShop() {
             </div>
           ))}
         </div>
+        )}
       </div>
 
       {/* Cart drawer */}

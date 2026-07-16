@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { adoptActiveCartForUser, releaseActiveCart } from './guest-cart';
 
 const AuthContext = createContext(null);
 
@@ -8,7 +9,7 @@ export const useAuth = () => useContext(AuthContext);
 const STORAGE_KEY = 'prosource_session_v1';
 const PROFILE_KEY = 'prosource_profile_v1';
 
-/** Auth pages themselves — never a valid post-login destination (would loop). */
+/** Auth pages themselves: never a valid post-login destination (would loop). */
 const AUTH_PATHS = ['/sign-in', '/create-account'];
 
 /**
@@ -17,13 +18,13 @@ const AUTH_PATHS = ['/sign-in', '/create-account'];
  * Open-redirect guard: the value must resolve to *this* origin, so absolute
  * URLs ("https://evil.com"), protocol-relative ("//evil.com"), backslash
  * variants ("/\evil.com") and non-http schemes ("javascript:…") all resolve to
- * a different origin — or fail to parse — and fall back. Returns `fallback`
+ * a different origin (or fail to parse) and fall back. Returns `fallback`
  * (default null) for anything it doesn't positively trust.
  */
 export const safeReturnTo = (raw, fallback = null) => {
   if (typeof raw !== 'string' || !raw) return fallback;
   // Must be an absolute internal path. `raw` is already decoded by
-  // URLSearchParams — decoding again would re-open encoded attacks.
+  // URLSearchParams; decoding again would re-open encoded attacks.
   if (!raw.startsWith('/')) return fallback;
   let url;
   try {
@@ -36,11 +37,39 @@ export const safeReturnTo = (raw, fallback = null) => {
   return `${url.pathname}${url.search}${url.hash}`;
 };
 
+/**
+ * Rehydrate the persisted session, discarding one that can't work.
+ *
+ * "Demo: Skip Signup" used to build a session with `userId: null`. Those are
+ * still sitting in real browsers' localStorage, and they rehydrate into the
+ * worst possible state: `isLoggedIn` is true, so the UI offers the full app and
+ * hides the sign-in entry points, but every `loadUserData` silently returns its
+ * fallback and every `saveUserData` throws "Not signed in". The user appears
+ * signed in to an app that cannot persist a single thing, with nothing on
+ * screen saying so.
+ *
+ * `userId` is what every persistence call is keyed on, so a session without one
+ * is not a session. Dropping it here renders the app logged-out and lets the
+ * user sign in again, self-healing every stale browser on next load.
+ *
+ * Deliberately NOT re-authenticating from here: a stale session should send
+ * someone back to the door, not quietly hand them a new identity.
+ */
 const loadSession = () => {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return null;
-    return JSON.parse(raw);
+    const parsed = JSON.parse(raw);
+    if (!parsed || !parsed.userId) {
+      // Clear the dead session *and* its cached profile: the two are written
+      // and cleared as one record everywhere else in this file. Nothing else is
+      // touched: the guest cart is a separate key and survives, so the user
+      // drops back to being a guest holding the cart they already had.
+      localStorage.removeItem(STORAGE_KEY);
+      localStorage.removeItem(PROFILE_KEY);
+      return null;
+    }
+    return parsed;
   } catch {
     return null;
   }
@@ -64,7 +93,7 @@ export const AuthProvider = ({ children }) => {
   const [isLoggedIn, setIsLoggedIn] = useState(!!initial);
   const [isNewUser, setIsNewUser] = useState(initial?.isNewUser || false);
   const [userEmail, setUserEmail] = useState(initial?.email || '');
-  // No display name until a session supplies one — every consumer falls back
+  // No display name until a session supplies one. Every consumer falls back
   // ('You' / 'there'), so an empty string is the honest neutral default.
   const [userName, setUserName] = useState(initial?.name || '');
   const [userId, setUserId] = useState(initial?.userId || null);
@@ -74,6 +103,22 @@ export const AuthProvider = ({ children }) => {
   const [accountManager, setAccountManager] = useState(initial?.accountManager || null);
   const [profile, setProfile] = useState(cachedProfile);
   const [profileLoading, setProfileLoading] = useState(false);
+
+  /**
+   * Adopt the active cart into the account.
+   *
+   * Runs on session *restore* as well as at sign-in: finalizeSession only fires
+   * on the sign-in itself, so without this a returning user's cart would never
+   * reconnect to their account after a page reload: no mirror, no continuity.
+   * `adoptActiveCartForUser` is idempotent and no-ops once it has run for a
+   * given userId, so this is safe on every mount.
+   */
+  useEffect(() => {
+    if (!userId) return;
+    adoptActiveCartForUser(userId).catch((err) =>
+      console.warn('Cart adoption failed:', err.message)
+    );
+  }, [userId]);
 
   const persist = (session) => {
     try {
@@ -115,7 +160,7 @@ export const AuthProvider = ({ children }) => {
 
   /**
    * Verify the 6-digit code. Returns { isNewUser, user, token }.
-   * Does NOT log the user in — call finalizeSession() once you're ready
+   * Does NOT log the user in. Call finalizeSession() once you're ready
    * (immediately for returning users, after onboarding for new ones).
    */
   const verifyCode = async (email, code) => {
@@ -195,7 +240,7 @@ export const AuthProvider = ({ children }) => {
    * Persist the user's profile to the ps-users blob.
    * Merges with whatever's already saved (shallow). Returns the merged record.
    *
-   * `overrides` lets callers pass userId/email explicitly — useful during
+   * `overrides` lets callers pass userId/email explicitly, which is useful during
    * onboarding when the React state hasn't flushed yet from finalizeSession.
    */
   const saveProfile = async (profileData, overrides = {}) => {
@@ -239,7 +284,7 @@ export const AuthProvider = ({ children }) => {
     setAccountManager(session.accountManager);
     setIsLoggedIn(true);
 
-    // Best-effort profile fetch — don't block login on it. For brand-new users
+    // Best-effort profile fetch; don't block login on it. For brand-new users
     // there's nothing to load yet; their first saveProfile will populate it.
     if (session.userId && !session.isNewUser) {
       fetchProfile({ userId: session.userId, email: session.email })
@@ -263,30 +308,30 @@ export const AuthProvider = ({ children }) => {
         .catch((err) => console.warn('Profile load failed:', err.message));
     }
 
-    // Active cart stays put across sign-in — same localStorage store works
-    // for guests and members. The user can save it to their library from the
-    // shop quote page if they want a named snapshot.
+    // The guest cart is adopted into the account by the effect above, which
+    // fires as soon as setUserId lands, covering sign-in and session restore
+    // through one path.
 
     // Honor a post-login destination captured when a logged-out user hit a
     // protected URL (see NotFoundRedirect in main.jsx). Only navigate when
     // there's a trusted returnTo to consume: callers that finalize a session
-    // without one — the landing page, and the quote wizard, which finalizes
-    // mid-modal and then renders its own success step — must stay put.
+    // without one (the landing page, and the quote wizard, which finalizes
+    // mid-modal and then renders its own success step) must stay put.
     const dest = safeReturnTo(new URLSearchParams(location.search).get('returnTo'));
     if (dest) navigate(dest, { replace: true });
   };
 
   /**
-   * "Demo: Skip Signup" — sign into the shared, pre-seeded demo account.
+   * "Demo: Skip Signup" signs into the shared, pre-seeded demo account.
    *
    * This used to fake a session locally with `userId: null`, which made every
    * persistence helper above a silent no-op (saveUserData threw "Not signed
    * in"). It now goes through /api/demo-session for a real userId + token, so
-   * the demo app saves like any other account — and its data survives across
+   * the demo app saves like any other account, and its data survives across
    * clicks, because the endpoint seeds only what's missing.
    *
    * Async and throws: callers must await and surface the failure.
-   * `name` only overrides the display name (the demo's greeting) — the account
+   * `name` only overrides the display name (the demo's greeting); the account
    * itself is fixed server-side.
    */
   const login = async ({ name } = {}) => {
@@ -320,6 +365,10 @@ export const AuthProvider = ({ children }) => {
     setToken(null);
     setProfile(null);
     localStorage.removeItem('prosource_welcome_dismissed');
+    // The active cart is the *account's* cart once adopted: it's mirrored to
+    // their blob and comes back on next sign-in. Leaving it in localStorage
+    // would hand it to whoever uses this browser next.
+    releaseActiveCart();
   };
 
   return (

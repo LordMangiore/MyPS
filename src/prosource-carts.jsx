@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from './auth-context';
-import { loadSavedCartIntoActive } from './guest-cart';
+import {
+  loadSavedCartIntoActive, saveActiveAsNewCart, guestCartCount,
+} from './guest-cart';
 import { Link, useNavigate } from 'react-router-dom';
 import Select from './components/Select';
 import {
@@ -16,7 +18,11 @@ import {
   Image,
   MoreHorizontal,
   Clock,
-  Package
+  Package,
+  Copy,
+  Pencil,
+  Check,
+  X,
 } from 'lucide-react';
 
 const ProSourceCarts = () => {
@@ -25,6 +31,11 @@ const ProSourceCarts = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedCart, setExpandedCart] = useState(null);
   const [sortBy, setSortBy] = useState('updated');
+  const [renamingId, setRenamingId] = useState(null);
+  const [renameDraft, setRenameDraft] = useState('');
+  const [confirmDeleteId, setConfirmDeleteId] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [flash, setFlash] = useState('');
 
   const colors = {
     red: '#BA0C2F',
@@ -416,7 +427,7 @@ const ProSourceCarts = () => {
   };
 
   // /carts is the *saved carts library*, members only. Guests don't have a
-  // library — their active cart lives at /cart, so we send them there.
+  // library; their active cart lives at /cart, so we send them there.
   const [carts, setCarts] = useState([]);
 
   useEffect(() => {
@@ -433,9 +444,104 @@ const ProSourceCarts = () => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId]);
 
+  /**
+   * "Add to Cart" now means add to cart.
+   *
+   * It used to call loadSavedCartIntoActive, which *replaced* the active cart
+   * wholesale: click it with a cart in progress and that cart was gone, with
+   * no warning and no undo. It merges now: quantities stack, and nothing the
+   * user already had is lost.
+   */
   const loadCart = (cart) => {
-    loadSavedCartIntoActive(cart);
+    const before = guestCartCount();
+    loadSavedCartIntoActive(cart, { mode: 'merge' });
+    const added = guestCartCount() - before;
+    setFlash(
+      before === 0
+        ? `Added ${cart.itemCount} item${cart.itemCount !== 1 ? 's' : ''} to your cart`
+        : `Merged into your cart (${added > 0 ? `+${added}` : 'no new'} item${added === 1 ? '' : 's'})`
+    );
     navigate('/cart');
+  };
+
+  const touch = (cart) => {
+    const now = Date.now();
+    return {
+      ...cart,
+      updatedAt: new Date(now).toLocaleDateString('en-US'),
+      updatedAtTs: now,
+      updatedBy: userName || 'You',
+    };
+  };
+
+  const commitRename = (cart) => {
+    const name = renameDraft.trim();
+    setRenamingId(null);
+    if (!name || name === cart.name) return;
+    setCarts((prev) => {
+      const next = prev.map((c) => (c.id === cart.id ? touch({ ...c, name }) : c));
+      persistCarts(next);
+      return next;
+    });
+  };
+
+  const duplicateCart = (cart) => {
+    const now = Date.now();
+    setCarts((prev) => {
+      const copy = {
+        ...cart,
+        id: `cart-${now}`,
+        name: `${cart.name} (copy)`,
+        updatedAt: new Date(now).toLocaleDateString('en-US'),
+        updatedAtTs: now,
+        updatedBy: userName || 'You',
+        // Deep-ish copy so editing one cart's lines can't mutate the other's.
+        products: (cart.products || []).map((p) => ({ ...p })),
+      };
+      const next = [copy, ...prev];
+      persistCarts(next);
+      return next;
+    });
+    setFlash('Cart duplicated');
+  };
+
+  const deleteCart = (cart) => {
+    setConfirmDeleteId(null);
+    setCarts((prev) => {
+      const next = prev.filter((c) => c.id !== cart.id);
+      persistCarts(next);
+      return next;
+    });
+    setFlash(`Deleted "${cart.name}"`);
+  };
+
+  /**
+   * The empty state's "Create Cart" button was dead, and `saveActiveAsNewCart`
+   * was imported by nobody, so there was no way to save a cart from anywhere
+   * in the app. This is that entry point: snapshot whatever is in the active
+   * cart into the library.
+   */
+  const createCartFromActive = async () => {
+    if (busy) return;
+    if (guestCartCount() === 0) {
+      // Nothing to snapshot, so send them to fill a cart rather than creating an
+      // empty shell that the library can't render.
+      navigate('/shop');
+      return;
+    }
+    setBusy(true);
+    try {
+      const saved = await saveActiveAsNewCart({ userId, userName, loadUserData, saveUserData });
+      if (saved) {
+        setCarts((prev) => [saved, ...prev]);
+        setFlash(`Saved "${saved.name}"`);
+      }
+    } catch (err) {
+      console.warn('Create cart failed:', err.message);
+      setFlash('Could not save your active cart.');
+    } finally {
+      setBusy(false);
+    }
   };
 
   const removeItem = (cart, product) => {
@@ -445,29 +551,55 @@ const ProSourceCarts = () => {
         .map(c => {
           if (c.id !== cart.id) return c;
           const products = c.products.filter(p => (p.sku || String(p.id)) !== key);
-          return {
+          return touch({
             ...c,
             products,
             itemCount: products.reduce((n, p) => n + (p.qty || 1), 0),
-          };
+          });
         })
-        // Auto-drop the cart entirely when it goes empty — there's no
-        // cart-level delete button anymore, so this is the only way out.
+        // A cart emptied to zero drops out of the library. There's an explicit
+        // Delete now, but this still keeps a 0-item husk out of the list.
         .filter(c => c.products && c.products.length > 0);
       persistCarts(next);
       return next;
     });
   };
 
+  // The `carts` blob holds both the saved-cart library (`list`) and the mirror
+  // of the user's active cart (`active`, written by guest-cart.js). Read before
+  // write so saving the library doesn't wipe the active cart.
   const persistCarts = (next) => {
     if (!userId) return;
-    saveUserData('carts', { list: next })
+    loadUserData('carts', null)
+      .then((stored) => saveUserData('carts', { ...(stored || {}), list: next }))
       .catch((err) => console.warn('Carts save failed:', err.message));
   };
 
-  const filteredCarts = searchQuery
-    ? carts.filter(c => c.name.toLowerCase().includes(searchQuery.toLowerCase()))
-    : carts;
+  // The sort control was a stub: it had state and a dropdown, and the value was
+  // never read. It sorts now.
+  const filteredCarts = React.useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    const hits = q
+      ? carts.filter(c =>
+          c.name.toLowerCase().includes(q) ||
+          (c.products || []).some(p =>
+            (p.name || '').toLowerCase().includes(q) ||
+            (p.sku || '').toLowerCase().includes(q)
+          )
+        )
+      : carts;
+    const out = [...hits];
+    if (sortBy === 'name') out.sort((a, b) => a.name.localeCompare(b.name));
+    else if (sortBy === 'items') out.sort((a, b) => (b.itemCount || 0) - (a.itemCount || 0));
+    else out.sort((a, b) => (b.updatedAtTs || 0) - (a.updatedAtTs || 0));
+    return out;
+  }, [carts, searchQuery, sortBy]);
+
+  useEffect(() => {
+    if (!flash) return;
+    const t = setTimeout(() => setFlash(''), 4000);
+    return () => clearTimeout(t);
+  }, [flash]);
 
   return (
     <div style={styles.wrapper}>
@@ -482,13 +614,34 @@ const ProSourceCarts = () => {
         <div className="flex-1 min-w-0">
           <h1 style={styles.pageTitle}>Saved Carts</h1>
           <p style={styles.pageDesc}>
-            Snapshots you've saved for later. Load one to bring it back into your active cart.
+            Snapshots you've saved for later. Adding one merges its items into your
+            active cart, so nothing you already had gets replaced.
           </p>
         </div>
-        <Link to="/cart" style={styles.btnPrimary} className={styles.btnPrimaryNoWrap}>
-          <ShoppingCart size={16} /> View active cart
-        </Link>
+        <div className="flex flex-wrap gap-2 shrink-0">
+          <button
+            style={styles.btnOutline}
+            onClick={createCartFromActive}
+            disabled={busy}
+            title="Snapshot your active cart into this library"
+          >
+            <Plus size={16} /> {busy ? 'Saving…' : 'Save active cart'}
+          </button>
+          <Link to="/cart" style={styles.btnPrimary} className={styles.btnPrimaryNoWrap}>
+            <ShoppingCart size={16} /> View active cart
+          </Link>
+        </div>
       </div>
+
+      {flash && (
+        <div style={{
+          padding: '10px 14px', borderRadius: 6, background: '#e8f5e9',
+          border: `1px solid #c8e6c9`, color: colors.green, fontSize: 13,
+          marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8,
+        }}>
+          <Check size={15} /> {flash}
+        </div>
+      )}
 
       {/* Search + Sort (saved-carts mode for logged-in users only) */}
       {userId && (
@@ -524,18 +677,48 @@ const ProSourceCarts = () => {
           </div>
           <div style={styles.emptyTitle}>No saved carts found</div>
           <div style={styles.emptyText}>
-            {searchQuery ? 'Try adjusting your search terms' : 'Create your first cart to save products for later'}
+            {searchQuery
+              ? 'Try adjusting your search terms'
+              : guestCartCount() > 0
+                ? 'Save the cart you have going and it will show up here.'
+                : 'Add products to your cart, then save it here to come back to later.'}
           </div>
-          <button style={styles.btnPrimary}>
-            <Plus size={16} /> Create Cart
+          {/* This button used to do nothing at all. */}
+          <button style={styles.btnPrimary} onClick={createCartFromActive} disabled={busy}>
+            <Plus size={16} />
+            {busy ? 'Saving…' : guestCartCount() > 0 ? 'Save my active cart' : 'Browse products'}
           </button>
         </div>
       ) : (
         filteredCarts.map(cart => (
           <div key={cart.id} style={styles.cartCard}>
             <div style={styles.cartHeader}>
-              <div>
-                <div style={styles.cartTitle}>{cart.name}</div>
+              <div className="min-w-0">
+                {renamingId === cart.id ? (
+                  <div className="flex items-center gap-2 mb-1">
+                    <input
+                      autoFocus
+                      value={renameDraft}
+                      onChange={(e) => setRenameDraft(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') commitRename(cart);
+                        if (e.key === 'Escape') setRenamingId(null);
+                      }}
+                      style={{
+                        ...styles.searchInput, padding: '6px 10px', fontSize: 16,
+                        fontWeight: 600, width: 260, maxWidth: '100%',
+                      }}
+                    />
+                    <button style={styles.actionBtn} onClick={() => commitRename(cart)} title="Save name">
+                      <Check size={14} />
+                    </button>
+                    <button style={styles.actionBtn} onClick={() => setRenamingId(null)} title="Cancel">
+                      <X size={14} />
+                    </button>
+                  </div>
+                ) : (
+                  <div style={styles.cartTitle} className="truncate">{cart.name}</div>
+                )}
                 <div style={styles.cartMeta}>
                   <span style={styles.cartMetaItem}>
                     <Clock size={14} />
@@ -549,33 +732,96 @@ const ProSourceCarts = () => {
               </div>
               <div style={styles.cartActions}>
                 {userId && (
-                  <button
-                    style={styles.addToCartBtn}
-                    onClick={() => loadCart(cart)}
-                    title="Replace your active cart with this one"
-                  >
-                    <ShoppingCart size={14} /> Add to Cart
-                  </button>
+                  <>
+                    <button
+                      style={styles.addToCartBtn}
+                      onClick={() => loadCart(cart)}
+                      title="Merge these items into your active cart"
+                    >
+                      <ShoppingCart size={14} /> Add to Cart
+                    </button>
+                    <button
+                      style={styles.actionBtn}
+                      onClick={() => { setRenamingId(cart.id); setRenameDraft(cart.name); }}
+                      title="Rename cart"
+                    >
+                      <Pencil size={14} /> Rename
+                    </button>
+                    <button
+                      style={styles.actionBtn}
+                      onClick={() => duplicateCart(cart)}
+                      title="Duplicate cart"
+                    >
+                      <Copy size={14} /> Duplicate
+                    </button>
+                    {confirmDeleteId === cart.id ? (
+                      <>
+                        <button style={styles.deleteBtn} onClick={() => deleteCart(cart)}>
+                          <Trash2 size={14} /> Confirm delete
+                        </button>
+                        <button style={styles.actionBtn} onClick={() => setConfirmDeleteId(null)}>
+                          Cancel
+                        </button>
+                      </>
+                    ) : (
+                      <button
+                        style={styles.actionBtn}
+                        onClick={() => setConfirmDeleteId(cart.id)}
+                        title="Delete cart"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    )}
+                  </>
                 )}
               </div>
             </div>
 
-            {/* Items always render inline — no Show/Hide toggle, no thumbnail grid above. */}
+            {/* Items always render inline: no Show/Hide toggle, no thumbnail grid above. */}
             {cart.products.length > 0 && (
               <div style={styles.expandedContent}>
                 <div style={styles.productList}>
                   {cart.products.map(product => (
-                    <div key={product.id} className="flex items-start gap-3 sm:items-center" style={styles.productRow}>
-                      <div className="w-14 h-14 sm:w-20 sm:h-20" style={styles.productImage}>
-                        <Image size={28} color={colors.gray400} />
+                    <div key={product.sku || product.id} className="flex items-start gap-3 sm:items-center" style={styles.productRow}>
+                      {/* saveActiveAsNewCart has always persisted `image`, yet this
+                          rendered a grey placeholder icon regardless. */}
+                      <div className="w-14 h-14 sm:w-20 sm:h-20 overflow-hidden" style={styles.productImage}>
+                        {product.image ? (
+                          <img
+                            src={product.image}
+                            alt=""
+                            className="w-full h-full"
+                            style={{ objectFit: 'cover' }}
+                          />
+                        ) : (
+                          <Image size={28} color={colors.gray400} />
+                        )}
                       </div>
                       <div className="flex-1 min-w-0" style={styles.productInfo}>
-                        <div style={styles.productName} className="truncate">{product.name}</div>
+                        <div style={styles.productName} className="truncate">
+                          {/* Item names were plain text, and dead ends. They link
+                              to the product page now. */}
+                          <Link
+                            to={`/shop/${encodeURIComponent(product.sku || product.id)}`}
+                            style={{ color: colors.gray900, textDecoration: 'none' }}
+                          >
+                            {product.isSample && (
+                              <span style={{
+                                fontSize: 10, fontWeight: 700, color: colors.darkBlue,
+                                background: '#e8f0fe', padding: '2px 5px', borderRadius: 3, marginRight: 6,
+                              }}>SAMPLE</span>
+                            )}
+                            {product.name}
+                          </Link>
+                        </div>
                         <div style={styles.productSku}>SKU: {product.sku}</div>
-                        <div style={styles.productCategory}>{product.category}</div>
+                        <div style={styles.productCategory}>
+                          {product.category}
+                          {product.colorName ? ` · ${product.colorName}` : ''}
+                        </div>
                         <div className="flex sm:hidden flex-wrap gap-x-4 gap-y-1 mt-2 text-sm">
                           <span style={{ color: colors.gray500 }}>Qty <span style={{ color: colors.gray900, fontWeight: 600 }}>{product.qty}</span></span>
-                          <span style={{ color: colors.gray500 }}>List <span style={{ color: colors.gray900, fontWeight: 600 }}>{product.price > 0 ? `$${product.price.toFixed(2)}` : '—'}</span></span>
+                          <span style={{ color: colors.gray500 }}>List <span style={{ color: colors.gray900, fontWeight: 600 }}>{product.price > 0 ? `$${product.price.toFixed(2)}` : 'N/A'}</span></span>
                           <span style={{ color: colors.gray500 }}>Quote <span style={{ color: colors.darkBlue, fontWeight: 600 }}>To be quoted</span></span>
                         </div>
                       </div>
@@ -586,7 +832,7 @@ const ProSourceCarts = () => {
                       <div className="hidden sm:block" style={styles.productPrice}>
                         <div style={styles.priceLabel}>List</div>
                         <div style={{ ...styles.priceValue, color: colors.gray500, fontWeight: 500 }}>
-                          {product.price > 0 ? `$${product.price.toFixed(2)}` : '—'}
+                          {product.price > 0 ? `$${product.price.toFixed(2)}` : 'N/A'}
                         </div>
                       </div>
                       <div className="hidden sm:block" style={styles.productPrice}>
