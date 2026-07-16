@@ -55,6 +55,7 @@ export const BUDGET_RANGES = [
 /** Quick-add suggestions. Rooms are free text — this list is a shortcut only. */
 export const ROOM_OPTIONS = [
   'Kitchen',
+  'Bathroom',
   'Master Bathroom',
   'Guest Bathroom',
   'Living Room',
@@ -70,14 +71,28 @@ export const ROOM_OPTIONS = [
   'Outdoor/Patio',
 ];
 
-/** Rooms we pre-seed in the create wizard based on the chosen project type. */
+/**
+ * Rooms we suggest in the create wizard based on the chosen project type.
+ * They are only ever a starting point — the wizard lets you remove any of them
+ * and add your own.
+ *
+ * Rule of thumb: only suggest a room we're actually confident about. A whole-home
+ * job really does span several rooms, so suggest the usual ones rather than a
+ * single pseudo-room called "Whole Home" — that would defeat the point of rooms,
+ * which is organising products by space. Where the type says nothing useful about
+ * which rooms are involved (Flooring, Commercial, Other), suggest nothing and let
+ * the Common-rooms chips do the work.
+ */
 export const DEFAULT_ROOMS_BY_TYPE = {
   'Kitchen Remodel': ['Kitchen'],
-  'Bathroom Remodel': ['Master Bathroom'],
-  'Full Home Renovation': ['Whole Home'],
-  'New Construction': ['Whole Home'],
+  'Bathroom Remodel': ['Bathroom'],
+  'Full Home Renovation': ['Kitchen', 'Living Room', 'Master Bathroom', 'Master Bedroom'],
+  'New Construction': ['Kitchen', 'Living Room', 'Master Bathroom', 'Master Bedroom'],
   'Countertops Only': ['Kitchen'],
   'Cabinets Only': ['Kitchen'],
+  'Flooring': [],
+  'Commercial': [],
+  'Other': [],
 };
 
 export const DEFAULT_PROJECT = {

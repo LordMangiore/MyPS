@@ -592,6 +592,12 @@ const styles = {
     textAlign: 'center',
     fontFamily: 'inherit',
     transition: 'all 0.12s ease',
+    // Flex-centred: the icon is an <svg> and preflight makes svg display:block,
+    // so textAlign alone would leave it against the left edge.
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   choiceCard: {
     border: '1.5px solid',

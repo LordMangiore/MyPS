@@ -490,6 +490,12 @@ const styles = {
     textAlign: 'center',
     fontFamily: 'inherit',
     transition: 'all 0.12s ease',
+    // Flex-centred: the icon is an <svg> and preflight makes svg display:block,
+    // so textAlign alone would leave it against the left edge.
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   chipRow: { display: 'flex', flexWrap: 'wrap', gap: 8 },
   chip: {

@@ -47,17 +47,35 @@ export default function ProSourceProjectCreate() {
   const [touchedRooms, setTouchedRooms] = useState(false);
   const [newRoomName, setNewRoomName] = useState('');
   const [connections, setConnections] = useState([]);
+  const [connectionsLoading, setConnectionsLoading] = useState(true);
   const [teamSelections, setTeamSelections] = useState({}); // connectionId → bool
+  const [showAddPerson, setShowAddPerson] = useState(false);
+  const [newPersonName, setNewPersonName] = useState('');
+  const [newPersonEmail, setNewPersonEmail] = useState('');
+  const [newPersonType, setNewPersonType] = useState('client');
+  const [addingPerson, setAddingPerson] = useState(false);
+  const [addPersonError, setAddPersonError] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
   // Load connections so the team step can offer real people.
+  // `connectionsLoading` matters: without it the team step renders its "no
+  // connections yet" empty state while the fetch is still in flight, which reads
+  // as "you have nobody" rather than "hang on". On a cold function that is the
+  // difference between the step looking broken and looking correct.
   useEffect(() => {
-    if (!userId) return;
+    if (!userId) { setConnectionsLoading(false); return; }
     let cancelled = false;
+    setConnectionsLoading(true);
     loadUserData('connections', null).then((stored) => {
       if (cancelled) return;
-      const list = Array.isArray(stored?.list) ? stored.list : [];
+      // Tolerate both shapes: the seed writes { list: [...] }, but older/other
+      // writers may hand back a bare array.
+      const list = Array.isArray(stored?.list)
+        ? stored.list
+        : Array.isArray(stored)
+        ? stored
+        : [];
       setConnections(list);
       // Pre-check ProSource showroom contacts (Kim + Heather etc.)
       const initial = {};
@@ -65,10 +83,63 @@ export default function ProSourceProjectCreate() {
         if (c.type === 'prosource') initial[c.id] = true;
       });
       setTeamSelections(initial);
+      setConnectionsLoading(false);
     });
     return () => { cancelled = true; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId]);
+
+  /**
+   * Add someone who isn't a connection yet, straight from the wizard.
+   * Written as status 'invited' with inviteEmailSent: false — they have been
+   * added to the project, but no email has gone out. The Connections page has
+   * the real invite flow; sending mail from here would surprise the user.
+   */
+  const addPerson = async () => {
+    const name = newPersonName.trim();
+    if (!name || addingPerson) return;
+    setAddingPerson(true);
+    setAddPersonError('');
+    try {
+      const stored = await loadUserData('connections', null);
+      const base = stored && typeof stored === 'object' && !Array.isArray(stored) ? stored : {};
+      const list = Array.isArray(stored?.list)
+        ? stored.list
+        : Array.isArray(stored)
+        ? stored
+        : [];
+      const id = `conn-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+      const record = {
+        id,
+        name,
+        initials: name.split(/\s+/).filter(Boolean).map((s) => s[0]?.toUpperCase()).slice(0, 2).join('') || '?',
+        role: newPersonType === 'client' ? 'Homeowner' : 'Trade Pro',
+        type: newPersonType,
+        email: newPersonEmail.trim(),
+        phone: '',
+        location: '',
+        status: 'invited',
+        projects: 0,
+        inviteToken: null,
+        inviteEmailSent: false,
+        invitedAt: Date.now(),
+        addedAt: Date.now(),
+      };
+      const next = [...list, record];
+      // Spread `base` so we never drop sibling keys (the Connections page keeps
+      // `requests`/`requestsSeeded` in this same blob).
+      await saveUserData('connections', { ...base, list: next });
+      setConnections(next);
+      setTeamSelections((prev) => ({ ...prev, [id]: true }));
+      setNewPersonName('');
+      setNewPersonEmail('');
+      setShowAddPerson(false);
+    } catch (err) {
+      setAddPersonError('Could not add them. Try again.');
+    } finally {
+      setAddingPerson(false);
+    }
+  };
 
   // Suggest a default name based on type and a client name from the team
   // (e.g. "Beans Kitchen Remodel"). Only applies before the user types anything.
@@ -413,13 +484,23 @@ export default function ProSourceProjectCreate() {
 
           {step === 'team' && (
             <Step
-              eyebrow={`Step ${stepIndex + 1} of ${stepIds.length}`}
+              eyebrow={`Step ${stepIndex + 1} of ${stepIds.length} · Optional`}
               title="Bring in your team."
-              sub="Your ProSource showroom team is already added. Toggle anyone else."
+              sub={
+                connectionsLoading
+                  ? 'Finding the people you work with…'
+                  : connections.some((c) => c.type === 'prosource')
+                  ? 'Your ProSource showroom team is pre-selected. Toggle anyone else, or add someone new.'
+                  : 'Toggle anyone who should see this project, or add someone new.'
+              }
             >
-              {connections.length === 0 ? (
+              {connectionsLoading ? (
                 <div style={{ fontSize: 14, color: colors.gray500, padding: 16 }}>
-                  No connections yet. You can add them after creating the project.
+                  Loading your connections…
+                </div>
+              ) : connections.length === 0 ? (
+                <div style={{ fontSize: 14, color: colors.gray500, padding: '8px 0 16px' }}>
+                  No connections yet — add the people working on this project below.
                 </div>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -475,6 +556,95 @@ export default function ProSourceProjectCreate() {
                       </button>
                     );
                   })}
+                </div>
+              )}
+
+              {!connectionsLoading && (
+                <div style={{ marginTop: 20, paddingTop: 20, borderTop: `1px solid ${colors.gray200}` }}>
+                  {!showAddPerson ? (
+                    <button
+                      onClick={() => setShowAddPerson(true)}
+                      style={{
+                        ...styles.chip,
+                        borderColor: colors.gray300,
+                        background: '#fff',
+                        color: colors.darkBlue,
+                        fontWeight: 600,
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 6,
+                      }}
+                    >
+                      <Plus size={14} /> Add someone new
+                    </button>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                      <div style={styles.sectionLabel}>Add someone to this project</div>
+                      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                        {[
+                          { value: 'client', label: 'Client' },
+                          { value: 'tradepro', label: 'Trade Pro' },
+                        ].map((opt) => (
+                          <button
+                            key={opt.value}
+                            onClick={() => setNewPersonType(opt.value)}
+                            style={{
+                              ...styles.chip,
+                              borderColor: newPersonType === opt.value ? colors.darkBlue : colors.gray300,
+                              background: newPersonType === opt.value ? '#f0f5ff' : '#fff',
+                              color: newPersonType === opt.value ? colors.darkBlue : colors.gray700,
+                              fontWeight: newPersonType === opt.value ? 600 : 500,
+                            }}
+                          >
+                            {opt.label}
+                          </button>
+                        ))}
+                      </div>
+                      <input
+                        type="text"
+                        value={newPersonName}
+                        onChange={(e) => setNewPersonName(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addPerson(); } }}
+                        placeholder="Name — e.g. Dana Whitfield"
+                        style={styles.input}
+                      />
+                      <input
+                        type="email"
+                        value={newPersonEmail}
+                        onChange={(e) => setNewPersonEmail(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addPerson(); } }}
+                        placeholder="Email (optional)"
+                        style={styles.input}
+                      />
+                      <div style={{ fontSize: 12, color: colors.gray500 }}>
+                        They'll be added to this project and your connections. No email is sent —
+                        you can invite them to ProSource from Connections when you're ready.
+                      </div>
+                      {addPersonError && (
+                        <div style={{ fontSize: 13, color: colors.red }} role="alert">{addPersonError}</div>
+                      )}
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <button
+                          onClick={addPerson}
+                          disabled={!newPersonName.trim() || addingPerson}
+                          style={{
+                            ...styles.navBtnPrimary,
+                            padding: '10px 18px',
+                            opacity: newPersonName.trim() && !addingPerson ? 1 : 0.5,
+                            cursor: newPersonName.trim() && !addingPerson ? 'pointer' : 'not-allowed',
+                          }}
+                        >
+                          {addingPerson ? 'Adding…' : 'Add to project'}
+                        </button>
+                        <button
+                          onClick={() => { setShowAddPerson(false); setAddPersonError(''); }}
+                          style={{ ...styles.navBtnGhost, padding: '10px 14px' }}
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </Step>
@@ -642,6 +812,13 @@ const styles = {
     textAlign: 'center',
     fontFamily: 'inherit',
     transition: 'all 0.12s ease',
+    // Flex-centred rather than relying on textAlign: the icon is an <svg>, and
+    // Tailwind's preflight sets `svg { display: block }`, so textAlign can't
+    // centre it -- it would sit hard against the left edge.
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   chipRow: {
     display: 'flex',
