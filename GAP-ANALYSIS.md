@@ -256,9 +256,17 @@ but shop products use `listPrice`, so every cart item price is `undefined`
 > documented for the record but is intentionally NOT scheduled. Revisit only if
 > this app ever faces real users or real customer data.
 >
-> **Do NOT "fix" the OTP dev bypass — it is load-bearing.** `RESEND_API_KEY` is
-> commented out in `.env`, so `DEV_BYPASS` is ON and any 6-digit code logs you
-> in. That is how the demo signs in without sending email. Leave it alone.
+> **CORRECTION (2026-07-16): the OTP dev bypass is NOT load-bearing.** An earlier
+> version of this document claimed `RESEND_API_KEY` was unset (it is commented
+> out in `.env`) and therefore `DEV_BYPASS` was ON and any 6-digit code would log
+> you in. **That was wrong.** The project is linked to a Netlify site whose
+> settings define `RESEND_API_KEY`, and `netlify dev` injects those site env vars
+> locally — observed directly: `Injected project settings env vars: FIREBASE_API_KEY,
+> FIREBASE_PASS_SECRET, RESEND_API_KEY, RESEND_FROM`. So `DEV_BYPASS` is **false**
+> both locally and in production, OTP is real, and **`send-invite` will genuinely
+> attempt to send real email to whatever address you type.** Be careful testing the
+> invite and OTP flows against addresses you don't own. To force the bypass on
+> deliberately, set `OTP_DEV_BYPASS=true`.
 >
 > Items originally filed here that cause *visible breakage* have been moved OUT
 > into WP14, because they make the demo look broken regardless of security
@@ -269,8 +277,11 @@ but shop products use `listPrice`, so every cart item price is `undefined`
   is derivable from email (`"ps-" + email`, otp-verify.mjs:127). Anyone can
   read/write anyone's data (auth-context.jsx:106-172; user-data.mjs:14
   "Demo only — no auth check"; save-profile.mjs:11; get-profile.mjs).
-- DEV_BYPASS fails OPEN: missing RESEND_API_KEY silently accepts ANY 6-digit
-  OTP in production (otp-send.mjs:9-10; otp-verify.mjs:9-10, :82-85).
+- DEV_BYPASS fails OPEN: a missing RESEND_API_KEY silently accepts ANY 6-digit
+  OTP (otp-send.mjs:9-10; otp-verify.mjs:9-10, :82-85). CORRECTED 2026-07-16:
+  the key IS set via Netlify site settings, so this is latent rather than active
+  — but it means accidentally deleting that env var silently removes
+  authentication instead of failing loudly.
 - lookup-user: unauthenticated PII lookup + account enumeration
   (lookup-user.mjs:13, :54-79).
 - send-invite: open relay — unauthenticated, attacker-controlled `signupUrl`

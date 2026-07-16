@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { X, CheckCircle, Mail } from 'lucide-react';
+import { iconForProjectType } from './project-type-icons';
 import { useAuth } from './auth-context';
 import { clearGuestCart } from './guest-cart';
 
@@ -32,15 +33,16 @@ const BUDGET_OPTIONS = [
   'Not sure yet',
 ];
 
+// Icons come from project-type-icons.js, keyed by label.
 const PROJECT_TYPES = [
-  { value: 'Kitchen Remodel', label: 'Kitchen', emoji: '🍳' },
-  { value: 'Bathroom Remodel', label: 'Bathroom', emoji: '🛁' },
-  { value: 'Flooring', label: 'Flooring', emoji: '🪵' },
-  { value: 'Full Home Renovation', label: 'Whole home', emoji: '🏡' },
-  { value: 'New Construction', label: 'New build', emoji: '🏗️' },
-  { value: 'Countertops', label: 'Countertops', emoji: '🪨' },
-  { value: 'Cabinets', label: 'Cabinets', emoji: '🗄️' },
-  { value: 'Other', label: 'Other', emoji: '✨' },
+  { value: 'Kitchen Remodel', label: 'Kitchen' },
+  { value: 'Bathroom Remodel', label: 'Bathroom' },
+  { value: 'Flooring', label: 'Flooring' },
+  { value: 'Full Home Renovation', label: 'Whole home' },
+  { value: 'New Construction', label: 'New build' },
+  { value: 'Countertops', label: 'Countertops' },
+  { value: 'Cabinets', label: 'Cabinets' },
+  { value: 'Other', label: 'Other' },
 ];
 
 const TIMING_OPTIONS = [
@@ -256,20 +258,29 @@ const QuoteWizard = ({ isOpen, onClose, cartItems = [], intent = 'quote' }) => {
               sub="Pick the closest match. Your account manager can refine it with you."
             >
               <div style={styles.chipGrid}>
-                {PROJECT_TYPES.map((t) => (
-                  <button
-                    key={t.value}
-                    onClick={() => setProjectType(t.value)}
-                    style={{
-                      ...styles.typeCard,
-                      borderColor: projectType === t.value ? colors.darkBlue : colors.gray200,
-                      background: projectType === t.value ? '#f0f5ff' : '#fff',
-                    }}
-                  >
-                    <div style={{ fontSize: 26, marginBottom: 6 }}>{t.emoji}</div>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: colors.gray900 }}>{t.label}</div>
-                  </button>
-                ))}
+                {PROJECT_TYPES.map((t) => {
+                  const Icon = iconForProjectType(t.label);
+                  const selected = projectType === t.value;
+                  return (
+                    <button
+                      key={t.value}
+                      onClick={() => setProjectType(t.value)}
+                      style={{
+                        ...styles.typeCard,
+                        borderColor: selected ? colors.darkBlue : colors.gray200,
+                        background: selected ? '#f0f5ff' : '#fff',
+                      }}
+                    >
+                      <Icon
+                        size={24}
+                        strokeWidth={1.5}
+                        color={selected ? colors.darkBlue : colors.gray500}
+                        style={{ marginBottom: 6 }}
+                      />
+                      <div style={{ fontSize: 13, fontWeight: 600, color: colors.gray900 }}>{t.label}</div>
+                    </button>
+                  );
+                })}
               </div>
             </Step>
           )}

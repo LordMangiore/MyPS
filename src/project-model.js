@@ -24,16 +24,18 @@
  * as the same project migrated on another page (even before anyone re-saves).
  */
 
+// Icons live in project-type-icons.js, keyed by `label` — this module stays
+// plain data so it's safe to import anywhere.
 export const PROJECT_TYPES = [
-  { value: 'Kitchen Remodel', label: 'Kitchen', emoji: '🍳' },
-  { value: 'Bathroom Remodel', label: 'Bathroom', emoji: '🛁' },
-  { value: 'Flooring', label: 'Flooring', emoji: '🪵' },
-  { value: 'Full Home Renovation', label: 'Whole home', emoji: '🏡' },
-  { value: 'New Construction', label: 'New build', emoji: '🏗️' },
-  { value: 'Commercial', label: 'Commercial', emoji: '🏢' },
-  { value: 'Countertops Only', label: 'Countertops', emoji: '🪨' },
-  { value: 'Cabinets Only', label: 'Cabinets', emoji: '🗄️' },
-  { value: 'Other', label: 'Other', emoji: '✨' },
+  { value: 'Kitchen Remodel', label: 'Kitchen' },
+  { value: 'Bathroom Remodel', label: 'Bathroom' },
+  { value: 'Flooring', label: 'Flooring' },
+  { value: 'Full Home Renovation', label: 'Whole home' },
+  { value: 'New Construction', label: 'New build' },
+  { value: 'Commercial', label: 'Commercial' },
+  { value: 'Countertops Only', label: 'Countertops' },
+  { value: 'Cabinets Only', label: 'Cabinets' },
+  { value: 'Other', label: 'Other' },
 ];
 
 /** Just the type values, for plain <select> menus. */

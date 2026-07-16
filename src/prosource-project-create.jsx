@@ -10,6 +10,7 @@ import {
   makeRoom,
   normalizeStored,
 } from './project-model';
+import { iconForProjectType } from './project-type-icons';
 
 const colors = {
   red: '#BA0C2F',
@@ -204,20 +205,29 @@ export default function ProSourceProjectCreate() {
               sub="Pick the closest match. You can change it later."
             >
               <div style={styles.chipGrid}>
-                {PROJECT_TYPES.map((t) => (
-                  <button
-                    key={t.value}
-                    onClick={() => setType(t.value)}
-                    style={{
-                      ...styles.typeCard,
-                      borderColor: type === t.value ? colors.darkBlue : colors.gray200,
-                      background: type === t.value ? '#f0f5ff' : '#fff',
-                    }}
-                  >
-                    <div style={{ fontSize: 28, marginBottom: 8 }}>{t.emoji}</div>
-                    <div style={{ fontSize: 14, fontWeight: 600, color: colors.gray900 }}>{t.label}</div>
-                  </button>
-                ))}
+                {PROJECT_TYPES.map((t) => {
+                  const Icon = iconForProjectType(t.label);
+                  const selected = type === t.value;
+                  return (
+                    <button
+                      key={t.value}
+                      onClick={() => setType(t.value)}
+                      style={{
+                        ...styles.typeCard,
+                        borderColor: selected ? colors.darkBlue : colors.gray200,
+                        background: selected ? '#f0f5ff' : '#fff',
+                      }}
+                    >
+                      <Icon
+                        size={26}
+                        strokeWidth={1.5}
+                        color={selected ? colors.darkBlue : colors.gray500}
+                        style={{ marginBottom: 8 }}
+                      />
+                      <div style={{ fontSize: 14, fontWeight: 600, color: colors.gray900 }}>{t.label}</div>
+                    </button>
+                  );
+                })}
               </div>
             </Step>
           )}
