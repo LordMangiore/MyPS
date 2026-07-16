@@ -46,6 +46,16 @@ import {
   removeProductAt,
   countProductsInRoom,
 } from './project-model';
+import { customerStatusLabel, statusTone, statusIcon } from './order-status';
+import {
+  useOrders,
+  docsForProject,
+  isEstimate,
+  headlineLabel,
+  headlineAmount,
+  byNewest,
+  money,
+} from './order-model';
 
 // ProSource Brand Colors
 const colors = {
@@ -70,7 +80,7 @@ const TAB_IDS = ['overview', 'products', 'designs', 'photos', 'estimates', 'acti
  * DEMO_IDENTITY_BY_NAME in netlify/functions/lib/seed.mjs.
  *
  * Seeded connections carry `demoIdentity`, but a project's `team` entries only
- * store name/role/type — so we resolve by connection first and fall back to the
+ * store name/role/type, so we resolve by connection first and fall back to the
  * name. Anyone who resolves to nothing (real invited users, James Anderson,
  * Mike Torres) simply never replies: we only ever put words in a demo persona's
  * mouth, never a real person's.
@@ -110,10 +120,10 @@ const fetchAiReply = async ({ identity, message, history, context }) => {
         headers: { 'Content-Type': 'application/json' },
         body: payload,
       });
-      if (res.status === 404) continue; // redirect not live yet — try direct path
+      if (res.status === 404) continue; // redirect not live yet, try direct path
       const data = await res.json();
       // `source` is "ai" or "canned" (key missing / API blip). Both are valid
-      // replies and must be treated identically — never surfaced in the UI.
+      // replies and must be treated identically. Never surfaced in the UI.
       if (data?.reply) {
         aiReplyPath = path; // remember the path that worked
         return data.reply;
@@ -129,7 +139,7 @@ const fetchAiReply = async ({ identity, message, history, context }) => {
 /**
  * Who on the team should field this post? Each rule owns a topic; the rule with
  * the most keyword hits that has someone on THIS project's team answers.
- * Deliberately simple and explainable — it only has to look considered, not be
+ * Deliberately simple and explainable. It only has to look considered, not be
  * a classifier.
  */
 const RESPONDER_RULES = [
@@ -168,7 +178,7 @@ const scoreRule = (text, keywords) =>
 
 /**
  * `candidates` are team members already resolved to a demo persona.
- * Default is the account manager — the member's main point of contact, and who
+ * Default is the account manager, the member's main point of contact, and who
  * they'd expect to hear from when nothing more specific applies.
  */
 const pickResponder = (message, candidates) => {
@@ -191,6 +201,14 @@ const pickResponder = (message, candidates) => {
 
 export default function ProjectDetailPage() {
   const { loadUserData, saveUserData, userId, userName, accountManager } = useAuth();
+  // Estimates & Orders tab. Reads the same `orders` blob as /orders. Seeded
+  // documents already carry a projectId, it just had nothing reading it.
+  const {
+    orders: allOrderDocs,
+    status: ordersStatus,
+    error: ordersError,
+    reload: reloadOrders,
+  } = useOrders();
   // ?tab=products lets the shop's save-to-project flow land on the right tab.
   const [searchParams] = useSearchParams();
   const requestedTab = searchParams.get('tab');
@@ -246,7 +264,7 @@ export default function ProjectDetailPage() {
           // (which used to wipe out team[] before the team effect could hydrate).
           lastPersistedStatus.current = { status: status || 'working', archived: !!arch };
         } else {
-          // Bad id — fall back to "new" behavior
+          // Bad id, so fall back to "new" behavior
           setProjectId(null);
         }
       }
@@ -300,13 +318,13 @@ export default function ProjectDetailPage() {
     }
   };
 
-  // Persist whenever status or archived flag changes — those are one-click
+  // Persist whenever status or archived flag changes. Those are one-click
   // actions with no explicit Save button. Skip until the initial load completes
   // so we don't echo the loaded values back as a save.
   const lastPersistedStatus = useRef({ status: null, archived: null });
   useEffect(() => {
     if (!userId || !loadedProject) return;
-    if (!projectId) return; // brand-new draft — let the explicit save handle it
+    if (!projectId) return; // brand-new draft, let the explicit save handle it
     if (
       lastPersistedStatus.current.status === projectStatus &&
       lastPersistedStatus.current.archived === archived
@@ -382,7 +400,7 @@ export default function ProjectDetailPage() {
 
   const persistTeam = async (nextTeam) => {
     if (!userId || !projectId) {
-      // No project saved yet — keep changes local; first project save will
+      // No project saved yet, so keep changes local; first project save will
       // include the team via persistProject below.
       setTeam(nextTeam);
       return;
@@ -391,7 +409,7 @@ export default function ProjectDetailPage() {
     try {
       const { updatedList } = buildUpsertedList(projectData, projectStatus, archived);
       // buildUpsertedList already includes our current `team` state through the
-      // shallow copy — so we need to override with the explicit nextTeam.
+      // shallow copy, so we need to override with the explicit nextTeam.
       const overridden = updatedList.map((p) =>
         p.id === projectId ? { ...p, team: nextTeam } : p
       );
@@ -471,7 +489,7 @@ export default function ProjectDetailPage() {
 
   /**
    * Project team members who map to a demo persona the AI-reply service knows.
-   * Everyone else is filtered out — a real user on the team never gets words
+   * Everyone else is filtered out, so a real user on the team never gets words
    * put in their mouth.
    */
   const teamPersonas = useMemo(
@@ -490,7 +508,7 @@ export default function ProjectDetailPage() {
    * Prior turns for the persona's context, oldest first. The persona's own past
    * posts are "them"; everything else is "user". Another persona's post is
    * attributed inline so the responder doesn't read it as the member speaking.
-   * Private notes are left out — they aren't visible to the team.
+   * Private notes are left out, since they aren't visible to the team.
    */
   const buildReplyHistory = (thread, identity) =>
     thread
@@ -505,7 +523,7 @@ export default function ProjectDetailPage() {
   /**
    * Ask a teammate to reply to the member's post.
    *
-   * Only ever called from postComment — i.e. only a member's own post triggers a
+   * Only ever called from postComment, i.e. only a member's own post triggers a
    * reply. The persona's post is written straight to the blob and never routed
    * back through here, so replies cannot chain.
    */
@@ -520,7 +538,7 @@ export default function ProjectDetailPage() {
         fetchAiReply({
           identity: responder.identity,
           message: post.body,
-          // `post` is the message itself — the rest of the thread is the history.
+          // `post` is the message itself; the rest of the thread is the history.
           history: buildReplyHistory(thread.slice(0, -1), responder.identity),
           context: {
             projectName: projectData.name,
@@ -611,7 +629,7 @@ export default function ProjectDetailPage() {
    * Narrow write: re-read the collection, patch ONLY this project, save.
    * Rooms and products change from three different pages, so writing back a
    * list we loaded on mount would clobber concurrent edits. Drafts that have
-   * never been saved (no projectId) stay local — persistProject picks them up.
+   * never been saved (no projectId) stay local, and persistProject picks them up.
    */
   const persistProjectFields = async (fields) => {
     setProjectData((current) => ({ ...current, ...fields }));
@@ -645,7 +663,7 @@ export default function ProjectDetailPage() {
     if (attached > 0) {
       const ok = window.confirm(
         `Remove "${room.name}"?\n\n${attached} product${attached !== 1 ? 's' : ''} ` +
-        `will move to Unassigned — nothing is deleted.`
+        `will move to Unassigned. Nothing is deleted.`
       );
       if (!ok) return;
     }
@@ -679,7 +697,7 @@ export default function ProjectDetailPage() {
    * Real project activity, newest first.
    *
    * This used to be two hand-written lists that credited Kim Marks with adding
-   * a "Top Knobs Garrison Knob" — a product no project has, which reads as
+   * a "Top Knobs Garrison Knob", a product no project has, which reads as
    * broken next to a Products tab showing real data. Everything here is instead
    * derived from timestamps the app already writes. An old record missing a
    * timestamp just yields no event rather than an invented one.
@@ -1325,8 +1343,8 @@ export default function ProjectDetailPage() {
     },
   };
 
-  // One saved product line. `index` is its position in projectData.products —
-  // that's the handle every edit writes back through.
+  // One saved product line. `index` is its position in projectData.products,
+  // and that's the handle every edit writes back through.
   const renderProductCard = (product, index) => (
     <div key={`${index}-${product.sku || product.id}`} style={{ ...styles.productCard, cursor: 'default' }}>
       <div style={styles.productImage}>
@@ -1351,7 +1369,7 @@ export default function ProjectDetailPage() {
           {product.name}
         </div>
         <div style={styles.productMeta}>
-          {[product.category, product.colorName].filter(Boolean).join(' • ') || '—'}
+          {[product.category, product.colorName].filter(Boolean).join(' • ') || 'No details'}
         </div>
         <div style={{ fontSize: 13, color: colors.gray700, marginTop: 6 }}>
           {product.isSample
@@ -1558,7 +1576,7 @@ export default function ProjectDetailPage() {
                         style={{ ...styles.btnOutline, ...styles.btnSmall }}
                         onClick={() => {
                           // Rooms + products are edited outside this buffer and
-                          // persist on their own — don't roll them back here.
+                          // persist on their own, so don't roll them back here.
                           if (snapshot) {
                             setProjectData((current) => ({
                               ...snapshot,
@@ -1640,7 +1658,7 @@ export default function ProjectDetailPage() {
                         </div>
                       </div>
 
-                      {/* Rooms live in their own card below — they're real
+                      {/* Rooms live in their own card below. They're real
                           entities now, not a checkbox tag list. */}
 
                       {/* Notes */}
@@ -1753,14 +1771,14 @@ export default function ProjectDetailPage() {
                 </div>
               </div>
 
-              {/* Rooms & Areas — real entities. Products hang off these. */}
+              {/* Rooms & Areas: real entities. Products hang off these. */}
               <div style={{ ...styles.card, marginBottom: 24 }}>
                 <div style={styles.cardHeader}>
                   <h3 style={styles.cardTitle}>Rooms &amp; Areas</h3>
                   <span style={{ fontSize: 13, color: colors.gray500 }}>
                     {rooms.length > 0
                       ? `${rooms.length} room${rooms.length !== 1 ? 's' : ''}`
-                      : '—'}
+                      : 'None yet'}
                   </span>
                 </div>
                 <div style={styles.cardBody}>
@@ -1830,7 +1848,7 @@ export default function ProjectDetailPage() {
                       value={newRoomName}
                       onChange={(e) => setNewRoomName(e.target.value)}
                       onKeyDown={(e) => { if (e.key === 'Enter') addRoom(newRoomName); }}
-                      placeholder="Add a room — any name works"
+                      placeholder="Add a room, any name works"
                       style={{ ...styles.formInput, flex: 1 }}
                     />
                     <button
@@ -1877,7 +1895,7 @@ export default function ProjectDetailPage() {
                 <div style={styles.cardHeader}>
                   <h3 style={styles.cardTitle}>Discussion</h3>
                   <span style={{ fontSize: 13, color: colors.gray500 }}>
-                    {comments.length > 0 ? `${comments.length} message${comments.length !== 1 ? 's' : ''}` : '—'}
+                    {comments.length > 0 ? `${comments.length} message${comments.length !== 1 ? 's' : ''}` : 'None yet'}
                   </span>
                 </div>
                 <div style={styles.cardBody}>
@@ -2008,7 +2026,7 @@ export default function ProjectDetailPage() {
                     </div>
                   )}
 
-                  {/* Sample messages — kept in the source for visual reference
+                  {/* Sample messages, kept in the source for visual reference
                       but rendered behind an opt-in flag that we never enable in
                       production. */}
                   {false && (
@@ -2308,7 +2326,7 @@ export default function ProjectDetailPage() {
                 </div>
               </div>
 
-              {/* Recent Activity — real events, newest 3. */}
+              {/* Recent Activity: real events, newest 3. */}
               <div style={styles.card}>
                 <div style={styles.cardHeader}>
                   <h3 style={styles.cardTitle}>Recent Activity</h3>
@@ -2482,36 +2500,131 @@ export default function ProjectDetailPage() {
           </div>
         )}
 
-        {/* Estimates Tab */}
-        {activeTab === 'estimates' && (
-          <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-              <div>
-                <h2 style={{ fontSize: 20, fontWeight: 600, margin: 0 }}>Estimates & Orders</h2>
-                <p style={{ color: colors.gray500, fontSize: 14, margin: '4px 0 0' }}>
-                  Track all estimates and orders for this project
-                </p>
-              </div>
-              <button style={styles.btnPrimary}>Request New Estimate</button>
-            </div>
+        {/* Estimates & Orders Tab */}
+        {activeTab === 'estimates' && (() => {
+          const projectDocs = docsForProject(allOrderDocs, projectId).sort(byNewest);
+          const estimates = projectDocs.filter(isEstimate);
+          const orderDocs = projectDocs.filter((d) => !isEstimate(d));
 
-            <div style={styles.emptyState}>
-              <div style={styles.emptyIcon}><FileText size={48} color={colors.gray300} /></div>
-              <h3 style={styles.emptyTitle}>No Estimates or Orders Yet</h3>
-              <p style={styles.emptyText}>
-                Request an estimate for your selected products, or ask your ProSource Account Manager to upload existing estimates and orders here.
-              </p>
-              <div style={{ display: 'flex', gap: 12, justifyContent: 'center' }}>
-                <button style={styles.btnPrimary}>
-                  Request Estimate
-                </button>
-                <button style={styles.btnOutline}>
-                  Contact Account Manager
-                </button>
-              </div>
+          const docCard = (doc) => {
+            const DocIcon = statusIcon(doc.status);
+            const tone = statusTone(doc.status);
+            return (
+              <Link
+                key={doc.id}
+                to={`/orders/${doc.id}`}
+                style={{
+                  ...styles.card,
+                  display: 'block',
+                  padding: 16,
+                  marginBottom: 12,
+                  textDecoration: 'none',
+                  color: 'inherit',
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap' }}>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: 15, fontWeight: 600, color: colors.gray900, marginBottom: 6 }}>
+                      {doc.id}
+                    </div>
+                    <div style={{
+                      display: 'inline-flex', alignItems: 'center', gap: 5,
+                      padding: '3px 8px', borderRadius: 4, fontSize: 12, fontWeight: 600,
+                      background: tone.bg, color: tone.fg,
+                    }}>
+                      {DocIcon && <DocIcon size={12} />} {customerStatusLabel(doc.status)}
+                    </div>
+                    <div style={{ fontSize: 13, color: colors.gray500, marginTop: 8 }}>
+                      {isEstimate(doc) ? 'Quoted' : 'Ordered'} {doc.orderDate || '--'}
+                      {doc.lineItems.length > 0 && ` · ${doc.lineItems.length} line ${doc.lineItems.length === 1 ? 'item' : 'items'}`}
+                    </div>
+                  </div>
+                  <div style={{ textAlign: 'right' }}>
+                    <div style={{ fontSize: 11, color: colors.gray500, textTransform: 'uppercase', marginBottom: 2 }}>
+                      {headlineLabel(doc)}
+                    </div>
+                    <div style={{
+                      fontSize: 17, fontWeight: 700,
+                      color: isEstimate(doc)
+                        ? colors.gray900
+                        : doc.balanceDue > 0 ? colors.red : colors.green,
+                    }}>
+                      {money(headlineAmount(doc))}
+                    </div>
+                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 13, fontWeight: 500, color: colors.darkBlue, marginTop: 8 }}>
+                      View details <ChevronRight size={14} />
+                    </div>
+                  </div>
+                </div>
+              </Link>
+            );
+          };
+
+          const section = (title, list) => (
+            <div style={{ marginBottom: 28 }}>
+              <h3 style={{ fontSize: 14, fontWeight: 600, color: colors.gray700, margin: '0 0 12px' }}>
+                {title} ({list.length})
+              </h3>
+              {list.map(docCard)}
             </div>
-          </div>
-        )}
+          );
+
+          return (
+            <div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16, marginBottom: 24, flexWrap: 'wrap' }}>
+                <div>
+                  <h2 style={{ fontSize: 20, fontWeight: 600, margin: 0 }}>Estimates & Orders</h2>
+                  <p style={{ color: colors.gray500, fontSize: 14, margin: '4px 0 0' }}>
+                    Track all estimates and orders for this project
+                  </p>
+                </div>
+                {/* Messaging the account manager IS how you request an estimate
+                    here. There's no self-serve estimate endpoint, so this links
+                    to the thing that actually works instead of a dead button. */}
+                <Link to="/messages" style={{ ...styles.btnPrimary, textDecoration: 'none' }}>
+                  Message your Account Manager
+                </Link>
+              </div>
+
+              {ordersStatus === 'loading' && (
+                <div style={styles.emptyState}>
+                  <div style={styles.emptyIcon}><FileText size={40} color={colors.gray300} /></div>
+                  <h3 style={styles.emptyTitle}>Loading…</h3>
+                  <p style={styles.emptyText}>Fetching this project's estimates and orders.</p>
+                </div>
+              )}
+
+              {ordersStatus === 'error' && (
+                <div style={styles.emptyState}>
+                  <div style={styles.emptyIcon}><FileText size={40} color={colors.gray300} /></div>
+                  <h3 style={styles.emptyTitle}>Couldn't load estimates & orders</h3>
+                  <p style={styles.emptyText}>{ordersError}</p>
+                  <button onClick={reloadOrders} style={styles.btnOutline}>Try again</button>
+                </div>
+              )}
+
+              {ordersStatus === 'ready' && projectDocs.length === 0 && (
+                <div style={styles.emptyState}>
+                  <div style={styles.emptyIcon}><FileText size={48} color={colors.gray300} /></div>
+                  <h3 style={styles.emptyTitle}>No Estimates or Orders Yet</h3>
+                  <p style={styles.emptyText}>
+                    Ask your ProSource Account Manager to quote the products on this project. Approved quotes turn into orders and show up here.
+                  </p>
+                  <Link to="/messages" style={{ ...styles.btnPrimary, textDecoration: 'none' }}>
+                    Message your Account Manager
+                  </Link>
+                </div>
+              )}
+
+              {ordersStatus === 'ready' && projectDocs.length > 0 && (
+                <>
+                  {estimates.length > 0 && section('Estimates', estimates)}
+                  {orderDocs.length > 0 && section('Orders', orderDocs)}
+                </>
+              )}
+            </div>
+          );
+        })()}
 
         {/* Activity Tab */}
         {activeTab === 'activity' && (

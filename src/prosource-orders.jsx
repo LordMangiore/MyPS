@@ -1,16 +1,26 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { useAuth } from './auth-context';
 import Select from './components/Select';
 import {
   customerStatusLabel,
   CUSTOMER_STATUS_OPTIONS,
   matchesCustomerStatus,
+  statusTone,
+  statusIcon,
 } from './order-status';
-import { getStatusOverride, setStatusOverride } from './order-status-overrides';
+import {
+  useOrders,
+  availableActions,
+  headlineLabel,
+  headlineAmount,
+  isEstimate,
+  withinTimeRange,
+  TIME_RANGE_OPTIONS,
+  DEFAULT_TIME_RANGE,
+  money,
+} from './order-model';
 import RfmsActionModal from './components/RfmsActionModal';
 import {
-  FileText,
   Search,
   Filter,
   ArrowUpDown,
@@ -18,10 +28,9 @@ import {
   ChevronRight,
   MapPin,
   ArrowLeft,
-  Clock,
-  CheckCircle,
+  FileText,
   AlertCircle,
-  Loader
+  RotateCw,
 } from 'lucide-react';
 
 // Chip-group for Sort/Filter modals
@@ -91,19 +100,13 @@ const SORT_OPTIONS = [
   { value: 'orderStatus', label: 'Order Status' },
 ];
 
-const TIME_OPTIONS = [
-  { value: '3year', label: '3 Years' },
-  { value: '1year', label: '1 Year' },
-  { value: '6mo', label: '6 Months' },
-];
-
 const SHOWROOM_OPTIONS = [
   { value: 'all', label: 'All Showrooms' },
   { value: 'stlouis', label: 'ProSource of St. Louis' },
   { value: 'fenton', label: 'ProSource of Fenton' },
 ];
 
-// Filter dropdown options — pulled from the shared customer-facing
+// Filter dropdown options: pulled from the shared customer-facing
 // taxonomy. "Order Confirmed" fans out to the payment/processing/items
 // RFMS states under the hood (see matchesCustomerStatus).
 const STATUS_OPTIONS = CUSTOMER_STATUS_OPTIONS;
@@ -121,14 +124,14 @@ const SEARCH_BY_PLACEHOLDER = {
 };
 
 const ProSourceOrders = () => {
-  const { userId, userName, loadUserData } = useAuth();
+  const { orders: allDocs, status: loadStatus, error: loadError, reload, runAction } = useOrders();
   const [activeType, setActiveType] = useState('orders');
   const [searchBy, setSearchBy] = useState('jobName');
   const [searchQuery, setSearchQuery] = useState('');
   // Applied state
   const [sortField, setSortField] = useState('orderStatus');
   const [sortDir, setSortDir] = useState('desc');
-  const [filterTime, setFilterTime] = useState('3year');
+  const [filterTime, setFilterTime] = useState(DEFAULT_TIME_RANGE);
   const [filterShowroom, setFilterShowroom] = useState('all');
   const [filterStatus, setFilterStatus] = useState('all');
   // Modal state
@@ -154,10 +157,10 @@ const ProSourceOrders = () => {
     setFilterTime(draftTime); setFilterShowroom(draftShowroom); setFilterStatus(draftStatus); setFilterOpen(false);
   };
   const resetFilter = () => {
-    setDraftTime('3year'); setDraftShowroom('all'); setDraftStatus('all');
+    setDraftTime(DEFAULT_TIME_RANGE); setDraftShowroom('all'); setDraftStatus('all');
   };
 
-  const activeFilterCount = (filterTime !== '3year' ? 1 : 0) + (filterShowroom !== 'all' ? 1 : 0) + (filterStatus !== 'all' ? 1 : 0);
+  const activeFilterCount = (filterTime !== DEFAULT_TIME_RANGE ? 1 : 0) + (filterShowroom !== 'all' ? 1 : 0) + (filterStatus !== 'all' ? 1 : 0);
   const sortLabel = SORT_OPTIONS.find(o => o.value === sortField)?.label || 'Sort';
 
   const colors = {
@@ -395,37 +398,20 @@ const ProSourceOrders = () => {
       fontSize: 14,
       color: colors.gray700,
     },
+    // Colours come from order-status.js so this page and the detail page can't
+    // drift apart (and so `items` / `pickup` don't fall through to grey).
     statusBadge: (status) => {
-      let bgColor, textColor;
-      switch (status) {
-        case 'ready':
-          bgColor = '#fef3c7';
-          textColor = colors.amber;
-          break;
-        case 'payment':
-          bgColor = '#fee2e2';
-          textColor = colors.red;
-          break;
-        case 'processing':
-          bgColor = '#dbeafe';
-          textColor = colors.darkBlue;
-          break;
-        case 'complete':
-          bgColor = '#dcfce7';
-          textColor = colors.green;
-          break;
-        default:
-          bgColor = colors.gray100;
-          textColor = colors.gray700;
-      }
+      const tone = statusTone(status);
       return {
-        display: 'inline-block',
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 5,
         padding: '4px 8px',
         borderRadius: 4,
         fontSize: 12,
         fontWeight: 600,
-        background: bgColor,
-        color: textColor,
+        background: tone.bg,
+        color: tone.fg,
       };
     },
     showroomName: {
@@ -460,20 +446,8 @@ const ProSourceOrders = () => {
     orderActions: {
       padding: '12px 20px',
       display: 'flex',
-      justifyContent: 'space-between',
+      justifyContent: 'flex-end',
       alignItems: 'center',
-    },
-    viewPdfBtn: {
-      display: 'inline-flex',
-      alignItems: 'center',
-      gap: 6,
-      padding: '8px 16px',
-      border: `1px solid ${colors.gray300}`,
-      borderRadius: 4,
-      fontSize: 13,
-      color: colors.gray700,
-      background: '#fff',
-      cursor: 'pointer',
     },
     viewDetailsLink: {
       color: colors.darkBlue,
@@ -486,161 +460,69 @@ const ProSourceOrders = () => {
       alignItems: 'center',
       gap: 4,
     },
-    loadMoreBtn: {
-      display: 'block',
-      width: 'fit-content',
-      margin: '24px auto',
-      padding: '12px 32px',
-      border: `1px solid ${colors.gray300}`,
-      borderRadius: 6,
-      fontSize: 14,
-      fontWeight: 500,
-      color: colors.gray700,
-      background: '#fff',
-      cursor: 'pointer',
-    },
     emptyState: {
       padding: 64,
       textAlign: 'center',
       background: colors.gray100,
       borderRadius: 8,
+      color: colors.gray500,
+      fontSize: 14,
+    },
+    emptyTitle: {
+      fontSize: 16,
+      fontWeight: 600,
+      color: colors.gray700,
+      marginBottom: 6,
+    },
+    resultCount: {
+      fontSize: 12,
+      color: colors.gray500,
+      margin: '20px 0 8px',
+      textAlign: 'center',
     },
   };
 
-  const FALLBACK_ORDERS = [
-    {
-      id: 'EC099016',
-      jobName: 'Beans Kitchen Remodel',
-      orderDate: '8/20/2024',
-      status: 'processing',
-      statusText: 'Order Being Processed',
-      soldTo: (userName || 'You').toUpperCase(),
-      showroom: 'ProSource of St. Louis',
-      invoiceTotal: 1758.42,
-      material: 1631.28,
-      salesTax: 127.14,
-      service: 0,
-      totalPaid: 879.21,
-      balanceDue: 879.21,
-    },
-    {
-      id: 'EC096890',
-      jobName: 'Chen Master Bath',
-      orderDate: '4/18/2024',
-      status: 'ready',
-      statusText: 'Order Ready for Approval',
-      soldTo: (userName || 'You').toUpperCase(),
-      showroom: 'ProSource of St. Louis',
-      invoiceTotal: 4713.89,
-      material: 4364.71,
-      salesTax: 349.18,
-      service: 0,
-      totalPaid: 0,
-      balanceDue: 4713.89,
-    },
-    {
-      id: 'EC094964',
-      jobName: 'Wilson Bathroom',
-      orderDate: '1/3/2024',
-      status: 'payment',
-      statusText: 'Order Down Payment Due',
-      soldTo: (userName || 'You').toUpperCase(),
-      showroom: 'ProSource of St. Louis',
-      invoiceTotal: 3241.56,
-      material: 2986.50,
-      salesTax: 255.06,
-      service: 0,
-      totalPaid: 0,
-      balanceDue: 3241.56,
-    },
-    {
-      id: 'EC091091',
-      jobName: 'Anderson Office Renovation',
-      orderDate: '5/26/2023',
-      status: 'payment',
-      statusText: 'Order Down Payment Due',
-      soldTo: (userName || 'You').toUpperCase(),
-      showroom: 'ProSource of St. Louis',
-      invoiceTotal: 2847.33,
-      material: 2636.42,
-      salesTax: 210.91,
-      service: 0,
-      totalPaid: 0,
-      balanceDue: 2847.33,
-    },
-    {
-      id: 'EC090657',
-      jobName: 'Torres Kitchen Refresh',
-      orderDate: '5/4/2023',
-      status: 'complete',
-      statusText: 'Order Complete',
-      soldTo: (userName || 'You').toUpperCase(),
-      showroom: 'ProSource of St. Louis',
-      invoiceTotal: 5318.76,
-      material: 4924.78,
-      salesTax: 393.98,
-      service: 0,
-      totalPaid: 5318.76,
-      balanceDue: 0,
-    },
-  ];
-
-  const [orders, setOrders] = useState(FALLBACK_ORDERS);
-  useEffect(() => {
-    if (!userId) return;
-    let cancelled = false;
-    loadUserData('orders', null).then((stored) => {
-      if (cancelled) return;
-      if (Array.isArray(stored?.list) && stored.list.length > 0) {
-        setOrders(stored.list);
-      }
-    });
-    return () => { cancelled = true; };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userId]);
-
-  // Demo: any Pay/Approve clicked on the detail page (or here) flips the
-  // status via localStorage. Re-read on every render so the list mirrors it.
-  const [overrideTick, setOverrideTick] = useState(0);
-  useEffect(() => {
-    const sync = () => setOverrideTick((n) => n + 1);
-    window.addEventListener('prosource-order-overrides-changed', sync);
-    window.addEventListener('storage', (e) => {
-      if (e.key === 'prosource_order_overrides_v1') sync();
-    });
-    return () => window.removeEventListener('prosource-order-overrides-changed', sync);
-  }, []);
-  const ordersWithOverrides = orders.map((o) => ({
-    ...o,
-    status: getStatusOverride(o.id) || o.status,
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }));
-  // Reference overrideTick so the memoization re-runs when overrides change.
-  // (No-op cast — the value isn't read for its number.)
-  void overrideTick;
+  // Orders and estimates come from ONE place: the user's `orders` blob, read
+  // through useOrders(), the same hook /orders/:id and the project page use.
+  // This page used to render five fabricated orders whenever the blob was
+  // empty, which meant the list and the detail page disagreed about what an
+  // order even was.
+  const docs = allDocs.filter((d) =>
+    activeType === 'estimates' ? isEstimate(d) : !isEstimate(d)
+  );
 
   const [rfmsModal, setRfmsModal] = useState({ open: false, variant: null, order: null });
   const openRfms = (order, variant) => setRfmsModal({ open: true, variant, order });
   const closeRfms = () => setRfmsModal({ open: false, variant: null, order: null });
-  const onRfmsSuccess = () => {
-    if (!rfmsModal.order) return;
-    if (rfmsModal.variant === 'approve') setStatusOverride(rfmsModal.order.id, 'payment');
-    else if (rfmsModal.variant === 'pay') setStatusOverride(rfmsModal.order.id, 'processing');
-  };
+  // Throws on failure. The modal catches it and shows the error instead of a
+  // fake success.
+  const submitRfms = () => runAction(rfmsModal.order.id, rfmsModal.variant);
 
-  const getStatusIcon = (status) => {
-    switch (status) {
-      case 'ready':
-        return <AlertCircle size={14} />;
-      case 'payment':
-        return <Clock size={14} />;
-      case 'processing':
-        return <Loader size={14} />;
-      case 'complete':
-        return <CheckCircle size={14} />;
-      default:
-        return null;
-    }
+  const actionButton = (order, action) => {
+    const label =
+      action === 'approve' ? 'Approve'
+        : action === 'decline' ? 'Decline'
+          : `Pay ${money(order.balanceDue)}`;
+    const background =
+      action === 'approve' ? colors.green
+        : action === 'decline' ? '#fff'
+          : colors.darkBlue;
+    return (
+      <button
+        key={action}
+        onClick={(e) => { e.preventDefault(); openRfms(order, action); }}
+        style={{
+          padding: '6px 12px',
+          background,
+          color: action === 'decline' ? colors.gray700 : '#fff',
+          border: action === 'decline' ? `1px solid ${colors.gray300}` : 'none',
+          borderRadius: 5, fontSize: 12, fontWeight: 600, cursor: 'pointer',
+          fontFamily: 'inherit',
+        }}
+      >
+        {label}
+      </button>
+    );
   };
 
   return (
@@ -685,12 +567,14 @@ const ProSourceOrders = () => {
         ))}
       </div>
 
-      {/* Search field (full width) with submit-style icon button */}
+      {/* Search field (full width) with submit-style icon button.
+          The list filters live as you type; the whole collection is already
+          local, so there's no request to fire. Submit just dismisses the
+          on-screen keyboard, which is what the button is for on mobile. */}
       <form
         className="mb-2 flex items-stretch"
         onSubmit={(e) => {
           e.preventDefault();
-          // Mimic the real API behavior: this is where the request would fire.
           if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
         }}
       >
@@ -759,14 +643,45 @@ const ProSourceOrders = () => {
       {(activeFilterCount > 0 || sortField !== 'orderStatus' || sortDir !== 'desc') && (
         <div className="text-xs mb-3" style={{ color: colors.gray500 }}>
           Sorted by <strong style={{ color: colors.gray700 }}>{sortLabel}</strong> ({sortDir === 'asc' ? 'asc' : 'desc'})
-          {activeFilterCount > 0 && <> · <button onClick={() => { setFilterTime('3year'); setFilterShowroom('all'); setFilterStatus('all'); }} style={{ background: 'none', border: 'none', color: colors.darkBlue, cursor: 'pointer', padding: 0, fontFamily: 'inherit', fontSize: 'inherit' }}>Clear filters</button></>}
+          {activeFilterCount > 0 && <> · <button onClick={() => { setFilterTime(DEFAULT_TIME_RANGE); setFilterShowroom('all'); setFilterStatus('all'); }} style={{ background: 'none', border: 'none', color: colors.darkBlue, cursor: 'pointer', padding: 0, fontFamily: 'inherit', fontSize: 'inherit' }}>Clear filters</button></>}
         </div>
       )}
 
-      {/* Order Cards */}
-      {(() => {
+      {/* Loading / error / empty. These three used to not exist: the page
+          always had five fake orders to fall back on, so a broken fetch was
+          indistinguishable from a working one. */}
+      {loadStatus === 'loading' && (
+        <div style={styles.emptyState}>
+          <RotateCw size={28} color={colors.gray400} style={{ marginBottom: 12 }} />
+          <div style={styles.emptyTitle}>Loading your {activeType}…</div>
+        </div>
+      )}
+
+      {loadStatus === 'error' && (
+        <div style={styles.emptyState}>
+          <AlertCircle size={28} color={colors.red} style={{ marginBottom: 12 }} />
+          <div style={styles.emptyTitle}>We couldn't load your {activeType}</div>
+          <div style={{ marginBottom: 16 }}>{loadError}</div>
+          <button onClick={reload} style={styles.btnOutline}>Try again</button>
+        </div>
+      )}
+
+      {loadStatus === 'ready' && docs.length === 0 && (
+        <div style={styles.emptyState}>
+          <FileText size={28} color={colors.gray400} style={{ marginBottom: 12 }} />
+          <div style={styles.emptyTitle}>No {activeType} yet</div>
+          <div>
+            {activeType === 'estimates'
+              ? 'Quotes your account manager prepares for you will show up here.'
+              : 'Once you approve a quote it becomes an order and appears here.'}
+          </div>
+        </div>
+      )}
+
+      {/* Order / estimate cards */}
+      {loadStatus === 'ready' && docs.length > 0 && (() => {
         const q = searchQuery.trim().toLowerCase();
-        let matches = ordersWithOverrides.filter(order => {
+        let matches = docs.filter(order => {
           if (q) {
             let hit = false;
             if (searchBy === 'jobName') hit = order.jobName.toLowerCase().includes(q);
@@ -775,6 +690,9 @@ const ProSourceOrders = () => {
             if (!hit) return false;
           }
           if (!matchesCustomerStatus(filterStatus, order.status)) return false;
+          // The time range used to be selectable, count toward the filter
+          // badge, and then never get applied.
+          if (!withinTimeRange(order, filterTime)) return false;
           if (filterShowroom !== 'all') {
             const room = order.showroom.toLowerCase();
             if (filterShowroom === 'stlouis' && !room.includes('st. louis')) return false;
@@ -786,7 +704,7 @@ const ProSourceOrders = () => {
           let av, bv;
           if (sortField === 'jobName') { av = a.jobName.toLowerCase(); bv = b.jobName.toLowerCase(); }
           else if (sortField === 'orderNumber') { av = a.id; bv = b.id; }
-          else if (sortField === 'orderDate') { av = new Date(a.orderDate); bv = new Date(b.orderDate); }
+          else if (sortField === 'orderDate') { av = a.orderDateTs || 0; bv = b.orderDateTs || 0; }
           else { av = customerStatusLabel(a.status); bv = customerStatusLabel(b.status); }
           if (av < bv) return sortDir === 'asc' ? -1 : 1;
           if (av > bv) return sortDir === 'asc' ? 1 : -1;
@@ -799,106 +717,104 @@ const ProSourceOrders = () => {
             </div>
           );
         }
-        return matches.map((order) => (
-        <div key={order.id} style={styles.orderCard}>
-          <div style={styles.orderHeader}>
-            <Link to={`/orders/${order.id}`} style={{ ...styles.orderNumber, textDecoration: 'none', color: 'inherit' }}>{order.id}</Link>
-            <div style={styles.balanceDueHeader}>
-              <div style={styles.balanceDueLabel}>Balance Due</div>
-              <div style={styles.balanceDueValue(order.balanceDue)}>${order.balanceDue.toFixed(2)}</div>
-            </div>
-          </div>
+        return (
+          <>
+            {matches.map((order) => {
+              const StatusIcon = statusIcon(order.status);
+              const actions = availableActions(order);
+              return (
+                <div key={order.id} style={styles.orderCard}>
+                  <div style={styles.orderHeader}>
+                    <Link to={`/orders/${order.id}`} style={{ ...styles.orderNumber, textDecoration: 'none', color: 'inherit' }}>{order.id}</Link>
+                    <div style={styles.balanceDueHeader}>
+                      {/* A quote owes nothing until it's approved, so it shows a
+                          total rather than a balance due in red. */}
+                      <div style={styles.balanceDueLabel}>{headlineLabel(order)}</div>
+                      <div style={
+                        isEstimate(order)
+                          ? { ...styles.balanceDueValue(0), color: colors.gray900 }
+                          : styles.balanceDueValue(order.balanceDue)
+                      }>
+                        {money(headlineAmount(order))}
+                      </div>
+                    </div>
+                  </div>
 
-          <div className={styles.orderGridClass} style={styles.orderGrid}>
-            <div>
-              <div style={styles.orderLabel}>Job Name</div>
-              <div style={styles.orderValue}>{order.jobName}</div>
-            </div>
-            <div>
-              <div style={styles.orderLabel}>Order Date</div>
-              <div style={styles.orderValue}>{order.orderDate}</div>
-            </div>
-            <div>
-              <div style={styles.orderLabel}>Order Status</div>
-              <div style={styles.statusBadge(order.status)}>
-                {customerStatusLabel(order.status)}
-              </div>
-              {order.status === 'ready' && (
-                <button
-                  onClick={(e) => { e.preventDefault(); openRfms(order, 'approve'); }}
-                  style={{
-                    marginTop: 8, padding: '6px 12px',
-                    background: '#07542E', color: '#fff', border: 'none',
-                    borderRadius: 5, fontSize: 12, fontWeight: 600, cursor: 'pointer',
-                  }}
-                >
-                  Approve
-                </button>
-              )}
-              {order.status === 'payment' && (
-                <button
-                  onClick={(e) => { e.preventDefault(); openRfms(order, 'pay'); }}
-                  style={{
-                    marginTop: 8, padding: '6px 12px',
-                    background: '#003087', color: '#fff', border: 'none',
-                    borderRadius: 5, fontSize: 12, fontWeight: 600, cursor: 'pointer',
-                  }}
-                >
-                  Pay ${order.balanceDue.toFixed(2)}
-                </button>
-              )}
-            </div>
-            <div>
-              <div style={styles.orderLabel}>Sold To</div>
-              <div style={styles.orderValue}>{order.soldTo}</div>
-            </div>
-            <div>
-              <div style={styles.orderLabel}>Showroom Name</div>
-              <div style={styles.showroomName}>
-                <MapPin size={14} color={colors.red} style={{ marginTop: 2, flexShrink: 0 }} />
-                <span style={styles.orderValue}>{order.showroom}</span>
-              </div>
-            </div>
-          </div>
+                  <div className={styles.orderGridClass} style={styles.orderGrid}>
+                    <div>
+                      <div style={styles.orderLabel}>Job Name</div>
+                      <div style={styles.orderValue}>{order.jobName}</div>
+                    </div>
+                    <div>
+                      <div style={styles.orderLabel}>{isEstimate(order) ? 'Quote Date' : 'Order Date'}</div>
+                      <div style={styles.orderValue}>{order.orderDate || '--'}</div>
+                    </div>
+                    <div>
+                      <div style={styles.orderLabel}>Status</div>
+                      <div style={styles.statusBadge(order.status)}>
+                        {StatusIcon && <StatusIcon size={12} />}
+                        {customerStatusLabel(order.status)}
+                      </div>
+                      {actions.length > 0 && (
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
+                          {actions.map((action) => actionButton(order, action))}
+                        </div>
+                      )}
+                    </div>
+                    <div>
+                      <div style={styles.orderLabel}>Sold To</div>
+                      <div style={styles.orderValue}>{order.soldTo}</div>
+                    </div>
+                    <div>
+                      <div style={styles.orderLabel}>Showroom Name</div>
+                      <div style={styles.showroomName}>
+                        <MapPin size={14} color={colors.red} style={{ marginTop: 2, flexShrink: 0 }} />
+                        <span style={styles.orderValue}>{order.showroom}</span>
+                      </div>
+                    </div>
+                  </div>
 
-          <div className={styles.totalsGridClass} style={styles.totalsGrid}>
-            <div style={styles.totalItem}>
-              <div style={styles.totalLabel}>Invoice Total:</div>
-              <div style={styles.totalValue}>${order.invoiceTotal.toFixed(2)}</div>
-            </div>
-            <div style={styles.totalItem}>
-              <div style={styles.totalLabel}>Material:</div>
-              <div style={styles.totalValue}>${order.material.toFixed(2)}</div>
-            </div>
-            <div style={styles.totalItem}>
-              <div style={styles.totalLabel}>Sales Tax:</div>
-              <div style={styles.totalValue}>${order.salesTax.toFixed(2)}</div>
-            </div>
-            <div style={styles.totalItem}>
-              <div style={styles.totalLabel}>Service:</div>
-              <div style={styles.totalValue}>${order.service.toFixed(2)}</div>
-            </div>
-            <div />
-            <div style={styles.totalPaid}>
-              <div style={styles.totalLabel}>Total Paid</div>
-              <div style={styles.totalValue}>${order.totalPaid.toFixed(2)}</div>
-            </div>
-          </div>
+                  <div className={styles.totalsGridClass} style={styles.totalsGrid}>
+                    <div style={styles.totalItem}>
+                      <div style={styles.totalLabel}>{isEstimate(order) ? 'Quote Total:' : 'Invoice Total:'}</div>
+                      <div style={styles.totalValue}>{money(order.invoiceTotal)}</div>
+                    </div>
+                    <div style={styles.totalItem}>
+                      <div style={styles.totalLabel}>Material:</div>
+                      <div style={styles.totalValue}>{money(order.material)}</div>
+                    </div>
+                    <div style={styles.totalItem}>
+                      <div style={styles.totalLabel}>Sales Tax:</div>
+                      <div style={styles.totalValue}>{money(order.salesTax)}</div>
+                    </div>
+                    <div style={styles.totalItem}>
+                      <div style={styles.totalLabel}>Service:</div>
+                      <div style={styles.totalValue}>{money(order.service)}</div>
+                    </div>
+                    <div />
+                    <div style={styles.totalPaid}>
+                      <div style={styles.totalLabel}>Total Paid</div>
+                      <div style={styles.totalValue}>{money(order.totalPaid)}</div>
+                    </div>
+                  </div>
 
-          <div style={styles.orderActions}>
-            <button style={styles.viewPdfBtn}>
-              <FileText size={14} /> View PDF
-            </button>
-            <Link to={`/orders/${order.id}`} style={{ ...styles.viewDetailsLink, textDecoration: 'none' }}>
-              View Details <ChevronRight size={14} />
-            </Link>
-          </div>
-        </div>
-        ));
+                  <div style={styles.orderActions}>
+                    <Link to={`/orders/${order.id}`} style={{ ...styles.viewDetailsLink, textDecoration: 'none' }}>
+                      View Details <ChevronRight size={14} />
+                    </Link>
+                  </div>
+                </div>
+              );
+            })}
+            {/* Replaces a "Load More" button that had nothing to load: the whole
+                collection is already on screen. */}
+            <div style={styles.resultCount}>
+              Showing {matches.length} of {docs.length} {docs.length === 1 ? activeType.replace(/s$/, '') : activeType}
+            </div>
+          </>
+        );
       })()}
 
-      {/* Load More */}
-      <button style={styles.loadMoreBtn}>Load More</button>
     </div>
 
     {/* Sort Modal */}
@@ -923,7 +839,7 @@ const ProSourceOrders = () => {
     {/* Filter Modal */}
     {filterOpen && (
       <SortFilterModal title="Filter By" onClose={() => setFilterOpen(false)} onApply={applyFilter} onReset={resetFilter} colors={colors}>
-        <ChipGroup options={TIME_OPTIONS} value={draftTime} onChange={setDraftTime} colors={colors} />
+        <ChipGroup options={TIME_RANGE_OPTIONS} value={draftTime} onChange={setDraftTime} colors={colors} />
         <div className="border-t border-neutral-200 my-4" />
         <ChipGroup options={SHOWROOM_OPTIONS} value={draftShowroom} onChange={setDraftShowroom} colors={colors} />
         <div className="border-t border-neutral-200 my-4" />
@@ -937,7 +853,7 @@ const ProSourceOrders = () => {
       variant={rfmsModal.variant}
       amount={rfmsModal.order?.balanceDue}
       orderId={rfmsModal.order?.id}
-      onSuccess={onRfmsSuccess}
+      onSubmit={submitRfms}
     />
     </div>
   );

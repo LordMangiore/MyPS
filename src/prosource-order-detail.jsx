@@ -1,25 +1,36 @@
 import React, { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { useAuth } from './auth-context';
-import { customerStatusLabel } from './order-status';
-import { useEffectiveOrderStatus, setStatusOverride } from './order-status-overrides';
+import {
+  customerStatusLabel,
+  statusTone,
+  statusIcon,
+} from './order-status';
+import {
+  useOrders,
+  findOrder,
+  availableActions,
+  headlineLabel,
+  headlineAmount,
+  isEstimate,
+  docNoun,
+  money,
+} from './order-model';
 import RfmsActionModal from './components/RfmsActionModal';
 import {
   ArrowLeft,
   MapPin,
-  FileText,
-  Clock,
-  CheckCircle,
-  AlertCircle,
-  Loader,
   Package,
-  Truck,
+  AlertCircle,
+  RotateCw,
+  SearchX,
 } from 'lucide-react';
 
 const ProSourceOrderDetail = () => {
   const { orderId } = useParams();
-  const { userName } = useAuth();
-  const userSoldTo = (userName || 'You').toUpperCase();
+  // Same hook, same blob, same records as /orders and the project page. This
+  // page used to carry its own hardcoded copy of every order (with invented
+  // line items), and nothing linked the two datasets together.
+  const { orders, status: loadStatus, error: loadError, reload, runAction } = useOrders();
 
   const colors = {
     red: '#BA0C2F',
@@ -77,37 +88,10 @@ const ProSourceOrderDetail = () => {
       color: colors.gray900,
       marginBottom: 4,
     },
+    // Colours come from order-status.js, shared with the list page. It's the
+    // only place `items` / `pickup` / line-item states are styled.
     statusBadge: (status) => {
-      let bgColor, textColor;
-      switch (status) {
-        case 'ready':
-          bgColor = '#fef3c7';
-          textColor = colors.amber;
-          break;
-        case 'payment':
-          bgColor = '#fee2e2';
-          textColor = colors.red;
-          break;
-        case 'processing':
-          bgColor = '#dbeafe';
-          textColor = colors.darkBlue;
-          break;
-        case 'complete':
-          bgColor = '#dcfce7';
-          textColor = colors.green;
-          break;
-        case 'on-order':
-          bgColor = '#dbeafe';
-          textColor = colors.darkBlue;
-          break;
-        case 'delivered':
-          bgColor = '#dcfce7';
-          textColor = colors.green;
-          break;
-        default:
-          bgColor = colors.gray100;
-          textColor = colors.gray700;
-      }
+      const tone = statusTone(status);
       return {
         display: 'inline-flex',
         alignItems: 'center',
@@ -116,8 +100,8 @@ const ProSourceOrderDetail = () => {
         borderRadius: 6,
         fontSize: 13,
         fontWeight: 600,
-        background: bgColor,
-        color: textColor,
+        background: tone.bg,
+        color: tone.fg,
       };
     },
     balanceDue: {
@@ -241,11 +225,6 @@ const ProSourceOrderDetail = () => {
       color: colors.green,
       marginTop: 12,
     },
-    actionsRow: {
-      display: 'flex',
-      gap: 12,
-      marginTop: 24,
-    },
     btnOutline: {
       padding: '10px 20px',
       background: '#fff',
@@ -261,499 +240,130 @@ const ProSourceOrderDetail = () => {
     },
   };
 
-  // Demo order data keyed by order ID
-  const allOrders = {
-    'EC099016': {
-      id: 'EC099016',
-      jobName: 'Beans Kitchen Remodel',
-      orderDate: '8/20/2024',
-      expectedDelivery: 'Feb 10, 2025',
-      status: 'processing',
-      statusText: 'Order Being Processed',
-      soldTo: userSoldTo,
-      client: 'Bubba Beans',
-      showroom: 'ProSource of St. Louis',
-      invoiceTotal: 1758.42,
-      material: 1631.28,
-      salesTax: 127.14,
-      service: 0,
-      totalPaid: 879.21,
-      balanceDue: 879.21,
-      referralBonus: 87.84,
-      lineItems: [
-        {
-          category: 'FLOORING / LVP',
-          product: 'Shaw Endura Plus LVP',
-          color: 'Amber Oak',
-          brand: 'Shaw',
-          quantity: '480 sq ft',
-          unitPrice: 2.89,
-          subtotal: 1387.20,
-          status: 'on-order',
-          statusText: 'On Order',
-        },
-        {
-          category: 'FLOORING / ACCESSORIES',
-          product: 'Shaw Endura Underlayment',
-          color: 'Standard',
-          brand: 'Shaw',
-          quantity: '5 rolls',
-          unitPrice: 34.99,
-          subtotal: 174.95,
-          status: 'on-order',
-          statusText: 'On Order',
-        },
-        {
-          category: 'FLOORING / ACCESSORIES',
-          product: 'T-Molding Transition Strip',
-          color: 'Amber Oak Match',
-          brand: 'Shaw',
-          quantity: '3 pieces',
-          unitPrice: 23.04,
-          subtotal: 69.13,
-          status: 'processing',
-          statusText: 'Processing',
-        },
-      ],
-    },
-    'EC096890': {
-      id: 'EC096890',
-      jobName: 'Chen Master Bath',
-      orderDate: '4/18/2024',
-      expectedDelivery: 'May 2, 2024',
-      status: 'ready',
-      statusText: 'Order Ready for Approval',
-      soldTo: userSoldTo,
-      client: 'Sarah Chen',
-      showroom: 'ProSource of St. Louis',
-      invoiceTotal: 4713.89,
-      material: 4364.71,
-      salesTax: 349.18,
-      service: 0,
-      totalPaid: 0,
-      balanceDue: 4713.89,
-      referralBonus: null,
-      lineItems: [
-        {
-          category: 'TILE / FLOOR TILE',
-          product: 'Emser Tile Borigni',
-          color: 'Beige',
-          brand: 'Emser',
-          quantity: '210 sq ft',
-          unitPrice: 8.49,
-          subtotal: 1782.90,
-          status: 'pending',
-          statusText: 'Awaiting Approval',
-        },
-        {
-          category: 'TILE / WALL TILE',
-          product: 'Daltile RevoTile Marble',
-          color: 'Carrara White',
-          brand: 'Daltile',
-          quantity: '95 sq ft',
-          unitPrice: 11.29,
-          subtotal: 1072.55,
-          status: 'pending',
-          statusText: 'Awaiting Approval',
-        },
-        {
-          category: 'COUNTERTOPS / QUARTZ',
-          product: 'MSI Calacatta Laza Quartz',
-          color: 'Calacatta Laza',
-          brand: 'MSI',
-          quantity: '42 sq ft',
-          unitPrice: 24.99,
-          subtotal: 1049.58,
-          status: 'pending',
-          statusText: 'Awaiting Approval',
-        },
-        {
-          category: 'K&B HARDWARE',
-          product: 'Delta Trinsic Widespread Faucet',
-          color: 'Champagne Bronze',
-          brand: 'Delta',
-          quantity: '1 unit',
-          unitPrice: 459.68,
-          subtotal: 459.68,
-          status: 'pending',
-          statusText: 'Awaiting Approval',
-        },
-      ],
-    },
-    'EC094964': {
-      id: 'EC094964',
-      jobName: 'Wilson Bathroom',
-      orderDate: '1/3/2024',
-      expectedDelivery: '--',
-      status: 'payment',
-      statusText: 'Order Down Payment Due',
-      soldTo: userSoldTo,
-      client: 'Martha Wilson',
-      showroom: 'ProSource of St. Louis',
-      invoiceTotal: 3241.56,
-      material: 2986.50,
-      salesTax: 255.06,
-      service: 0,
-      totalPaid: 0,
-      balanceDue: 3241.56,
-      referralBonus: null,
-      lineItems: [
-        {
-          category: 'TILE / FLOOR TILE',
-          product: 'Daltile Keystones Tile',
-          color: 'Desert Gray',
-          brand: 'Daltile',
-          quantity: '185 sq ft',
-          unitPrice: 6.49,
-          subtotal: 1200.65,
-          status: 'pending',
-          statusText: 'Awaiting Payment',
-        },
-        {
-          category: 'TILE / WALL TILE',
-          product: 'Daltile Chord Mosaic',
-          color: 'Forte White',
-          brand: 'Daltile',
-          quantity: '62 sq ft',
-          unitPrice: 12.99,
-          subtotal: 805.38,
-          status: 'pending',
-          statusText: 'Awaiting Payment',
-        },
-        {
-          category: 'K&B HARDWARE',
-          product: 'Moen Align Shower Faucet',
-          color: 'Brushed Nickel',
-          brand: 'Moen',
-          quantity: '1 unit',
-          unitPrice: 489.00,
-          subtotal: 489.00,
-          status: 'pending',
-          statusText: 'Awaiting Payment',
-        },
-        {
-          category: 'K&B HARDWARE',
-          product: 'Moen Align Towel Bar 24"',
-          color: 'Brushed Nickel',
-          brand: 'Moen',
-          quantity: '2 units',
-          unitPrice: 74.99,
-          subtotal: 149.98,
-          status: 'pending',
-          statusText: 'Awaiting Payment',
-        },
-        {
-          category: 'CABINETS / VANITY',
-          product: 'KraftMaid Durham Vanity 48"',
-          color: 'Dove White',
-          brand: 'KraftMaid',
-          quantity: '1 unit',
-          unitPrice: 341.49,
-          subtotal: 341.49,
-          status: 'pending',
-          statusText: 'Awaiting Payment',
-        },
-      ],
-    },
-    'EC091091': {
-      id: 'EC091091',
-      jobName: 'Anderson Office Renovation',
-      orderDate: '5/26/2023',
-      expectedDelivery: 'Jun 15, 2023',
-      status: 'payment',
-      statusText: 'Order Down Payment Due',
-      soldTo: userSoldTo,
-      client: 'James Anderson',
-      showroom: 'ProSource of St. Louis',
-      invoiceTotal: 2847.33,
-      material: 2636.42,
-      salesTax: 210.91,
-      service: 0,
-      totalPaid: 0,
-      balanceDue: 2847.33,
-      referralBonus: null,
-      lineItems: [
-        {
-          category: 'FLOORING / CARPET',
-          product: 'Shaw Bellera Carpet',
-          color: 'Heather Gray',
-          brand: 'Shaw',
-          quantity: '320 sq ft',
-          unitPrice: 4.29,
-          subtotal: 1372.80,
-          status: 'pending',
-          statusText: 'Awaiting Payment',
-        },
-        {
-          category: 'FLOORING / CARPET PAD',
-          product: 'Shaw Total Confidence Pad',
-          color: 'Standard',
-          brand: 'Shaw',
-          quantity: '320 sq ft',
-          unitPrice: 1.19,
-          subtotal: 380.80,
-          status: 'pending',
-          statusText: 'Awaiting Payment',
-        },
-        {
-          category: 'FLOORING / LVP',
-          product: 'Mohawk SolidTech LVP',
-          color: 'Blonde Maple',
-          brand: 'Mohawk',
-          quantity: '145 sq ft',
-          unitPrice: 3.89,
-          subtotal: 564.05,
-          status: 'pending',
-          statusText: 'Awaiting Payment',
-        },
-        {
-          category: 'FLOORING / ACCESSORIES',
-          product: 'Reducer Transition Strip',
-          color: 'Blonde Maple Match',
-          brand: 'Mohawk',
-          quantity: '4 pieces',
-          unitPrice: 29.69,
-          subtotal: 118.77,
-          status: 'pending',
-          statusText: 'Awaiting Payment',
-        },
-        {
-          category: 'FLOORING / ACCESSORIES',
-          product: 'Carpet-to-LVP Transition',
-          color: 'Satin Nickel',
-          brand: 'M-D Building Products',
-          quantity: '4 pieces',
-          unitPrice: 50.00,
-          subtotal: 200.00,
-          status: 'pending',
-          statusText: 'Awaiting Payment',
-        },
-      ],
-    },
-    'EC090657': {
-      id: 'EC090657',
-      jobName: 'Torres Kitchen Refresh',
-      orderDate: '5/4/2023',
-      expectedDelivery: 'May 22, 2023',
-      status: 'complete',
-      statusText: 'Order Complete',
-      soldTo: userSoldTo,
-      client: 'Bubba Beans',
-      showroom: 'ProSource of St. Louis',
-      invoiceTotal: 5318.76,
-      material: 4924.78,
-      salesTax: 393.98,
-      service: 0,
-      totalPaid: 5318.76,
-      balanceDue: 0,
-      referralBonus: 87.84,
-      lineItems: [
-        {
-          category: 'CABINETS / WALL CABINET',
-          product: 'KraftMaid Lyndale Wall Cabinet 36"',
-          color: 'Praline',
-          brand: 'KraftMaid',
-          quantity: '4 units',
-          unitPrice: 339.99,
-          subtotal: 1359.96,
-          status: 'delivered',
-          statusText: 'Delivered',
-        },
-        {
-          category: 'CABINETS / BASE CABINET',
-          product: 'KraftMaid Lyndale Base Cabinet 24"',
-          color: 'Praline',
-          brand: 'KraftMaid',
-          quantity: '3 units',
-          unitPrice: 349.99,
-          subtotal: 1049.97,
-          status: 'delivered',
-          statusText: 'Delivered',
-        },
-        {
-          category: 'COUNTERTOPS / QUARTZ',
-          product: 'MSI Carrara Mist Quartz',
-          color: 'Carrara Mist',
-          brand: 'MSI',
-          quantity: '38 sq ft',
-          unitPrice: 27.49,
-          subtotal: 1044.62,
-          status: 'delivered',
-          statusText: 'Delivered',
-        },
-        {
-          category: 'K&B HARDWARE',
-          product: 'Amerock Bar Pull 5"',
-          color: 'Matte Black',
-          brand: 'Amerock',
-          quantity: '14 units',
-          unitPrice: 8.99,
-          subtotal: 125.86,
-          status: 'delivered',
-          statusText: 'Delivered',
-        },
-        {
-          category: 'K&B HARDWARE',
-          product: 'Amerock Knob 1.25"',
-          color: 'Matte Black',
-          brand: 'Amerock',
-          quantity: '7 units',
-          unitPrice: 5.49,
-          subtotal: 38.43,
-          status: 'delivered',
-          statusText: 'Delivered',
-        },
-        {
-          category: 'TILE / BACKSPLASH',
-          product: 'Daltile Color Wheel Mosaic',
-          color: 'Arctic White',
-          brand: 'Daltile',
-          quantity: '48 sq ft',
-          unitPrice: 11.41,
-          subtotal: 547.68,
-          status: 'delivered',
-          statusText: 'Delivered',
-        },
-        {
-          category: 'K&B HARDWARE',
-          product: 'Moen Adler Kitchen Faucet',
-          color: 'Spot Resist Stainless',
-          brand: 'Moen',
-          quantity: '1 unit',
-          unitPrice: 189.00,
-          subtotal: 189.00,
-          status: 'delivered',
-          statusText: 'Delivered',
-        },
-        {
-          category: 'K&B HARDWARE',
-          product: 'InSinkErator Badger 5 Disposal',
-          color: 'N/A',
-          brand: 'InSinkErator',
-          quantity: '1 unit',
-          unitPrice: 119.00,
-          subtotal: 119.00,
-          status: 'delivered',
-          statusText: 'Delivered',
-        },
-        {
-          category: 'CABINETS / ACCESSORIES',
-          product: 'Rev-A-Shelf Lazy Susan 28"',
-          color: 'Natural Wood',
-          brand: 'Rev-A-Shelf',
-          quantity: '1 unit',
-          unitPrice: 189.50,
-          subtotal: 189.50,
-          status: 'delivered',
-          statusText: 'Delivered',
-        },
-        {
-          category: 'CABINETS / ACCESSORIES',
-          product: 'Rev-A-Shelf Pull-Out Waste Container',
-          color: 'Silver/White',
-          brand: 'Rev-A-Shelf',
-          quantity: '1 unit',
-          unitPrice: 165.99,
-          subtotal: 165.99,
-          status: 'delivered',
-          statusText: 'Delivered',
-        },
-        {
-          category: 'TILE / ACCESSORIES',
-          product: 'Custom Building Products Grout',
-          color: 'Bright White',
-          brand: 'Custom',
-          quantity: '3 bags',
-          unitPrice: 31.59,
-          subtotal: 94.77,
-          status: 'delivered',
-          statusText: 'Delivered',
-        },
-      ],
-    },
-  };
-
-  const baseOrder = allOrders[orderId] || allOrders['EC099016'];
-  // Demo: honor any locally-flipped status from a prior Approve/Pay click.
-  const effectiveStatus = useEffectiveOrderStatus(baseOrder.id, baseOrder.status);
-  const order = { ...baseOrder, status: effectiveStatus };
+  const order = findOrder(orders, orderId);
 
   const [rfmsModal, setRfmsModal] = useState({ open: false, variant: null });
-  const openApprove = () => setRfmsModal({ open: true, variant: 'approve' });
-  const openPay = () => setRfmsModal({ open: true, variant: 'pay' });
+  const openRfms = (variant) => setRfmsModal({ open: true, variant });
   const closeRfms = () => setRfmsModal({ open: false, variant: null });
-  const onRfmsSuccess = () => {
-    // 'ready' (Quote ready to approve) → 'payment' (Order Confirmed, down payment due)
-    // 'payment' (Down payment due)     → 'processing' (Order Confirmed, in progress)
-    if (rfmsModal.variant === 'approve') setStatusOverride(order.id, 'payment');
-    else if (rfmsModal.variant === 'pay') setStatusOverride(order.id, 'processing');
-  };
+  // Real write, real failure. `runAction` moves the status, the totals AND the
+  // line items together, so the page can't end up saying "Order Confirmed"
+  // next to an untouched red balance the way it used to.
+  const submitRfms = () => runAction(order.id, rfmsModal.variant);
 
-  const getStatusIcon = (status) => {
-    switch (status) {
-      case 'ready':
-        return <AlertCircle size={14} />;
-      case 'payment':
-      case 'pending':
-        return <Clock size={14} />;
-      case 'processing':
-        return <Loader size={14} />;
-      case 'complete':
-      case 'delivered':
-        return <CheckCircle size={14} />;
-      case 'on-order':
-        return <Package size={14} />;
-      default:
-        return <Package size={14} />;
-    }
+  const backLink = (
+    <Link to="/orders" style={styles.backLink}>
+      <ArrowLeft size={18} /> Back to Orders
+    </Link>
+  );
+
+  const messageState = (icon, title, body, action = null) => (
+    <div style={styles.wrapper}>
+      <div style={styles.container}>
+        {backLink}
+        <div style={{
+          padding: 64, textAlign: 'center', background: '#fff',
+          border: `1px solid ${colors.gray200}`, borderRadius: 12,
+        }}>
+          <div style={{ marginBottom: 14 }}>{icon}</div>
+          <div style={{ fontSize: 18, fontWeight: 600, color: colors.gray900, marginBottom: 8 }}>{title}</div>
+          <div style={{ fontSize: 14, color: colors.gray500, marginBottom: action ? 20 : 0 }}>{body}</div>
+          {action}
+        </div>
+      </div>
+    </div>
+  );
+
+  if (loadStatus === 'loading') {
+    return messageState(
+      <RotateCw size={32} color={colors.gray400} />,
+      'Loading…',
+      `Fetching ${orderId}.`
+    );
+  }
+
+  if (loadStatus === 'error') {
+    return messageState(
+      <AlertCircle size={32} color={colors.red} />,
+      "We couldn't load this order",
+      loadError,
+      <button onClick={reload} style={styles.btnOutline}>Try again</button>
+    );
+  }
+
+  // An unknown id used to silently fall back to the Beans demo order. The page
+  // would happily show you somebody else's order under the id you asked for.
+  if (!order) {
+    return messageState(
+      <SearchX size={32} color={colors.gray400} />,
+      'Order not found',
+      `We don't have an order or estimate with the number ${orderId} on your account.`,
+      <Link to="/orders" style={{ ...styles.btnOutline, textDecoration: 'none' }}>
+        View all orders
+      </Link>
+    );
+  }
+
+  const actions = availableActions(order);
+  const StatusIcon = statusIcon(order.status);
+  const noun = docNoun(order);
+
+  const actionButton = (action) => {
+    const label =
+      action === 'approve' ? 'Approve quote'
+        : action === 'decline' ? 'Decline'
+          : `Pay ${money(order.balanceDue)}`;
+    const background =
+      action === 'approve' ? colors.green
+        : action === 'decline' ? '#fff'
+          : colors.darkBlue;
+    return (
+      <button
+        key={action}
+        onClick={() => openRfms(action)}
+        style={{
+          padding: '10px 18px',
+          background,
+          color: action === 'decline' ? colors.gray700 : '#fff',
+          border: action === 'decline' ? `1px solid ${colors.gray300}` : 'none',
+          borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: 'pointer',
+          display: 'inline-flex', alignItems: 'center', gap: 8,
+          fontFamily: 'inherit',
+        }}
+      >
+        {label}
+      </button>
+    );
   };
 
   return (
     <div style={styles.wrapper}>
     <div style={styles.container}>
-      <Link to="/orders" style={styles.backLink}>
-        <ArrowLeft size={18} /> Back to Orders
-      </Link>
+      {backLink}
 
       {/* Order Header */}
       <div style={styles.headerCard}>
         <div style={styles.headerTop}>
           <div>
-            <div style={styles.orderNumber}>Order {order.id}</div>
+            <div style={styles.orderNumber}>{noun} {order.id}</div>
             <div style={styles.statusBadge(order.status)}>
-              {getStatusIcon(order.status)} {customerStatusLabel(order.status)}
+              {StatusIcon && <StatusIcon size={14} />} {customerStatusLabel(order.status)}
             </div>
           </div>
           <div style={styles.balanceDue}>
-            <div style={styles.balanceDueLabel}>Balance Due</div>
-            <div style={styles.balanceDueValue(order.balanceDue)}>
-              ${order.balanceDue.toFixed(2)}
+            {/* A quote has a total, not a balance due. Nobody owes anything
+                until it's approved. */}
+            <div style={styles.balanceDueLabel}>{headlineLabel(order)}</div>
+            <div style={
+              isEstimate(order)
+                ? { ...styles.balanceDueValue(0), color: colors.gray900 }
+                : styles.balanceDueValue(order.balanceDue)
+            }>
+              {money(headlineAmount(order))}
             </div>
-            {order.status === 'ready' && (
-              <button
-                onClick={openApprove}
-                style={{
-                  marginTop: 12, padding: '10px 18px',
-                  background: '#07542E', color: '#fff', border: 'none',
-                  borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: 'pointer',
-                  display: 'inline-flex', alignItems: 'center', gap: 8,
-                }}
-              >
-                Approve order
-              </button>
-            )}
-            {order.status === 'payment' && (
-              <button
-                onClick={openPay}
-                style={{
-                  marginTop: 12, padding: '10px 18px',
-                  background: '#003087', color: '#fff', border: 'none',
-                  borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: 'pointer',
-                  display: 'inline-flex', alignItems: 'center', gap: 8,
-                }}
-              >
-                Pay ${order.balanceDue.toFixed(2)}
-              </button>
+            {actions.length > 0 && (
+              <div style={{ display: 'flex', justifyContent: 'flex-end', flexWrap: 'wrap', gap: 8, marginTop: 12 }}>
+                {actions.map(actionButton)}
+              </div>
             )}
           </div>
         </div>
@@ -765,15 +375,15 @@ const ProSourceOrderDetail = () => {
           </div>
           <div>
             <div style={styles.detailLabel}>Client</div>
-            <div style={styles.detailValue}>{order.client}</div>
+            <div style={styles.detailValue}>{order.client || '--'}</div>
           </div>
           <div>
-            <div style={styles.detailLabel}>Order Date</div>
-            <div style={styles.detailValue}>{order.orderDate}</div>
+            <div style={styles.detailLabel}>{isEstimate(order) ? 'Quote Date' : 'Order Date'}</div>
+            <div style={styles.detailValue}>{order.orderDate || '--'}</div>
           </div>
           <div>
             <div style={styles.detailLabel}>Expected Delivery</div>
-            <div style={styles.detailValue}>{order.expectedDelivery}</div>
+            <div style={styles.detailValue}>{order.expectedDelivery || '--'}</div>
           </div>
           <div>
             <div style={styles.detailLabel}>Sold To</div>
@@ -795,7 +405,9 @@ const ProSourceOrderDetail = () => {
           <h2 style={styles.sectionTitle}>
             Line Items ({order.lineItems.length})
           </h2>
-          {order.lineItems.map((item, i) => (
+          {order.lineItems.map((item, i) => {
+            const ItemIcon = statusIcon(item.status);
+            return (
             <div key={i} style={styles.lineItemCard}>
               <div style={styles.lineItemHeader}>
                 <div>
@@ -804,7 +416,7 @@ const ProSourceOrderDetail = () => {
                   <div style={styles.lineItemColor}>{item.color}</div>
                 </div>
                 <div style={styles.statusBadge(item.status)}>
-                  {getStatusIcon(item.status)} {item.statusText}
+                  {ItemIcon && <ItemIcon size={14} />} {item.statusText}
                 </div>
               </div>
               <div style={styles.lineItemDetails}>
@@ -818,15 +430,16 @@ const ProSourceOrderDetail = () => {
                 </div>
                 <div>
                   <div style={styles.lineItemLabel}>Unit Price</div>
-                  <div style={styles.lineItemValue}>${item.unitPrice.toFixed(2)}</div>
+                  <div style={styles.lineItemValue}>{money(item.unitPrice)}</div>
                 </div>
                 <div>
                   <div style={styles.lineItemLabel}>Subtotal</div>
-                  <div style={styles.lineItemSubtotal}>${item.subtotal.toFixed(2)}</div>
+                  <div style={styles.lineItemSubtotal}>{money(item.subtotal)}</div>
                 </div>
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
@@ -846,50 +459,51 @@ const ProSourceOrderDetail = () => {
 
       {/* Order Summary */}
       <div style={styles.summaryCard}>
-        <h2 style={{ ...styles.sectionTitle, marginBottom: 12 }}>Order Summary</h2>
+        <h2 style={{ ...styles.sectionTitle, marginBottom: 12 }}>{noun} Summary</h2>
         <div style={styles.summaryRow(false)}>
           <span>Material</span>
-          <span>${order.material.toFixed(2)}</span>
+          <span>{money(order.material)}</span>
         </div>
         <div style={styles.summaryRow(false)}>
           <span>Service</span>
-          <span>${order.service.toFixed(2)}</span>
+          <span>{money(order.service)}</span>
         </div>
         <div style={styles.summaryRow(false)}>
           <span>Sales Tax</span>
-          <span>${order.salesTax.toFixed(2)}</span>
+          <span>{money(order.salesTax)}</span>
         </div>
         <div style={styles.summaryDivider} />
         <div style={styles.summaryRow(true)}>
-          <span>Invoice Total</span>
-          <span>${order.invoiceTotal.toFixed(2)}</span>
+          <span>{isEstimate(order) ? 'Quote Total' : 'Invoice Total'}</span>
+          <span>{money(order.invoiceTotal)}</span>
         </div>
-        <div style={styles.summaryRow(false)}>
-          <span>Total Paid</span>
-          <span style={{ color: colors.green }}>${order.totalPaid.toFixed(2)}</span>
-        </div>
-        <div style={styles.summaryDivider} />
-        <div style={styles.summaryRow(true)}>
-          <span>Balance Due</span>
-          <span style={{ color: order.balanceDue > 0 ? colors.red : colors.green }}>
-            ${order.balanceDue.toFixed(2)}
-          </span>
-        </div>
+        {/* Paid / owed is an order's story. A quote hasn't been accepted, so
+            "Balance Due: $1,253.20" on it would be claiming a debt that
+            doesn't exist. */}
+        {!isEstimate(order) && (
+          <>
+            <div style={styles.summaryRow(false)}>
+              <span>Total Paid</span>
+              <span style={{ color: colors.green }}>{money(order.totalPaid)}</span>
+            </div>
+            <div style={styles.summaryDivider} />
+            <div style={styles.summaryRow(true)}>
+              <span>Balance Due</span>
+              <span style={{ color: order.balanceDue > 0 ? colors.red : colors.green }}>
+                {money(order.balanceDue)}
+              </span>
+            </div>
+          </>
+        )}
 
         {order.referralBonus && (
           <div style={styles.referralBadge}>
             <CheckCircle size={16} />
-            Referral Bonus Earned: +${order.referralBonus.toFixed(2)}
+            Referral Bonus Earned: +{money(order.referralBonus)}
           </div>
         )}
       </div>
 
-      {/* Actions */}
-      <div style={styles.actionsRow}>
-        <button style={styles.btnOutline}>
-          <FileText size={16} /> View PDF
-        </button>
-      </div>
     </div>
 
     <RfmsActionModal
@@ -898,7 +512,7 @@ const ProSourceOrderDetail = () => {
       variant={rfmsModal.variant}
       amount={order.balanceDue}
       orderId={order.id}
-      onSuccess={onRfmsSuccess}
+      onSubmit={submitRfms}
     />
     </div>
   );

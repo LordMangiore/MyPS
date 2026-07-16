@@ -2,7 +2,7 @@ import { getStore } from "@netlify/blobs";
 
 /**
  * Seed a brand-new user's blob with sample data so the demo looks populated
- * the moment they finish signup. Safe to call multiple times — only writes if
+ * the moment they finish signup. Safe to call multiple times: only writes if
  * the key is empty.
  */
 
@@ -42,7 +42,7 @@ const fmtRelativeTimestamp = (ts) => {
 };
 
 // Rooms are real entities: { id, name, type?, squareFootage?, notes?, createdAt }.
-// The id must match `roomIdFromName` in src/project-model.js — that's the
+// The id must match `roomIdFromName` in src/project-model.js. That's the
 // contract that lets the client migrate legacy string rooms onto the same ids.
 const room = (name, createdAt, extra = {}) => ({
   id: `room-${name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')}`,
@@ -105,7 +105,7 @@ const buildSeedProjects = (now) => {
           targetCompletion: new Date(now + days(75)).toISOString().slice(0, 10),
           squareFootage: "180",
           rooms: [
-            room('Kitchen', now - days(14), { type: 'Kitchen', squareFootage: '180', notes: 'Sight-line to dining stays open — no upper cabinets on the south wall.' }),
+            room('Kitchen', now - days(14), { type: 'Kitchen', squareFootage: '180', notes: 'Sight-line to dining stays open. No upper cabinets on the south wall.' }),
             room('Pantry', now - days(12), { type: 'Pantry', squareFootage: '32' }),
           ],
           products: [
@@ -127,7 +127,7 @@ const buildSeedProjects = (now) => {
               price: 6.49, unit: 'SF', sfPerBox: 15.6, qty: 3, image: IMG.tile,
               roomId: 'room-pantry', addedAt: now - days(6),
             }),
-            // Deliberately unassigned — shows the "Unassigned" group and gives
+            // Deliberately unassigned: shows the "Unassigned" group and gives
             // the demo something to drag into a room.
             product({
               id: 'prod-002', sku: 'sku-prod-002', name: 'COREtec Pro Plus Enhanced Luxury Vinyl Plank',
@@ -137,7 +137,7 @@ const buildSeedProjects = (now) => {
             }),
           ],
           notes:
-            "Client prefers appointments after 2pm. Dog in backyard — use side gate.",
+            "Client prefers appointments after 2pm. Dog in backyard, use side gate.",
           status: "working",
           archived: false,
           createdAt: now - days(14),
@@ -160,7 +160,7 @@ const buildSeedProjects = (now) => {
           targetCompletion: new Date(now - days(20)).toISOString().slice(0, 10),
           squareFootage: "90",
           rooms: [
-            room('Master Bathroom', now - days(110), { type: 'Bathroom', squareFootage: '90', notes: 'Curbless shower — floor slopes to the linear drain.' }),
+            room('Master Bathroom', now - days(110), { type: 'Bathroom', squareFootage: '90', notes: 'Curbless shower, floor slopes to the linear drain.' }),
           ],
           products: [
             product({
@@ -177,7 +177,7 @@ const buildSeedProjects = (now) => {
             }),
           ],
           notes:
-            "Client has been great. Watch for tile manufacturer recall on the wall mosaic — bumped to v2 lot.",
+            "Client has been great. Watch for tile manufacturer recall on the wall mosaic (bumped to v2 lot).",
           status: "complete",
           archived: false,
           createdAt: now - days(110),
@@ -229,7 +229,7 @@ const buildSeedProjects = (now) => {
   };
 };
 
-// Message seed builder — each thread references one of the seeded projects.
+// Message seed builder. Each thread references one of the seeded projects.
 const buildSeedMessages = (now, projectIds) => {
   const kimMsg2 = now - minutes(28);
   const kimMsg1 = now - minutes(75);
@@ -298,7 +298,7 @@ const buildSeedMessages = (now, projectIds) => {
         name: "Bubba Beans",
         initials: "BB",
         type: "client",
-        role: "Homeowner — Beans Kitchen Remodel",
+        role: "Homeowner: Beans Kitchen Remodel",
         lastMessage:
           "Sounds good, I'll be at the showroom Saturday morning to look at the LVP.",
         timestamp: fmtRelativeTimestamp(bubbaMsg2),
@@ -310,7 +310,7 @@ const buildSeedMessages = (now, projectIds) => {
             sender: "Me",
             isMe: true,
             text:
-              "Hey Bubba — Kim has a couple of LVP samples set aside for the kitchen. Want to come look this weekend?",
+              "Hey Bubba, Kim has a couple of LVP samples set aside for the kitchen. Want to come look this weekend?",
             time: fmtTime(bubbaMsg1),
             date: fmtDate(bubbaMsg1),
             timestamp: bubbaMsg1,
@@ -345,7 +345,7 @@ const buildSeedMessages = (now, projectIds) => {
             sender: "Me",
             isMe: true,
             text:
-              "Thanks again for hustling on the Wilson bath install — clients are thrilled.",
+              "Thanks again for hustling on the Wilson bath install. Clients are thrilled.",
             time: fmtTime(ryanMsg1),
             date: fmtDate(ryanMsg1),
             timestamp: ryanMsg1,
@@ -368,9 +368,9 @@ const buildSeedMessages = (now, projectIds) => {
         name: "Sarah Chen",
         initials: "SC",
         type: "client",
-        role: "Homeowner — Chen Outdoor Patio",
+        role: "Homeowner: Chen Outdoor Patio",
         lastMessage:
-          "We finally got the family photos done on the patio — it looks incredible. Thanks again!",
+          "We finally got the family photos done on the patio and it looks incredible. Thanks again!",
         timestamp: fmtRelativeTimestamp(sarahMsg2),
         unread: false,
         updatedAt: sarahMsg2,
@@ -380,7 +380,7 @@ const buildSeedMessages = (now, projectIds) => {
             sender: "Me",
             isMe: true,
             text:
-              "Hi Sarah — wanted to check in. Anything we should adjust before we put the patio in our portfolio?",
+              "Hi Sarah, wanted to check in. Anything we should adjust before we put the patio in our portfolio?",
             time: fmtTime(sarahMsg1),
             date: fmtDate(sarahMsg1),
             timestamp: sarahMsg1,
@@ -390,7 +390,7 @@ const buildSeedMessages = (now, projectIds) => {
             sender: "Sarah Chen",
             isMe: false,
             text:
-              "We finally got the family photos done on the patio — it looks incredible. Thanks again!",
+              "We finally got the family photos done on the patio and it looks incredible. Thanks again!",
             time: fmtTime(sarahMsg2),
             date: fmtDate(sarahMsg2),
             timestamp: sarahMsg2,
@@ -405,7 +405,7 @@ const buildSeedMessages = (now, projectIds) => {
         type: "prosource",
         role: "Designer",
         lastMessage:
-          "Uploaded the Chen patio render variants — let me know which lighting layout you want me to spec out.",
+          "Uploaded the Chen patio render variants. Let me know which lighting layout you want me to spec out.",
         timestamp: fmtRelativeTimestamp(heatherMsg),
         unread: false,
         updatedAt: heatherMsg,
@@ -415,7 +415,7 @@ const buildSeedMessages = (now, projectIds) => {
             sender: "Heather Yager",
             isMe: false,
             text:
-              "Uploaded the Chen patio render variants — let me know which lighting layout you want me to spec out.",
+              "Uploaded the Chen patio render variants. Let me know which lighting layout you want me to spec out.",
             time: fmtTime(heatherMsg),
             date: fmtDate(heatherMsg),
             timestamp: heatherMsg,
@@ -426,76 +426,347 @@ const buildSeedMessages = (now, projectIds) => {
   };
 };
 
-// Seeded orders tied to the seeded projects so /orders isn't empty.
+// Seeded orders + estimates, tied to the seeded projects so /orders isn't empty
+// and each project's "Estimates & Orders" tab has something to show.
+//
+// Contract with src/order-model.js (`ORDERS_SCHEMA_VERSION`):
+//   docType: 'estimate' → a quote awaiting the customer's decision
+//   docType: 'order'    → an estimate they approved
+// The client migrates schemaVersion-less blobs on read, so bumping the version
+// here is only about letting seedNewUser replace a stale seed.
+const ORDERS_SCHEMA_VERSION = 2;
+
+const round2 = (n) => Math.round(n * 100) / 100;
+
+// Rough blended MO rate. One constant so every seeded document taxes the same.
+const TAX_RATE = 0.08;
+
+// A line on a document. `subtotal` is always qty x unitPrice, never hand-typed,
+// so a document's totals can't drift from the lines that make it up.
+const orderLine = ({ category, product, color, brand, qty, unit, unitPrice, status }) => ({
+  category,
+  product,
+  color,
+  brand,
+  qty,
+  unit,
+  quantity: `${qty} ${unit}`,
+  unitPrice,
+  subtotal: round2(qty * unitPrice),
+  status,
+});
+
 const buildSeedOrders = (now, projectIds, displayName) => {
   const soldTo = (displayName || 'You').toUpperCase();
   const showroom = 'ProSource of St. Louis';
-  const orderDate = (ts) => new Date(ts).toLocaleDateString('en-US');
+  const usDate = (ts) => new Date(ts).toLocaleDateString('en-US');
+
+  // Every money figure below is derived: material from the lines, tax from
+  // material, total from both, balance from what's been paid. Nothing to keep
+  // in sync by hand.
+  const doc = ({
+    id,
+    docType,
+    projectId,
+    jobName,
+    client,
+    date,
+    expectedDelivery = null,
+    status,
+    statusText,
+    paidRatio = 0,
+    service = 0,
+    referralBonus = null,
+    lines,
+  }) => {
+    const material = round2(lines.reduce((sum, l) => sum + l.subtotal, 0));
+    const salesTax = round2(material * TAX_RATE);
+    const invoiceTotal = round2(material + salesTax + service);
+    const totalPaid = round2(invoiceTotal * paidRatio);
+    return {
+      id,
+      docType,
+      projectId: projectId || null,
+      jobName,
+      client,
+      orderDate: usDate(date),
+      orderDateTs: date,
+      expectedDelivery,
+      status,
+      statusText,
+      soldTo,
+      showroom,
+      material,
+      salesTax,
+      service,
+      invoiceTotal,
+      totalPaid,
+      balanceDue: round2(invoiceTotal - totalPaid),
+      referralBonus,
+      lineItems: lines,
+    };
+  };
+
   return {
+    schemaVersion: ORDERS_SCHEMA_VERSION,
     list: [
-      {
-        id: 'EC099016',
-        projectId: projectIds.working || null,
+      // --- Estimates: quotes awaiting a decision ---
+      doc({
+        id: 'ES-2041',
+        docType: 'estimate',
+        projectId: projectIds.working,
         jobName: 'Beans Kitchen Remodel',
-        orderDate: orderDate(now - days(3)),
+        client: 'Bubba Beans',
+        date: now - days(2),
+        status: 'ready',
+        statusText: 'Quote Ready for Approval',
+        lines: [
+          orderLine({
+            category: 'TILE / BACKSPLASH', product: 'Daltile Chord Mosaic',
+            color: 'Forte White', brand: 'Daltile',
+            qty: 62, unit: 'sq ft', unitPrice: 12.99, status: 'pending',
+          }),
+          orderLine({
+            category: 'K&B HARDWARE', product: 'Moen Adler Kitchen Faucet',
+            color: 'Spot Resist Stainless', brand: 'Moen',
+            qty: 1, unit: 'unit', unitPrice: 189.0, status: 'pending',
+          }),
+          orderLine({
+            category: 'CABINETS / ACCESSORIES', product: 'Rev-A-Shelf Pull-Out Waste Container',
+            color: 'Silver/White', brand: 'Rev-A-Shelf',
+            qty: 1, unit: 'unit', unitPrice: 165.99, status: 'pending',
+          }),
+        ],
+      }),
+      {
+        ...doc({
+          id: 'ES-2035',
+          docType: 'estimate',
+          projectId: projectIds.complete,
+          jobName: 'Wilson Master Bath',
+          client: 'Martha Wilson',
+          date: now - days(120),
+          status: 'declined',
+          statusText: 'Quote Declined',
+          lines: [
+            orderLine({
+              category: 'CABINETS / VANITY', product: 'KraftMaid Durham Vanity 48"',
+              color: 'Dove White', brand: 'KraftMaid',
+              qty: 1, unit: 'unit', unitPrice: 341.49, status: 'declined',
+            }),
+            orderLine({
+              category: 'K&B HARDWARE', product: 'Moen Align Towel Bar 24"',
+              color: 'Brushed Nickel', brand: 'Moen',
+              qty: 2, unit: 'units', unitPrice: 74.99, status: 'declined',
+            }),
+          ],
+        }),
+        declinedAt: now - days(118),
+      },
+
+      // --- Orders ---
+      doc({
+        id: 'EC099016',
+        docType: 'order',
+        projectId: projectIds.working,
+        jobName: 'Beans Kitchen Remodel',
+        client: 'Bubba Beans',
+        date: now - days(3),
+        expectedDelivery: usDate(now + days(18)),
         status: 'processing',
         statusText: 'Order Being Processed',
-        soldTo,
-        showroom,
-        invoiceTotal: 1758.42,
-        material: 1631.28,
-        salesTax: 127.14,
-        service: 0,
-        totalPaid: 879.21,
-        balanceDue: 879.21,
-      },
-      {
-        id: 'EC096890',
-        projectId: projectIds.working || null,
+        paidRatio: 0.5,
+        lines: [
+          orderLine({
+            category: 'FLOORING / LVP', product: 'COREtec Pro Plus Enhanced Luxury Vinyl Plank',
+            color: 'Pembroke Pine', brand: 'COREtec',
+            qty: 320, unit: 'sq ft', unitPrice: 4.99, status: 'on-order',
+          }),
+          orderLine({
+            category: 'FLOORING / ACCESSORIES', product: 'COREtec Premium Underlayment',
+            color: 'Standard', brand: 'COREtec',
+            qty: 5, unit: 'rolls', unitPrice: 34.99, status: 'on-order',
+          }),
+          orderLine({
+            category: 'FLOORING / ACCESSORIES', product: 'T-Molding Transition Strip',
+            color: 'Pembroke Pine Match', brand: 'COREtec',
+            qty: 3, unit: 'pieces', unitPrice: 23.04, status: 'processing',
+          }),
+        ],
+      }),
+      doc({
+        id: 'EC097430',
+        docType: 'order',
+        projectId: projectIds.working,
         jobName: 'Beans Kitchen Remodel',
-        orderDate: orderDate(now - days(10)),
-        status: 'ready',
-        statusText: 'Order Ready for Approval',
-        soldTo,
-        showroom,
-        invoiceTotal: 4713.89,
-        material: 4364.71,
-        salesTax: 349.18,
-        service: 0,
-        totalPaid: 0,
-        balanceDue: 4713.89,
-      },
+        client: 'Bubba Beans',
+        date: now - days(8),
+        status: 'payment',
+        statusText: 'Order Down Payment Due',
+        lines: [
+          orderLine({
+            category: 'CABINETS / BASE CABINET', product: 'KraftMaid Durham Maple Shaker Base Cabinet 24"',
+            color: 'Dove White', brand: 'KraftMaid',
+            qty: 6, unit: 'units', unitPrice: 485.0, status: 'pending',
+          }),
+          orderLine({
+            category: 'CABINETS / WALL CABINET', product: 'KraftMaid Durham Maple Shaker Wall Cabinet 36"',
+            color: 'Dove White', brand: 'KraftMaid',
+            qty: 4, unit: 'units', unitPrice: 465.0, status: 'pending',
+          }),
+          orderLine({
+            category: 'COUNTERTOPS / QUARTZ', product: 'Silestone Calacatta Gold Quartz Countertop',
+            color: 'Calacatta Gold', brand: 'Silestone',
+            qty: 46, unit: 'sq ft', unitPrice: 72.0, status: 'pending',
+          }),
+        ],
+      }),
       {
+        // 'items' is an internal RFMS state the customer sees as "Order Confirmed".
+        ...doc({
+          id: 'EC098220',
+          docType: 'order',
+          projectId: projectIds.working,
+          jobName: 'Beans Kitchen Remodel',
+          client: 'Bubba Beans',
+          date: now - days(15),
+          expectedDelivery: usDate(now + days(5)),
+          status: 'items',
+          statusText: 'Items Arriving',
+          paidRatio: 1,
+          lines: [
+            orderLine({
+              category: 'TILE / FLOOR TILE', product: 'Daltile Perpetuo Porcelain Floor Tile 12x24',
+              color: 'Brilliant White', brand: 'Daltile',
+              qty: 47, unit: 'sq ft', unitPrice: 6.49, status: 'received',
+            }),
+            orderLine({
+              category: 'TILE / ACCESSORIES', product: 'Custom Building Products Grout',
+              color: 'Bright White', brand: 'Custom',
+              qty: 2, unit: 'bags', unitPrice: 31.59, status: 'received',
+            }),
+          ],
+        }),
+      },
+      doc({
+        id: 'EC095512',
+        docType: 'order',
+        projectId: projectIds.working,
+        jobName: 'Beans Kitchen Remodel',
+        client: 'Bubba Beans',
+        date: now - days(20),
+        expectedDelivery: 'Ready now',
+        status: 'pickup',
+        statusText: 'Ready for Pickup',
+        paidRatio: 1,
+        lines: [
+          orderLine({
+            category: 'K&B HARDWARE', product: 'Top Knobs Garrison Pull 4"',
+            color: 'Polished Nickel', brand: 'Top Knobs',
+            qty: 18, unit: 'units', unitPrice: 12.49, status: 'ready-for-pickup',
+          }),
+          orderLine({
+            category: 'K&B HARDWARE', product: 'Top Knobs Garrison Knob 1 1/4"',
+            color: 'Polished Nickel', brand: 'Top Knobs',
+            qty: 32, unit: 'units', unitPrice: 8.99, status: 'ready-for-pickup',
+          }),
+        ],
+      }),
+      doc({
         id: 'EC094964',
-        projectId: projectIds.complete || null,
+        docType: 'order',
+        projectId: projectIds.complete,
         jobName: 'Wilson Master Bath',
-        orderDate: orderDate(now - days(35)),
+        client: 'Martha Wilson',
+        date: now - days(95),
+        expectedDelivery: usDate(now - days(72)),
         status: 'complete',
         statusText: 'Order Complete',
-        soldTo,
-        showroom,
-        invoiceTotal: 3241.56,
-        material: 2986.50,
-        salesTax: 255.06,
-        service: 0,
-        totalPaid: 3241.56,
-        balanceDue: 0,
-      },
-      {
+        paidRatio: 1,
+        referralBonus: 87.84,
+        lines: [
+          orderLine({
+            category: 'TILE / FLOOR TILE', product: 'Daltile Perpetuo Porcelain Floor Tile 12x24',
+            color: 'Brilliant White', brand: 'Daltile',
+            qty: 109, unit: 'sq ft', unitPrice: 6.49, status: 'delivered',
+          }),
+          orderLine({
+            category: 'COUNTERTOPS / QUARTZ', product: 'Silestone Calacatta Gold Quartz Countertop',
+            color: 'Calacatta Gold', brand: 'Silestone',
+            qty: 12, unit: 'sq ft', unitPrice: 72.0, status: 'delivered',
+          }),
+          orderLine({
+            category: 'K&B HARDWARE', product: 'Moen Align Shower Faucet',
+            color: 'Brushed Nickel', brand: 'Moen',
+            qty: 1, unit: 'unit', unitPrice: 489.0, status: 'delivered',
+          }),
+          orderLine({
+            category: 'CABINETS / VANITY', product: 'KraftMaid Durham Vanity 60"',
+            color: 'Dove White', brand: 'KraftMaid',
+            qty: 1, unit: 'unit', unitPrice: 1341.49, status: 'delivered',
+          }),
+        ],
+      }),
+      doc({
         id: 'EC090657',
-        projectId: projectIds.published || null,
+        docType: 'order',
+        projectId: projectIds.published,
         jobName: 'Chen Outdoor Patio & Outdoor Kitchen',
-        orderDate: orderDate(now - days(140)),
+        client: 'Sarah Chen',
+        // Ordered at the Chen project's start. Deliberately >6 months back, so
+        // each of the three time-range options returns a different list.
+        date: now - days(195),
+        expectedDelivery: usDate(now - days(172)),
         status: 'complete',
         statusText: 'Order Complete',
-        soldTo,
-        showroom,
-        invoiceTotal: 5318.76,
-        material: 4924.78,
-        salesTax: 393.98,
-        service: 0,
-        totalPaid: 5318.76,
-        balanceDue: 0,
+        paidRatio: 1,
+        referralBonus: 87.84,
+        lines: [
+          orderLine({
+            category: 'TILE / PAVERS', product: 'Daltile Perpetuo Porcelain Floor Tile 12x24',
+            color: 'Brilliant White', brand: 'Daltile',
+            qty: 530, unit: 'sq ft', unitPrice: 6.49, status: 'delivered',
+          }),
+          orderLine({
+            category: 'COUNTERTOPS / QUARTZ', product: 'Silestone Calacatta Gold Quartz Countertop',
+            color: 'Calacatta Gold', brand: 'Silestone',
+            qty: 18, unit: 'sq ft', unitPrice: 72.0, status: 'delivered',
+          }),
+        ],
+      }),
+      {
+        // Predates the projects: RFMS history, no projectId. Also the only
+        // document older than a year, so the time-range filter has something to
+        // actually cut.
+        ...doc({
+          id: 'EC088410',
+          docType: 'order',
+          projectId: null,
+          jobName: 'Torres Kitchen Refresh',
+          client: 'Marco Torres',
+          date: now - days(760),
+          expectedDelivery: usDate(now - days(742)),
+          status: 'complete',
+          statusText: 'Order Complete',
+          paidRatio: 1,
+          lines: [
+            orderLine({
+              category: 'CABINETS / WALL CABINET', product: 'KraftMaid Lyndale Wall Cabinet 36"',
+              color: 'Praline', brand: 'KraftMaid',
+              qty: 4, unit: 'units', unitPrice: 339.99, status: 'delivered',
+            }),
+            orderLine({
+              category: 'COUNTERTOPS / QUARTZ', product: 'MSI Carrara Mist Quartz',
+              color: 'Carrara Mist', brand: 'MSI',
+              qty: 38, unit: 'sq ft', unitPrice: 27.49, status: 'delivered',
+            }),
+            orderLine({
+              category: 'K&B HARDWARE', product: 'Moen Adler Kitchen Faucet',
+              color: 'Spot Resist Stainless', brand: 'Moen',
+              qty: 1, unit: 'unit', unitPrice: 189.0, status: 'delivered',
+            }),
+          ],
+        }),
       },
     ],
   };
@@ -525,8 +796,8 @@ const buildSeedAppointments = (now) => {
 };
 
 // Twilio identity for each seeded counterparty. These MUST match the
-// DEMO_PARTICIPANTS identities in netlify/functions/twilio-conversations.mjs —
-// that's how a connection card lines up with the conversation seeded for the
+// DEMO_PARTICIPANTS identities in netlify/functions/twilio-conversations.mjs.
+// That's how a connection card lines up with the conversation seeded for the
 // same person. Contract for the messaging layer:
 //   demoIdentity → a seeded demo contact; message them at this Twilio identity
 //   userId       → a real signed-up user; message them at their userId
@@ -541,7 +812,7 @@ const DEMO_IDENTITY_BY_NAME = {
   'Heather Yager': 'demo-heather-yager',
 };
 
-// Seeded connections — same counterparties that appear in seeded messages
+// Seeded connections: same counterparties that appear in seeded messages
 // (Kim, Bubba, Ryan, Sarah, Heather) plus a couple of extra tradepros.
 //
 // `projects` is the count of SEEDED PROJECTS THIS PERSON IS ON, derived from the
@@ -610,7 +881,7 @@ const buildSeedCarts = (now, projectIds, displayName) => {
     list: [
       {
         id: `cart-${now}-beans-lvp`,
-        name: 'Beans Kitchen — Flooring Options',
+        name: 'Beans Kitchen: Flooring Options',
         projectId: projectIds.working || null,
         updatedAt: fmt(now - days(2)),
         updatedAtTs: now - days(2),
@@ -638,7 +909,7 @@ const buildSeedCarts = (now, projectIds, displayName) => {
       },
       {
         id: `cart-${now}-beans-hardware`,
-        name: 'Beans Kitchen — Cabinet Hardware',
+        name: 'Beans Kitchen: Cabinet Hardware',
         projectId: projectIds.working || null,
         updatedAt: fmt(now - days(5)),
         updatedAtTs: now - days(5),
@@ -651,7 +922,7 @@ const buildSeedCarts = (now, projectIds, displayName) => {
       },
       {
         id: `cart-${now}-wilson-final`,
-        name: 'Wilson Bath — Final Pickups',
+        name: 'Wilson Bath: Final Pickups',
         projectId: projectIds.complete || null,
         updatedAt: fmt(now - days(28)),
         updatedAtTs: now - days(28),
@@ -701,7 +972,7 @@ export async function seedNewUser(userId) {
       store.get(connectionsKey, { type: "json" }).catch(() => null),
     ]);
 
-    // Built up front (pure — nothing is written unless the key is empty) because
+    // Built up front (pure, since nothing is written unless the key is empty) because
     // the connections seed derives its shared-project counts from the team
     // arrays on these projects.
     const seedProjects = buildSeedProjects(now);
@@ -732,7 +1003,7 @@ export async function seedNewUser(userId) {
     }
 
     if (!existingCarts) {
-      // We don't know the user's display name here yet — save-profile is called
+      // We don't know the user's display name here yet: save-profile is called
       // after onboarding and the cart "updatedBy" is purely cosmetic. Use a
       // generic "You" and the frontend overrides for new entries.
       const carts = buildSeedCarts(now, projectIds, "You");
@@ -744,7 +1015,15 @@ export async function seedNewUser(userId) {
       await store.setJSON(appointmentsKey, { value: appts, updatedAt: now });
     }
 
-    if (!existingOrders) {
+    // Orders are the one seeded key we'll also REPLACE, not just fill in.
+    // A pre-v2 blob is always pure seed data: before v2 the client never wrote
+    // this key (Approve/Pay flipped a status in localStorage, not here), so
+    // there is nothing of the user's to lose, and leaving it means every order
+    // renders with no line items and no estimates tab. Once a v2 blob exists,
+    // the user's approvals and payments live in it and we never touch it again.
+    const ordersAreLegacy =
+      existingOrders && existingOrders?.value?.schemaVersion !== ORDERS_SCHEMA_VERSION;
+    if (!existingOrders || ordersAreLegacy) {
       const orders = buildSeedOrders(now, projectIds, "You");
       await store.setJSON(ordersKey, { value: orders, updatedAt: now });
     }
