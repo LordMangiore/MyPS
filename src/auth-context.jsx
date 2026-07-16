@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 
 const AuthContext = createContext(null);
 
@@ -6,6 +7,34 @@ export const useAuth = () => useContext(AuthContext);
 
 const STORAGE_KEY = 'prosource_session_v1';
 const PROFILE_KEY = 'prosource_profile_v1';
+
+/** Auth pages themselves — never a valid post-login destination (would loop). */
+const AUTH_PATHS = ['/sign-in', '/create-account'];
+
+/**
+ * Sanitize a post-login `?returnTo=` destination.
+ *
+ * Open-redirect guard: the value must resolve to *this* origin, so absolute
+ * URLs ("https://evil.com"), protocol-relative ("//evil.com"), backslash
+ * variants ("/\evil.com") and non-http schemes ("javascript:…") all resolve to
+ * a different origin — or fail to parse — and fall back. Returns `fallback`
+ * (default null) for anything it doesn't positively trust.
+ */
+export const safeReturnTo = (raw, fallback = null) => {
+  if (typeof raw !== 'string' || !raw) return fallback;
+  // Must be an absolute internal path. `raw` is already decoded by
+  // URLSearchParams — decoding again would re-open encoded attacks.
+  if (!raw.startsWith('/')) return fallback;
+  let url;
+  try {
+    url = new URL(raw, window.location.origin);
+  } catch {
+    return fallback;
+  }
+  if (url.origin !== window.location.origin) return fallback;
+  if (AUTH_PATHS.includes(url.pathname)) return fallback;
+  return `${url.pathname}${url.search}${url.hash}`;
+};
 
 const loadSession = () => {
   try {
@@ -30,10 +59,14 @@ const loadCachedProfile = () => {
 export const AuthProvider = ({ children }) => {
   const initial = loadSession();
   const cachedProfile = loadCachedProfile();
+  const navigate = useNavigate();
+  const location = useLocation();
   const [isLoggedIn, setIsLoggedIn] = useState(!!initial);
   const [isNewUser, setIsNewUser] = useState(initial?.isNewUser || false);
   const [userEmail, setUserEmail] = useState(initial?.email || '');
-  const [userName, setUserName] = useState(initial?.name || 'Justin');
+  // No display name until a session supplies one — every consumer falls back
+  // ('You' / 'there'), so an empty string is the honest neutral default.
+  const [userName, setUserName] = useState(initial?.name || '');
   const [userId, setUserId] = useState(initial?.userId || null);
   const [token, setToken] = useState(initial?.token || null);
   const [userType, setUserType] = useState(initial?.userType || 'tradepro');
@@ -233,13 +266,21 @@ export const AuthProvider = ({ children }) => {
     // Active cart stays put across sign-in — same localStorage store works
     // for guests and members. The user can save it to their library from the
     // shop quote page if they want a named snapshot.
+
+    // Honor a post-login destination captured when a logged-out user hit a
+    // protected URL (see NotFoundRedirect in main.jsx). Only navigate when
+    // there's a trusted returnTo to consume: callers that finalize a session
+    // without one — the landing page, and the quote wizard, which finalizes
+    // mid-modal and then renders its own success step — must stay put.
+    const dest = safeReturnTo(new URLSearchParams(location.search).get('returnTo'));
+    if (dest) navigate(dest, { replace: true });
   };
 
   /** Local login override (legacy "Demo: Skip Signup" flow). */
   const login = ({ email, newUser = false, name }) => {
     const session = {
       email,
-      name: name || 'Justin',
+      name: name || (email ? email.split('@')[0] : 'Member'),
       userId: null,
       token: null,
       isNewUser: !!newUser,
@@ -258,7 +299,7 @@ export const AuthProvider = ({ children }) => {
     setIsLoggedIn(false);
     setIsNewUser(false);
     setUserEmail('');
-    setUserName('Justin');
+    setUserName('');
     setUserId(null);
     setToken(null);
     setProfile(null);

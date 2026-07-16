@@ -194,14 +194,29 @@ const Layout = () => {
           )}
 
           {!isLoggedIn ? (
-            <Link
-              to="/sign-in"
-              style={{
-                color: '#003087', fontWeight: 600, fontSize: 14,
-                textDecoration: 'none',
-                padding: '6px 14px', border: '1px solid #003087', borderRadius: 6,
-              }}
-            >Sign In</Link>
+            <>
+              <Link
+                to="/sign-in"
+                style={{
+                  color: '#003087', fontWeight: 600, fontSize: 14,
+                  textDecoration: 'none',
+                  padding: '6px 14px', border: '1px solid #003087', borderRadius: 6,
+                  whiteSpace: 'nowrap',
+                }}
+              >Sign In</Link>
+              {/* Below sm the header is already tight; the drawer carries the
+                  same CTA there, so hide rather than crush it. */}
+              <Link
+                to="/create-account"
+                className="hidden sm:inline-block"
+                style={{
+                  background: '#003087', color: '#fff', fontWeight: 600, fontSize: 14,
+                  textDecoration: 'none',
+                  padding: '7px 14px', border: '1px solid #003087', borderRadius: 6,
+                  whiteSpace: 'nowrap',
+                }}
+              >Create Account</Link>
+            </>
           ) : (
           <div className="relative">
             <button
@@ -272,7 +287,8 @@ const Layout = () => {
               {!isLoggedIn && (
                 <>
                   <div className="border-t border-neutral-200 my-2" />
-                  <Link to="/sign-in" onClick={closeMobile} className="block px-4 py-3 text-sm font-semibold text-blue-700 hover:bg-neutral-50">Sign In / Create Account</Link>
+                  <Link to="/sign-in" onClick={closeMobile} className="block px-4 py-3 text-sm font-semibold text-blue-700 hover:bg-neutral-50">Sign In</Link>
+                  <Link to="/create-account" onClick={closeMobile} className="block px-4 py-3 text-sm font-semibold text-blue-700 hover:bg-neutral-50">Create Account</Link>
                 </>
               )}
             </nav>

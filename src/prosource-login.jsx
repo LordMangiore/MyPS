@@ -4,9 +4,17 @@ import { ShoppingBag } from 'lucide-react';
 import { useAuth } from './auth-context';
 import AddressAutocomplete from './components/AddressAutocomplete';
 
-const ProSourceLogin = () => {
+/**
+ * `initialPage` / `initialMode` let the router mount this straight onto the
+ * email form (/sign-in, /create-account) instead of the marketing landing (/).
+ * Both entry points run the identical email→OTP flow — the OTP verify response
+ * tells us whether this is a new or returning user — so `authMode` only steers
+ * copy, never behavior.
+ */
+const ProSourceLogin = ({ initialPage = 'email', initialMode = 'signin' }) => {
   const { login, requestCode, verifyCode, finalizeSession, lookupShowroom, saveProfile } = useAuth();
-  const [page, setPage] = useState('email'); // email, email-sent, step1..step4, hoStep1
+  const [page, setPage] = useState(initialPage); // email, auth, email-sent, step1..step4, hoStep1
+  const [authMode, setAuthMode] = useState(initialMode); // 'signin' | 'signup'
   const [userType, setUserType] = useState('tradepro'); // 'tradepro' | 'homeowner'
   const [email, setEmail] = useState('');
   const [emailError, setEmailError] = useState(false);
@@ -46,14 +54,6 @@ const ProSourceLogin = () => {
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [phone, setPhone] = useState('');
-  const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
-  const [street, setStreet] = useState('');
-  const [city, setCity] = useState('');
-  const [stateName, setStateName] = useState('MO');
-  const [zip, setZip] = useState('');
-  const [country, setCountry] = useState('United States');
   // Step 2 — Your Business
   const [businessName, setBusinessName] = useState('');
   const [businessStreet, setBusinessStreet] = useState('');
@@ -80,8 +80,6 @@ const ProSourceLogin = () => {
   const [showTerms, setShowTerms] = useState(false);
   const [optInUpdates, setOptInUpdates] = useState(true);
   const [optInConsent, setOptInConsent] = useState(true);
-
-  const existingUsers = ['justin@test.com', 'suzie@test.com'];
 
   useEffect(() => {
     window.scrollTo(0, 0);
@@ -245,8 +243,9 @@ const ProSourceLogin = () => {
         accountManager: crmLookup?.manager || null,
       });
     } else {
-      // Demo: Skip Signup flow keeps the legacy local-only login.
-      login({ email, newUser: true, name: firstName || 'Justin' });
+      // No verified session behind this wizard — fall back to the local-only
+      // login, which derives a name from the email when we don't have one.
+      login({ email, newUser: true, name: firstName.trim() || undefined });
     }
   };
 
@@ -695,36 +694,45 @@ const ProSourceLogin = () => {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, width: '100%' }}>
         <Link to="/" style={{ display: 'flex', alignItems: 'baseline', gap: 3, textDecoration: 'none' }}>
           <span style={s.logoPs}>ProSource</span>
-          <span style={s.logoWh}>Wholesale</span>
+          <span style={s.logoWh} className="hidden sm:inline">Wholesale</span>
         </Link>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <Link
             to="/profile"
             className="hidden md:inline"
             style={{ color: colors.gray700, fontSize: 14, fontWeight: 500, textDecoration: 'none' }}
           >Find a Pro</Link>
+          {/* Guest browsing stays one tap away; the label collapses to the icon
+              on narrow screens to make room for the two auth CTAs. */}
           <Link
             to="/shop"
             style={{
               display: 'inline-flex', alignItems: 'center', gap: 6,
-              padding: '8px 14px',
+              padding: '8px 12px',
               border: `1px solid ${colors.gray300}`,
               borderRadius: 6,
               color: colors.gray900,
               fontSize: 13, fontWeight: 600,
               textDecoration: 'none',
               background: '#fff',
+              whiteSpace: 'nowrap',
             }}
+            aria-label="Browse products"
           >
-            <ShoppingBag size={15} /> Browse products
+            <ShoppingBag size={15} /> <span className="hidden md:inline">Browse products</span>
           </Link>
-          <a
-            href="#get-started"
-            onClick={(e) => {
-              e.preventDefault();
-              const el = document.getElementById('get-started');
-              if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          <Link
+            to="/sign-in"
+            style={{
+              padding: '8px 4px',
+              color: colors.gray900,
+              fontSize: 13, fontWeight: 600,
+              textDecoration: 'none',
+              whiteSpace: 'nowrap',
             }}
+          >Sign In</Link>
+          <Link
+            to="/create-account"
             style={{
               padding: '8px 14px',
               borderRadius: 6,
@@ -732,8 +740,9 @@ const ProSourceLogin = () => {
               color: '#fff',
               fontSize: 13, fontWeight: 600,
               textDecoration: 'none',
+              whiteSpace: 'nowrap',
             }}
-          >Sign In</a>
+          >Create Account</Link>
         </div>
       </div>
     </nav>
@@ -1018,72 +1027,131 @@ const ProSourceLogin = () => {
     </div>
   );
 
-  // ==================== PAGE: LOGIN ====================
-  const renderLoginPage = () => (
-    <div style={s.authLayout} className="grid grid-cols-1 md:grid-cols-2">
-      {renderAuthLeft(
-        'Welcome back',
-        'Good to see you again.',
-        'Sign in to access your member pricing, projects, and ProSource team.',
-        null
-      )}
-      <div style={s.authRight} className="px-6 py-10 md:px-14 md:py-12">
-        <div style={s.authFormWrap}>
-          <div style={s.authTitle}>Sign in</div>
-          <div style={s.authSubtitle}>Welcome back. Enter your password to continue.</div>
-          <div style={s.alertInfo}>
-            <span style={{ fontSize: 16, flexShrink: 0, marginTop: 1 }}>&#9993;</span>
-            <span>Signing in as <strong>{email}</strong></span>
+  // ==================== PAGE: AUTH (dedicated sign-in / create-account) ====================
+  // Same email→OTP flow either way; only the framing differs.
+  const authCopy = {
+    signin: {
+      eyebrow: 'Welcome back',
+      headline: 'Good to see you again.',
+      body: 'Sign in to access your member pricing, projects, and ProSource team.',
+      benefits: null,
+      title: 'Sign in',
+      subtitle: "Enter the email on your account and we'll send you a one-time code.",
+      cta: 'Send my code',
+      switchNote: 'New to ProSource?',
+      switchLabel: 'Create an account',
+      switchTo: '/create-account',
+      switchMode: 'signup',
+    },
+    signup: {
+      eyebrow: 'Trade Pro Membership',
+      headline: 'Create your ProSource account.',
+      body: 'Member pricing, project tools, and a dedicated account manager at your local showroom.',
+      benefits: [
+        'Wholesale pricing on 50,000+ products',
+        'A dedicated account manager who knows your business',
+        'Quotes, projects, and client collaboration in one place',
+      ],
+      title: 'Create your account',
+      subtitle: "Start with your email — we'll send a one-time code, then ask a few quick questions.",
+      cta: 'Get started',
+      switchNote: 'Already a member?',
+      switchLabel: 'Sign in',
+      switchTo: '/sign-in',
+      switchMode: 'signin',
+    },
+  };
+
+  const renderAuthPage = () => {
+    const copy = authCopy[authMode] || authCopy.signin;
+    return (
+      <div style={s.authLayout} className="grid grid-cols-1 md:grid-cols-2">
+        {renderAuthLeft(copy.eyebrow, copy.headline, copy.body, copy.benefits)}
+        <div style={s.authRight} className="px-6 py-10 md:px-14 md:py-12">
+          <div style={s.authFormWrap}>
+            <div style={s.authTitle}>{copy.title}</div>
+            <div style={s.authSubtitle}>{copy.subtitle}</div>
+            <form onSubmit={(e) => { e.preventDefault(); checkEmail(); }}>
+              <div style={s.field}>
+                <label style={s.fieldLabel}>Email address</label>
+                <input
+                  type="email"
+                  autoFocus
+                  autoComplete="email"
+                  style={{ ...s.input, borderColor: emailError ? colors.red : colors.gray200 }}
+                  placeholder="you@yourbusiness.com"
+                  value={email}
+                  onChange={(e) => { setEmail(e.target.value); setEmailError(false); }}
+                />
+                {emailError && (
+                  <div style={{ color: colors.red, fontSize: 12, fontWeight: 500, marginTop: 8 }}>
+                    {emailErrorMsg || 'Please enter a valid email address to continue.'}
+                  </div>
+                )}
+              </div>
+              <button
+                type="submit"
+                style={{
+                  ...s.btnPrimary,
+                  background: email.trim() && !sending ? colors.blue : colors.gray300,
+                  cursor: email.trim() && !sending ? 'pointer' : 'not-allowed',
+                }}
+                disabled={!email.trim() || sending}
+              >
+                {sending ? 'Sending…' : `${copy.cta} →`}
+              </button>
+            </form>
+            <div style={{ fontSize: 13, color: colors.gray500, marginTop: 10 }}>
+              We'll email you a 6-digit code. No password required.
+            </div>
+
+            <div style={s.divider}>
+              <div style={s.dividerLine} />
+              <span style={s.dividerText}>or</span>
+              <div style={s.dividerLine} />
+            </div>
+
+            <Link
+              to="/shop"
+              style={{ ...s.btnSecondary, textDecoration: 'none' }}
+            >
+              <ShoppingBag size={15} /> Browse products as a guest
+            </Link>
+
+            <div style={s.linkText}>
+              {copy.switchNote}{' '}
+              <Link to={copy.switchTo} style={s.link} onClick={() => setAuthMode(copy.switchMode)}>
+                {copy.switchLabel}
+              </Link>
+            </div>
+            {renderDemoSkip()}
           </div>
-          <div style={s.field}>
-            <label style={s.fieldLabel}>Password</label>
-            <input
-              type="password"
-              style={s.input}
-              placeholder="Your password"
-              defaultValue="password123"
-              onKeyDown={(e) => e.key === 'Enter' && handleLogin()}
-            />
-          </div>
-          <div style={{ textAlign: 'right', marginBottom: 20 }}>
-            <a
-              style={{ fontSize: 13, color: colors.blue, textDecoration: 'none', cursor: 'pointer' }}
-              onClick={() => setPage('forgot-password')}
-            >Forgot password?</a>
-          </div>
-          <button style={s.btnPrimary} onClick={handleLogin}>
-            Sign In &rarr;
-          </button>
-          <div style={s.divider}>
-            <div style={s.dividerLine} />
-            <span style={s.dividerText}>or</span>
-            <div style={s.dividerLine} />
-          </div>
-          <button style={s.btnSecondary} onClick={() => setPage('email')}>
-            &larr; Use a different email
-          </button>
         </div>
       </div>
-    </div>
-  );
+    );
+  };
 
   // ==================== PAGE: EMAIL SENT (OTP code entry) ====================
+  // One verify path for both intents — otp-verify tells us which it actually
+  // was, so `authMode` here only picks the wording.
   const renderEmailSentPage = () => (
     <div style={s.authLayout} className="grid grid-cols-1 md:grid-cols-2">
       {renderAuthLeft(
         'Check your inbox',
         'Enter your 6-digit code.',
-        'We just emailed you a one-time login code. It expires in 10 minutes.',
+        'We just emailed you a one-time code. It expires in 10 minutes.',
         null
       )}
       <div style={s.authRight} className="px-6 py-10 md:px-14 md:py-12">
         <div style={s.authFormWrap}>
           <div style={{ textAlign: 'center' }}>
             <div style={s.emailIcon}>&#9993;</div>
-            <div style={s.emailTitle}>Enter your login code</div>
+            <div style={s.emailTitle}>
+              {authMode === 'signup' ? 'Confirm your email' : 'Enter your login code'}
+            </div>
             <div style={s.emailBody}>
               We sent a 6-digit code to <strong style={{ color: colors.gray900 }}>{email}</strong>.<br />
-              Enter it below to sign in.
+              {authMode === 'signup' ? 'Enter it below to continue.' : 'Enter it below to sign in.'}
             </div>
             <div style={s.field}>
               <input
@@ -1124,9 +1192,11 @@ const ProSourceLogin = () => {
               disabled={code.length !== 6 || verifying}
               onClick={handleVerify}
             >
-              {verifying ? 'Verifying…' : 'Sign in →'}
+              {verifying ? 'Verifying…' : (authMode === 'signup' ? 'Continue →' : 'Sign in →')}
             </button>
-            <button style={s.btnSecondary} onClick={() => setPage('email')}>
+            {/* Back to wherever this flow started: the dedicated form for the
+                /sign-in + /create-account entries, the landing page otherwise. */}
+            <button style={s.btnSecondary} onClick={() => setPage(initialPage)}>
               &larr; Use a different email
             </button>
             <div style={{ ...s.linkText, marginTop: 16 }}>
@@ -1141,92 +1211,6 @@ const ProSourceLogin = () => {
     </div>
   );
 
-  // ==================== PAGE: FORGOT PASSWORD ====================
-  const renderForgotPasswordPage = () => (
-    <div style={s.authLayout} className="grid grid-cols-1 md:grid-cols-2">
-      {renderAuthLeft(
-        'No worries',
-        'We\'ll get you back in.',
-        'Enter your email and we\'ll send you a link to reset your password.',
-        null
-      )}
-      <div style={s.authRight} className="px-6 py-10 md:px-14 md:py-12">
-        <div style={s.authFormWrap}>
-          <div style={s.authTitle}>Reset your password</div>
-          <div style={s.authSubtitle}>We'll email you a secure link to set a new password.</div>
-          <div style={s.field}>
-            <label style={s.fieldLabel}>Email address</label>
-            <input
-              type="email"
-              style={s.input}
-              placeholder="you@yourbusiness.com"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && email.trim() && setPage('forgot-password-sent')}
-            />
-          </div>
-          <button
-            style={{
-              ...s.btnPrimary,
-              background: email.trim() ? colors.blue : colors.gray300,
-              cursor: email.trim() ? 'pointer' : 'not-allowed',
-            }}
-            onClick={() => email.trim() && setPage('forgot-password-sent')}
-            disabled={!email.trim()}
-          >
-            Send reset link &rarr;
-          </button>
-          <div style={s.divider}>
-            <div style={s.dividerLine} />
-            <span style={s.dividerText}>or</span>
-            <div style={s.dividerLine} />
-          </div>
-          <button style={s.btnSecondary} onClick={() => setPage('login')}>
-            &larr; Back to sign in
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-
-  // ==================== PAGE: FORGOT PASSWORD SENT ====================
-  const renderForgotPasswordSentPage = () => (
-    <div style={s.authLayout} className="grid grid-cols-1 md:grid-cols-2">
-      {renderAuthLeft(
-        'Check your inbox',
-        'A reset link is on its way.',
-        'Click the link in the email to choose a new password.',
-        null
-      )}
-      <div style={s.authRight} className="px-6 py-10 md:px-14 md:py-12">
-        <div style={s.authFormWrap}>
-          <div style={{ textAlign: 'center' }}>
-            <div style={s.emailIcon}>&#9993;</div>
-            <div style={s.emailTitle}>Reset link sent</div>
-            <div style={s.emailBody}>
-              We sent a password reset link to <strong style={{ color: colors.gray900 }}>{email}</strong>.<br />
-              The link expires in 30 minutes.
-            </div>
-            <button style={{ ...s.btnPrimary, marginBottom: 12 }} onClick={() => setPage('login')}>
-              Back to sign in &rarr;
-            </button>
-            <div style={{ ...s.linkText, marginTop: 16 }}>
-              Didn't get it?{' '}
-              <a
-                style={s.link}
-                onClick={() => {
-                  setEmailResent(true);
-                  setTimeout(() => setEmailResent(false), 3000);
-                }}
-              >{emailResent ? 'Email resent ✓' : 'Resend email'}</a>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-
-  // ==================== PAGE: STEP 1 — About You ====================
   // ==================== USER TYPE CHOICE (first wizard step) ====================
   const renderTypeChoice = () => {
     const options = [
@@ -1539,7 +1523,12 @@ const ProSourceLogin = () => {
     );
   };
 
-  const renderStep1 = () => (
+  const renderStep1 = () => {
+    // Mirrors the "*" markers below — State is a select with a default, so it
+    // can't be empty.
+    const ready = firstName.trim() && lastName.trim() && phone.trim()
+      && businessStreet.trim() && businessCity.trim() && businessZip.trim();
+    return (
     <div style={s.onboardingLayout}>
       <div style={{ width: '100%', maxWidth: 600, marginBottom: 32, textAlign: 'center' }}>
         <div style={s.stepIndicator}>
@@ -1607,14 +1596,26 @@ const ProSourceLogin = () => {
         </div>
 
         <div style={{ marginTop: 28 }}>
-          <button style={s.btnPrimary} onClick={() => { triggerCrmLookup(zip || businessZip); setPage('step2'); }}>Continue &rarr;</button>
+          <button
+            style={{
+              ...s.btnPrimary,
+              background: ready ? colors.blue : colors.gray300,
+              cursor: ready ? 'pointer' : 'not-allowed',
+            }}
+            onClick={ready ? () => { triggerCrmLookup(businessZip); setPage('step2'); } : undefined}
+          >
+            Continue &rarr;
+          </button>
         </div>
       </div>
     </div>
-  );
+    );
+  };
 
   // ==================== PAGE: STEP 2 — Your Business ====================
-  const renderStep2 = () => (
+  const renderStep2 = () => {
+    const ready = businessName.trim() && tradeType && businessType;
+    return (
     <div style={s.onboardingLayout}>
       <div style={{ width: '100%', maxWidth: 600, marginBottom: 32, textAlign: 'center' }}>
         <div style={s.stepIndicator}>
@@ -1723,11 +1724,21 @@ const ProSourceLogin = () => {
 
         <div style={{ marginTop: 28, display: 'flex', gap: 12 }}>
           <button style={{ ...s.btnSecondary, width: 'auto', padding: '13px 24px' }} onClick={() => setPage('step1')}>&larr; Back</button>
-          <button style={{ ...s.btnPrimary, flex: 1 }} onClick={() => setPage('step3')}>Continue &rarr;</button>
+          <button
+            style={{
+              ...s.btnPrimary, flex: 1,
+              background: ready ? colors.blue : colors.gray300,
+              cursor: ready ? 'pointer' : 'not-allowed',
+            }}
+            onClick={ready ? () => setPage('step3') : undefined}
+          >
+            Continue &rarr;
+          </button>
         </div>
       </div>
     </div>
-  );
+    );
+  };
 
   // ==================== PAGE: STEP 3 — How You'll Work With Us ====================
   const renderStep3 = () => (
@@ -1940,9 +1951,8 @@ const ProSourceLogin = () => {
       <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Serif+Display&display=swap" rel="stylesheet" />
       {renderNav()}
       {page === 'email' && renderEmailPage()}
+      {page === 'auth' && renderAuthPage()}
       {page === 'email-sent' && renderEmailSentPage()}
-      {page === 'forgot-password' && renderForgotPasswordPage()}
-      {page === 'forgot-password-sent' && renderForgotPasswordSentPage()}
       {page === 'step1' && renderStep1()}
       {page === 'step2' && renderStep2()}
       {page === 'step3' && renderStep3()}
