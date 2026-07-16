@@ -23,6 +23,11 @@ const ALLOWED_KEYS = new Set([
   "appointments",
   "discussions",
   "consultations",
+  // Users the account owner has invited onto their own ProSource account
+  // (Settings > Manage Users). Shape: { list: [...] }. Distinct from
+  // "connections", which is other businesses you work with rather than people
+  // holding access to your account.
+  "team",
 ]);
 
 const sanitizeKey = (k) => {

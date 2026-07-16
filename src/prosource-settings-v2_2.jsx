@@ -16,10 +16,13 @@ import {
   X,
   ArrowLeft,
   Tag,
-  Search
+  Search,
+  Mail,
+  AlertCircle
 } from 'lucide-react';
 import AppointmentModal from './prosource-appointment-modal';
 import Select from './components/Select';
+import { normalizeStored } from './project-model';
 
 // ProSource Brand Colors from source
 const colors = {
@@ -36,34 +39,286 @@ const colors = {
   gray900: '#212529',
 };
 
+/**
+ * What a profile that has never touched notification settings means.
+ * Applied on read, so records written before `notificationPrefs` existed keep
+ * working and simply adopt these until the user changes something.
+ */
+const DEFAULT_NOTIFICATION_PREFS = {
+  email: true,
+  sms: false,
+  frequency: 'Weekly',
+  acceptingLeads: true,
+};
+
+/** Project cards shown per status group before "Load More" adds another page. */
+const PROJECT_PAGE_SIZE = 6;
+
+/** Initials from a display name, for the avatar treatment used app-wide. */
+const initialsFor = (name) =>
+  String(name || '')
+    .trim()
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((part) => part[0] || '')
+    .join('')
+    .toUpperCase() || '?';
+
 // Small icon-button used next to team members to open a direct-message thread.
-// Has its own hover state so the four instances across the dashboard stay in sync.
-function ChatBubbleLink({ to, title }) {
+// Has its own hover state so the instances across the dashboard stay in sync.
+//
+// `to` may be a router path or a mailto: URL. Only a real connection can be
+// messaged in-app (`/messages?connection=<id>`), so people we know by name but
+// hold no connection record for get a mailto instead of a chat bubble that
+// dead-ends. Both destinations are real; the icon says which one you're getting.
+function ContactLink({ to, title, icon: Icon = MessageCircle }) {
   const [hovered, setHovered] = useState(false);
+  const style = {
+    width: 36,
+    height: 36,
+    borderRadius: '50%',
+    border: `1px solid ${hovered ? colors.darkBlue : colors.gray200}`,
+    background: hovered ? '#f0f5ff' : '#fff',
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+    transition: 'background 0.15s ease, border-color 0.15s ease',
+  };
+  const inner = <Icon size={16} color={hovered ? colors.darkBlue : colors.gray500} />;
+  const handlers = {
+    title,
+    'aria-label': title,
+    onMouseEnter: () => setHovered(true),
+    onMouseLeave: () => setHovered(false),
+    style,
+  };
+  if (String(to).startsWith('mailto:')) {
+    return <a href={to} {...handlers}>{inner}</a>;
+  }
+  return <Link to={to} {...handlers}>{inner}</Link>;
+}
+
+/** Round-avatar with initials. The photo-free treatment used across the app. */
+function Avatar({ name, initials, color, size = 48 }) {
   return (
-    <Link
-      to={to}
-      title={title}
-      aria-label={title}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
+    <div
+      aria-label={name}
       style={{
-        width: 36,
-        height: 36,
+        width: size,
+        height: size,
         borderRadius: '50%',
-        border: `1px solid ${hovered ? colors.darkBlue : colors.gray200}`,
-        background: hovered ? '#f0f5ff' : '#fff',
-        cursor: 'pointer',
+        background: color || colors.lightBlue,
+        color: '#fff',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        transition: 'background 0.15s ease, border-color 0.15s ease',
+        fontWeight: 600,
+        fontSize: Math.round(size / 3.2),
+        border: `2px solid ${colors.lightBlue}`,
+        flexShrink: 0,
       }}
     >
-      <MessageCircle size={16} color={hovered ? colors.darkBlue : colors.gray500} />
-    </Link>
+      {initials || initialsFor(name)}
+    </div>
   );
 }
+
+/**
+ * Referral bonuses: DEMO DATA, and that is the end of the story.
+ *
+ * There is no referral feed to read from and there is never going to be one, so
+ * these are literals keyed by the real showroom ids the account carries
+ * (`showrooms[n].id` from useAuth). A showroom with no entry here renders an
+ * honest empty state rather than borrowing another showroom's numbers.
+ *
+ * St. Louis is the established showroom; Chicago opened later, so it earns less
+ * and its history starts in 2023. Switching showrooms has to visibly move the
+ * numbers, otherwise the selector is decoration.
+ *
+ * The "All Showrooms" total is NOT a literal: see `sumShowroomYears`.
+ */
+const REFERRAL_DEMO_DATA = {
+  'st-louis': [
+    {
+      year: 2024,
+      months: [
+        { month: 'January', orders: [] },
+        { month: 'February', orders: [
+          { order: 'EC099016', client: 'Bubba Beans', product: 'Shaw Endura Plus LVP', amount: 87.84 },
+        ] },
+        { month: 'March', orders: [] },
+        { month: 'April', orders: [
+          { order: 'EC099042', client: 'Sarah Chen', product: 'Mohawk RevWood Select', amount: 52.10 },
+          { order: 'EC099043', client: 'Martha Wilson', product: 'Daltile Keystones Tile', amount: 35.74 },
+        ] },
+        { month: 'May', orders: [
+          { order: 'EC099058', client: 'Bubba Beans', product: 'MSI Calacatta Laza Quartz', amount: 87.84 },
+        ] },
+        { month: 'June', orders: [
+          { order: 'EC099071', client: 'Martha Wilson', product: 'Shaw Floorte Pro LVP', amount: 87.84 },
+        ] },
+        { month: 'July', orders: [
+          { order: 'EC099085', client: 'Sarah Chen', product: 'Emser Tile Borigni', amount: 45.20 },
+          { order: 'EC099086', client: 'Bubba Beans', product: 'Shaw Bellera Carpet', amount: 42.64 },
+        ] },
+        { month: 'August', orders: [] },
+        { month: 'September', orders: [
+          { order: 'EC099102', client: 'Martha Wilson', product: 'Mohawk SolidTech LVP', amount: 87.84 },
+        ] },
+        { month: 'October', orders: [] },
+        { month: 'November', orders: [] },
+        { month: 'December', orders: [
+          { order: 'EC099130', client: 'Bubba Beans', product: 'Shaw Inspiring Design Carpet', amount: 87.84 },
+        ] },
+      ],
+    },
+    {
+      year: 2023,
+      months: [
+        { month: 'January', orders: [] },
+        { month: 'February', orders: [
+          { order: 'EC098901', client: 'Bubba Beans', product: 'Shaw Epic Hardwood', amount: 87.84 },
+        ] },
+        { month: 'March', orders: [] },
+        { month: 'April', orders: [
+          { order: 'EC098920', client: 'Sarah Chen', product: 'Daltile Perpetuo Tile', amount: 87.84 },
+        ] },
+        { month: 'May', orders: [
+          { order: 'EC098935', client: 'Martha Wilson', product: 'Mohawk UltraStrand Carpet', amount: 87.84 },
+        ] },
+        { month: 'June', orders: [
+          { order: 'EC098948', client: 'Bubba Beans', product: 'Shaw Floorte Plus LVP', amount: 87.84 },
+        ] },
+        { month: 'July', orders: [
+          { order: 'EC098960', client: 'Sarah Chen', product: 'MSI Premium Natural Quartz', amount: 87.84 },
+        ] },
+        { month: 'August', orders: [] },
+        { month: 'September', orders: [
+          { order: 'EC098980', client: 'Martha Wilson', product: 'Shaw Exquisite Hardwood', amount: 87.84 },
+        ] },
+        { month: 'October', orders: [] },
+        { month: 'November', orders: [] },
+        { month: 'December', orders: [
+          { order: 'EC098999', client: 'Bubba Beans', product: 'Mohawk RevWood Plus', amount: 87.84 },
+        ] },
+      ],
+    },
+    {
+      year: 2022,
+      months: [
+        { month: 'January', orders: [] },
+        { month: 'February', orders: [] },
+        { month: 'March', orders: [] },
+        { month: 'April', orders: [] },
+        { month: 'May', orders: [] },
+        { month: 'June', orders: [] },
+        { month: 'July', orders: [] },
+        { month: 'August', orders: [] },
+        { month: 'September', orders: [] },
+        { month: 'October', orders: [] },
+        { month: 'November', orders: [
+          { order: 'EC098712', client: 'Bubba Beans', product: 'Shaw Anso Nylon Carpet', amount: 87.84 },
+        ] },
+        { month: 'December', orders: [] },
+      ],
+    },
+  ],
+  // Newer showroom: fewer clients, smaller bonuses, nothing before 2023.
+  chicago: [
+    {
+      year: 2024,
+      months: [
+        { month: 'January', orders: [] },
+        { month: 'February', orders: [] },
+        { month: 'March', orders: [
+          { order: 'CH041022', client: 'Dana Whitfield', product: 'Mohawk RevWood Premier', amount: 31.15 },
+        ] },
+        { month: 'April', orders: [] },
+        { month: 'May', orders: [
+          { order: 'CH041050', client: 'Priya Raman', product: 'Daltile Volume 1.0 Tile', amount: 24.60 },
+        ] },
+        { month: 'June', orders: [] },
+        { month: 'July', orders: [] },
+        { month: 'August', orders: [
+          { order: 'CH041088', client: 'Dana Whitfield', product: 'COREtec Pro Plus LVP', amount: 44.30 },
+        ] },
+        { month: 'September', orders: [] },
+        { month: 'October', orders: [
+          { order: 'CH041119', client: 'Marcus Vaughn', product: 'MSI Ostrich Grey Quartz', amount: 18.90 },
+        ] },
+        { month: 'November', orders: [] },
+        { month: 'December', orders: [] },
+      ],
+    },
+    {
+      year: 2023,
+      months: [
+        { month: 'January', orders: [] },
+        { month: 'February', orders: [] },
+        { month: 'March', orders: [] },
+        { month: 'April', orders: [] },
+        { month: 'May', orders: [] },
+        { month: 'June', orders: [] },
+        { month: 'July', orders: [] },
+        { month: 'August', orders: [] },
+        { month: 'September', orders: [
+          { order: 'CH040902', client: 'Priya Raman', product: 'Shaw Floorte Classic LVP', amount: 22.40 },
+        ] },
+        { month: 'October', orders: [] },
+        { month: 'November', orders: [
+          { order: 'CH040931', client: 'Marcus Vaughn', product: 'Emser Tile Cascade', amount: 16.75 },
+        ] },
+        { month: 'December', orders: [] },
+      ],
+    },
+  ],
+};
+
+/** Cents-safe money add: these are dollar literals, so keep the rounding honest. */
+const addMoney = (a, b) => Math.round((a + b) * 100) / 100;
+
+/** A month's bonus is the sum of its orders. Never a separate literal that could disagree. */
+const monthTotal = (m) => (m.orders || []).reduce((sum, o) => addMoney(sum, o.amount || 0), 0);
+
+/** A year's bonus is the sum of its months. Same reason. */
+const yearTotal = (y) => (y.months || []).reduce((sum, m) => addMoney(sum, monthTotal(m)), 0);
+
+/**
+ * "All Showrooms" = the per-showroom datasets summed, never its own literal.
+ *
+ * A hardcoded grand total drifts out of sync with its rows the moment anyone
+ * edits one showroom's numbers, and then the demo shows a total that doesn't
+ * equal the parts. Summing means it cannot disagree by construction.
+ *
+ * Merges by period: a year (or month) present for one showroom and absent for
+ * another counts the missing side as zero rather than dropping the row, so
+ * Chicago having no 2022 doesn't erase St. Louis's 2022. Orders are tagged with
+ * the showroom they came from so the detail panel can say where each one landed.
+ */
+const sumShowroomYears = (datasets) => {
+  const byYear = new Map();
+  datasets.forEach(({ showroomName, years }) => {
+    (years || []).forEach((y) => {
+      if (!byYear.has(y.year)) byYear.set(y.year, new Map());
+      const monthMap = byYear.get(y.year);
+      (y.months || []).forEach((m) => {
+        const prior = monthMap.get(m.month) || [];
+        monthMap.set(
+          m.month,
+          prior.concat((m.orders || []).map((o) => ({ ...o, showroomName })))
+        );
+      });
+    });
+  });
+  return [...byYear.entries()]
+    .sort((a, b) => b[0] - a[0])
+    .map(([year, monthMap]) => ({
+      year,
+      months: [...monthMap.entries()].map(([month, orders]) => ({ month, orders })),
+    }));
+};
 
 // This component is designed to work INSIDE the existing ProSource dashboard layout
 // It replaces the content in .col-dashboard-content while keeping the existing header and sidebar
@@ -72,12 +327,14 @@ export default function ProSourceSettingsRedesign() {
     isNewUser,
     userName,
     showroom,
+    showrooms,
     accountManager,
     userId,
     userEmail,
     profile,
     saveProfile,
     loadUserData,
+    saveUserData,
   } = useAuth();
 
   // Personal info editor state: seeded from the saved profile, edits flushed
@@ -131,27 +388,42 @@ export default function ProSourceSettingsRedesign() {
   const [searchParams] = useSearchParams();
   const activeSection = searchParams.get('section') || 'dashboard';
   const [projectsList, setProjectsList] = useState([]);
+  const [projectsLoading, setProjectsLoading] = useState(true);
   const [messageThreads, setMessageThreads] = useState([]);
+  const [connections, setConnections] = useState([]);
+  const [teamUsers, setTeamUsers] = useState([]);
+  const [teamLoading, setTeamLoading] = useState(true);
   const [upcomingAppointments, setUpcomingAppointments] = useState([]);
   const [appointmentsRefreshKey, setAppointmentsRefreshKey] = useState(0);
 
 
-  // Pull the user's projects + message threads + appointments so the dashboard
-  // activity feed, project/message counts, and team panel reflect real data.
+  // Pull the user's projects + message threads + appointments + connections +
+  // account users so the dashboard activity feed, project list, and both team
+  // panels reflect real data instead of literals.
   useEffect(() => {
-    if (!userId) return;
+    // No userId means nothing to fetch, so nothing is "still loading" either.
+    if (!userId) {
+      setProjectsLoading(false);
+      setTeamLoading(false);
+      return;
+    }
     let cancelled = false;
     Promise.all([
       loadUserData('projects', null),
       loadUserData('messages', null),
       loadUserData('appointments', null),
-    ]).then(([p, m, a]) => {
+      loadUserData('connections', null),
+      loadUserData('team', null),
+    ]).then(([p, m, a, c, t]) => {
       if (cancelled) return;
-      const list = Array.isArray(p?.list)
-        ? p.list
-        : (p?.project ? [{ ...p.project, status: p.status || 'working', archived: !!p.archived, id: 'legacy' }] : []);
-      setProjectsList(list);
+      // Same normalizer the projects pages use, so a legacy blob renders here
+      // exactly as it renders there (and rooms/products keep migrating on read).
+      setProjectsList(normalizeStored(p));
+      setProjectsLoading(false);
       setMessageThreads(Array.isArray(m?.threads) ? m.threads : []);
+      setConnections(Array.isArray(c?.list) ? c.list : []);
+      setTeamUsers(Array.isArray(t?.list) ? t.list : []);
+      setTeamLoading(false);
       // Only keep appointments booked recently, dropping the obviously stale ones.
       const appts = Array.isArray(a?.list) ? a.list : [];
       const cutoff = Date.now() - 30 * 86400000;
@@ -224,18 +496,89 @@ export default function ProSourceSettingsRedesign() {
     if (days < 7) return `${days}d ago`;
     return d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
   };
-  const [notifyEmail, setNotifyEmail] = useState(true);
-  const [notifySms, setNotifySms] = useState(false);
-  const [commFrequency, setCommFrequency] = useState('Weekly');
-  const [referralShowroom, setReferralShowroom] = useState('jackson');
-  const [acceptingLeads, setAcceptingLeads] = useState(true);
-  const [expandedYear, setExpandedYear] = useState(2024);
+  /**
+   * Notification preferences.
+   *
+   * These used to be plain useState with no backend field at all, so every
+   * toggle was forgotten on refresh. They now live on the profile blob under
+   * `notificationPrefs` and flush through saveProfile, which shallow-merges, so
+   * a profile written before this field existed simply falls back to DEFAULTS
+   * and starts persisting the moment anything is touched. No reset, no
+   * migration.
+   */
+  const [prefs, setPrefs] = useState(() => ({
+    ...DEFAULT_NOTIFICATION_PREFS,
+    ...(profile?.notificationPrefs || {}),
+  }));
+  // The profile arrives from cache at mount or from the network a moment later.
+  // Hydrate from it exactly once: after that the user's edits own this state and
+  // a late-arriving profile must not stomp them.
+  const [prefsHydrated, setPrefsHydrated] = useState(!!profile);
+  const [prefsSaving, setPrefsSaving] = useState(false);
+  const [prefsSavedAt, setPrefsSavedAt] = useState(null);
+  const [prefsError, setPrefsError] = useState('');
+
+  useEffect(() => {
+    if (!profile || prefsHydrated) return;
+    setPrefs({ ...DEFAULT_NOTIFICATION_PREFS, ...(profile.notificationPrefs || {}) });
+    setPrefsHydrated(true);
+  }, [profile, prefsHydrated]);
+
+  /**
+   * Apply a preference change optimistically, then persist it.
+   *
+   * On failure the control snaps BACK to what is actually stored and says why.
+   * A toggle that stays where you put it while the save failed is a lie, and
+   * that lie survives until the next reload silently undoes it.
+   */
+  const savePrefs = async (patch) => {
+    const previous = prefs;
+    setPrefs({ ...prefs, ...patch });
+    setPrefsError('');
+    setPrefsSaving(true);
+    try {
+      await saveProfile({ notificationPrefs: { ...previous, ...patch } });
+      setPrefsSavedAt(Date.now());
+    } catch (err) {
+      setPrefs(previous);
+      setPrefsSavedAt(null);
+      setPrefsError(err.message || 'Could not save. Your preference was not changed.');
+    } finally {
+      setPrefsSaving(false);
+    }
+  };
+
+  // 'auto' means "the most recent year in whatever dataset is showing", which
+  // stays right when the showroom selector changes the years on offer. An
+  // explicit year (or null for all-collapsed) takes over once the user clicks.
+  /**
+   * One status line, shown in the header of every card these preferences live
+   * in. A failed save has to be visible: the whole point of this work package
+   * is that these settings used to lie about being kept.
+   */
+  const prefsStatus = prefsSaving ? (
+    <span style={{ fontSize: 13, color: colors.gray500 }}>Saving…</span>
+  ) : prefsError ? (
+    <span style={{ fontSize: 13, color: colors.red, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+      <AlertCircle size={14} /> {prefsError}
+    </span>
+  ) : prefsSavedAt ? (
+    <span style={{ fontSize: 13, color: colors.green, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+      <Check size={14} /> Saved
+    </span>
+  ) : null;
+
+  const [expandedYear, setExpandedYear] = useState('auto');
   const [selectedMonth, setSelectedMonth] = useState(null);
   const [appointmentModalOpen, setAppointmentModalOpen] = useState(false);
   const [appointmentBtnHover, setAppointmentBtnHover] = useState(false);
   const [hoveredCard, setHoveredCard] = useState(null);
   const [addUserModalOpen, setAddUserModalOpen] = useState(false);
-  const [userSaved, setUserSaved] = useState(false);
+  const [editingUserId, setEditingUserId] = useState(null);
+  const [teamBusy, setTeamBusy] = useState(false);
+  const [teamError, setTeamError] = useState('');
+  // What the invite ACTUALLY did, straight from the server. Never assumed.
+  const [inviteResult, setInviteResult] = useState(null);
   const [newUser, setNewUser] = useState({
     firstName: '',
     lastName: '',
@@ -244,6 +587,305 @@ export default function ProSourceSettingsRedesign() {
     role: '',
     access: 'full'
   });
+
+  /**
+   * "Your ProSource Team": the account managers of every showroom the account
+   * works with, plus any ProSource staff in the connections list.
+   *
+   * Merged by name because Kim is both the St. Louis account manager (from the
+   * showroom record) and connection #1: one person, one row, and the connection
+   * id is what makes her row messageable. An account manager with no connection
+   * record still shows, because a showroom always has one whether or not anyone
+   * has connected to them yet.
+   */
+  const prosourceTeam = useMemo(() => {
+    const byName = new Map();
+    const add = (person) => {
+      if (!person?.name) return;
+      const merged = { ...(byName.get(person.name) || {}) };
+      // Only defined values overwrite, so a connection record without a
+      // photoColor doesn't wipe the account manager's, and a null connectionId
+      // doesn't wipe a real one.
+      Object.entries(person).forEach(([k, v]) => {
+        if (v !== undefined && v !== null && v !== '') merged[k] = v;
+      });
+      byName.set(person.name, merged);
+    };
+
+    // `showrooms` is primary-first, so the primary showroom's manager leads.
+    (showrooms || []).forEach((s) => {
+      const am = s?.accountManager;
+      if (!am?.name) return;
+      add({
+        name: am.name,
+        role: am.title || 'Account Manager',
+        location: s.name,
+        initials: am.initials,
+        photoColor: am.photoColor,
+        email: am.email,
+      });
+    });
+
+    connections
+      .filter((c) => c.type === 'prosource')
+      .forEach((c) => {
+        add({
+          name: c.name,
+          role: c.role,
+          location: c.location,
+          initials: c.initials,
+          email: c.email,
+          connectionId: c.id,
+        });
+      });
+
+    return [...byName.values()];
+  }, [showrooms, connections]);
+
+  /**
+   * "Your Team Members": the real people you work with, i.e. every connection
+   * who is not ProSource staff (they have their own panel above). Every row
+   * here holds a connection id, so every chat bubble resolves.
+   */
+  const teamMemberConnections = useMemo(
+    () => connections.filter((c) => c.type && c.type !== 'prosource'),
+    [connections]
+  );
+
+  // ---- My Projects -------------------------------------------------------
+  const [projectQuery, setProjectQuery] = useState('');
+  const [projectSort, setProjectSort] = useState('recent');
+  // How many cards each status group is currently showing. "Load More" raises
+  // the number for one group; it used to be a button that did nothing at all.
+  const [visibleCounts, setVisibleCounts] = useState({});
+  const visibleCount = (key) => visibleCounts[key] || PROJECT_PAGE_SIZE;
+
+  const projectGroups = useMemo(() => {
+    const q = projectQuery.trim().toLowerCase();
+    let list = projectsList.filter((p) => !p.archived);
+    if (q) {
+      // "Search by client or project name": the client is whoever is on the
+      // project team, so search their names too rather than only the title.
+      list = list.filter((p) =>
+        [p.name, p.type, p.address, ...(p.team || []).map((m) => m.name)].some((field) =>
+          String(field || '').toLowerCase().includes(q)
+        )
+      );
+    }
+    const sorted = [...list].sort((a, b) => {
+      if (projectSort === 'alpha') return (a.name || '').localeCompare(b.name || '');
+      if (projectSort === 'oldest') return (a.updatedAt || 0) - (b.updatedAt || 0);
+      return (b.updatedAt || 0) - (a.updatedAt || 0);
+    });
+    const groups = { working: [], complete: [], published: [] };
+    sorted.forEach((p) => {
+      const key = groups[p.status] ? p.status : 'working';
+      groups[key].push(p);
+    });
+    return groups;
+  }, [projectsList, projectQuery, projectSort]);
+
+  /** The client on a project is a real team member, not a placeholder name. */
+  const projectClient = (p) =>
+    (p.team || []).find((m) => m.type === 'client')?.name || null;
+
+  const formatShortDate = (ts) => {
+    if (!ts) return 'Not yet';
+    try {
+      return new Date(ts).toLocaleDateString('en-US');
+    } catch {
+      return 'Not yet';
+    }
+  };
+
+  // ---- Referral bonus (demo data, see REFERRAL_DEMO_DATA) -----------------
+  const referralOptions = useMemo(() => {
+    const perShowroom = (showrooms || []).map((s) => ({ value: s.id, label: s.name }));
+    // "All Showrooms" is only a real choice when there is more than one
+    // showroom. With one it IS that showroom, so offering it is just noise.
+    return perShowroom.length > 1
+      ? [{ value: 'all', label: 'All Showrooms' }, ...perShowroom]
+      : perShowroom;
+  }, [showrooms]);
+
+  const [referralShowroom, setReferralShowroom] = useState(null);
+  // Default to the widest honest view. `showrooms` arrives with the profile, so
+  // this also repairs a selection that no longer exists on the account.
+  useEffect(() => {
+    if (referralShowroom && referralOptions.some((o) => o.value === referralShowroom)) return;
+    setReferralShowroom(referralOptions[0]?.value ?? null);
+  }, [referralOptions, referralShowroom]);
+
+  const referralYears = useMemo(() => {
+    if (!referralShowroom) return [];
+    if (referralShowroom === 'all') {
+      return sumShowroomYears(
+        (showrooms || []).map((s) => ({
+          showroomName: s.name,
+          years: REFERRAL_DEMO_DATA[s.id] || [],
+        }))
+      );
+    }
+    return REFERRAL_DEMO_DATA[referralShowroom] || [];
+  }, [referralShowroom, showrooms]);
+
+  // Newest year first everywhere, so [0] is the year-to-date year.
+  const referralYtdYear = referralYears[0] || null;
+  const openYear = expandedYear === 'auto' ? referralYtdYear?.year ?? null : expandedYear;
+
+  // ---- Manage Users ------------------------------------------------------
+  /** Write the account's user list to the `team` blob and mirror it locally. */
+  const persistTeam = async (next) => {
+    await saveUserData('team', { list: next });
+    setTeamUsers(next);
+  };
+
+  const resetUserModal = () => {
+    setAddUserModalOpen(false);
+    setEditingUserId(null);
+    setTeamError('');
+    setNewUser({ firstName: '', lastName: '', email: '', phone: '', role: '', access: 'full' });
+  };
+
+  const openEditUser = (user) => {
+    setEditingUserId(user.id);
+    setTeamError('');
+    setNewUser({
+      firstName: user.firstName || '',
+      lastName: user.lastName || '',
+      email: user.email || '',
+      phone: user.phone || '',
+      role: user.role || '',
+      access: user.access || 'full',
+    });
+    setAddUserModalOpen(true);
+  };
+
+  /**
+   * Save the Add/Edit User modal.
+   *
+   * Adding sends an invitation; editing an existing user does not, because
+   * changing someone's access level is not a reason to email them again.
+   *
+   * The invite goes through /api/send-invite, which records the invite in the
+   * ps-invites store and reports whether an email actually went out. We show
+   * exactly what it reports: an "Invitation Sent!" banner over a send that
+   * didn't happen is the bug this replaces.
+   */
+  const saveUser = async () => {
+    const email = newUser.email.trim();
+    const firstName = newUser.firstName.trim();
+    if (!firstName) {
+      setTeamError('First name is required.');
+      return;
+    }
+    if (!email.includes('@')) {
+      setTeamError('A valid email address is required.');
+      return;
+    }
+    const duplicate = teamUsers.some(
+      (u) => u.email?.toLowerCase() === email.toLowerCase() && u.id !== editingUserId
+    );
+    if (duplicate) {
+      setTeamError('That email is already on your account.');
+      return;
+    }
+
+    setTeamBusy(true);
+    setTeamError('');
+    try {
+      const name = [firstName, newUser.lastName.trim()].filter(Boolean).join(' ');
+
+      if (editingUserId) {
+        const next = teamUsers.map((u) =>
+          u.id === editingUserId
+            ? {
+                ...u,
+                firstName,
+                lastName: newUser.lastName.trim(),
+                name,
+                initials: initialsFor(name),
+                email,
+                phone: newUser.phone.trim(),
+                role: newUser.role,
+                access: newUser.access,
+                updatedAt: Date.now(),
+              }
+            : u
+        );
+        await persistTeam(next);
+        setInviteResult(null);
+        resetUserModal();
+        return;
+      }
+
+      // Ask the server to record the invite and (if email is configured) send
+      // it, then report back what it actually managed to do.
+      let result;
+      try {
+        const res = await fetch('/api/send-invite', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            toEmail: email,
+            fromName: userName || 'A ProSource member',
+            fromUserId: userId || null,
+            fromBusinessName: profile?.business?.name || '',
+            message: `You have been added to our ProSource account with ${
+              newUser.access === 'full' ? 'full' : 'view only'
+            } access.`,
+          }),
+        });
+        const data = await res.json().catch(() => ({}));
+        result = res.ok
+          ? data
+          : { emailSent: false, reason: 'send-failed', error: data.error || `HTTP ${res.status}` };
+      } catch (err) {
+        result = { emailSent: false, reason: 'request-failed', error: err.message };
+      }
+
+      const user = {
+        id: `user-${Date.now()}`,
+        firstName,
+        lastName: newUser.lastName.trim(),
+        name,
+        initials: initialsFor(name),
+        email,
+        phone: newUser.phone.trim(),
+        role: newUser.role,
+        access: newUser.access,
+        // 'invited' until they actually sign in. Nothing here can make that
+        // happen, so nothing here gets to call them 'active'.
+        status: 'invited',
+        inviteEmailSent: Boolean(result.emailSent),
+        inviteToken: result.token || null,
+        invitedAt: Date.now(),
+      };
+      await persistTeam([...teamUsers, user]);
+      setInviteResult(result);
+      resetUserModal();
+    } catch (err) {
+      setTeamError(err.message || 'Could not save this user.');
+    } finally {
+      setTeamBusy(false);
+    }
+  };
+
+  const removeUser = async (user) => {
+    if (!window.confirm(`Remove ${user.name || user.email} from your account?`)) return;
+    setTeamBusy(true);
+    setTeamError('');
+    try {
+      await persistTeam(teamUsers.filter((u) => u.id !== user.id));
+    } catch (err) {
+      setTeamError(err.message || 'Could not remove this user.');
+    } finally {
+      setTeamBusy(false);
+    }
+  };
+
+  const ACCESS_LABEL = { full: 'Full Access', view: 'View Only' };
+  const STATUS_LABEL = { active: 'Accepted', invited: 'Invited' };
 
   // Welcome modal - shows for new users from onboarding or if not dismissed
   const [tipSlide, setTipSlide] = useState(0);
@@ -1019,13 +1661,17 @@ export default function ProSourceSettingsRedesign() {
                     linkTo: '/shop',
                   },
                   {
+                    // Was "Create your first room visualization" pointing at
+                    // nothing, because there is no visualizer to point at.
+                    // Rooms are real project entities, so this now promises the
+                    // thing the app can actually do and links to where it happens.
                     title: 'Tips & Resources',
                     bg: '#e3f2fd',
                     icon: <Home size={32} color={colors.darkBlue} style={{ marginBottom: 12 }} />,
-                    heading: 'Create your first room visualization',
-                    sub: 'Get to know your benefits',
-                    linkText: 'Learn More →',
-                    linkTo: null,
+                    heading: 'Set up your first project',
+                    sub: 'Add rooms, invite your client, and keep selections in one place',
+                    linkText: 'Start a Project →',
+                    linkTo: '/projects/new',
                   },
                 ];
                 const slide = slides[tipSlide];
@@ -1062,11 +1708,11 @@ export default function ProSourceSettingsRedesign() {
                       {slide.icon}
                       <div style={{ fontSize: 14, fontWeight: 600, color: colors.gray900, marginBottom: 4 }}>{slide.heading}</div>
                       <div style={{ fontSize: 13, color: colors.gray500, marginBottom: 12 }}>{slide.sub}</div>
-                      {slide.linkTo ? (
-                        <Link to={slide.linkTo} style={{ fontSize: 13, color: colors.darkBlue, fontWeight: 500, textDecoration: 'none' }}>{slide.linkText}</Link>
-                      ) : (
-                        <a style={{ fontSize: 13, color: colors.darkBlue, fontWeight: 500, cursor: 'pointer' }}>{slide.linkText}</a>
-                      )}
+                      {/* Every slide links somewhere real. The old `linkTo: null`
+                          fallback rendered a bare <a> that looked like a link and
+                          did nothing, so it is gone rather than left waiting to
+                          catch the next slide someone adds without a destination. */}
+                      <Link to={slide.linkTo} style={{ fontSize: 13, color: colors.darkBlue, fontWeight: 500, textDecoration: 'none' }}>{slide.linkText}</Link>
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'center', gap: 6, marginTop: 12 }}>
                       {slides.map((_, i) => (
@@ -1095,42 +1741,36 @@ export default function ProSourceSettingsRedesign() {
               }}>
                 <h3 style={{ fontSize: 16, fontWeight: 600, marginBottom: 16, color: colors.gray900 }}>Your ProSource Team</h3>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                    <img
-                      src="https://images.unsplash.com/photo-1580489944761-15a19d654956?w=96&h=96&fit=crop&crop=face"
-                      alt="Kim Marks"
-                      style={{
-                        width: 48,
-                        height: 48,
-                        borderRadius: '50%',
-                        objectFit: 'cover',
-                        border: `2px solid ${colors.lightBlue}`,
-                      }}
-                    />
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: 14, fontWeight: 600, color: colors.gray900 }}>Kim Marks</div>
-                      <div style={{ fontSize: 12, color: colors.gray500 }}>Account Manager • ProSource of St. Louis</div>
+                  {prosourceTeam.length === 0 && (
+                    <div style={{ fontSize: 13, color: colors.gray500 }}>
+                      Your showroom team will appear here once your account is matched to a showroom.
                     </div>
-                    <ChatBubbleLink to="/messages?thread=kim" title="Message Kim Marks" />
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                    <img
-                      src="https://images.unsplash.com/photo-1573497019940-1c28c88b4f3e?w=96&h=96&fit=crop&crop=face"
-                      alt="Heather Yager"
-                      style={{
-                        width: 48,
-                        height: 48,
-                        borderRadius: '50%',
-                        objectFit: 'cover',
-                        border: `2px solid ${colors.lightBlue}`,
-                      }}
-                    />
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: 14, fontWeight: 600, color: colors.gray900 }}>Heather Yager</div>
-                      <div style={{ fontSize: 12, color: colors.gray500 }}>Design Consultant • ProSource of St. Louis</div>
+                  )}
+                  {prosourceTeam.map((person) => (
+                    <div key={person.name} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                      <Avatar name={person.name} initials={person.initials} color={person.photoColor} />
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 14, fontWeight: 600, color: colors.gray900 }}>{person.name}</div>
+                        <div style={{ fontSize: 12, color: colors.gray500 }}>
+                          {[person.role, person.location].filter(Boolean).join(' • ')}
+                        </div>
+                      </div>
+                      {/* Messageable only with a real connection id. Otherwise
+                          their real email, rather than a bubble to nowhere. */}
+                      {person.connectionId != null ? (
+                        <ContactLink
+                          to={`/messages?connection=${person.connectionId}`}
+                          title={`Message ${person.name}`}
+                        />
+                      ) : person.email ? (
+                        <ContactLink
+                          to={`mailto:${person.email}`}
+                          title={`Email ${person.name}`}
+                          icon={Mail}
+                        />
+                      ) : null}
                     </div>
-                    <ChatBubbleLink to="/messages?thread=heather" title="Message Heather Yager" />
-                  </div>
+                  ))}
                 </div>
                 <button
                   onClick={() => setAppointmentModalOpen(true)}
@@ -1210,50 +1850,55 @@ export default function ProSourceSettingsRedesign() {
               }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
                   <h3 style={{ fontSize: 16, fontWeight: 600, color: colors.gray900, margin: 0 }}>Your Team Members</h3>
+                  {/* Points at /connections, which is what this panel now lists.
+                      It used to point at Manage Users, a different dataset
+                      entirely (people with a login on your account). That page
+                      is still one click away in the account menu. */}
                   <Link
-                    to="/settings?section=team"
+                    to="/connections"
                     style={{ fontSize: 13, color: colors.darkBlue, textDecoration: 'none', fontWeight: 500 }}
                   >
                     Manage →
                   </Link>
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                    <div style={{
-                      width: 48,
-                      height: 48,
-                      borderRadius: '50%',
-                      background: colors.gray200,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      color: colors.gray500,
-                      fontWeight: 600,
-                    }}>JD</div>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: 14, fontWeight: 600, color: colors.gray900 }}>John Doe</div>
-                      <div style={{ fontSize: 12, color: colors.gray500 }}>Project Manager</div>
+                  {teamMemberConnections.length === 0 && (
+                    <div style={{ fontSize: 13, color: colors.gray500 }}>
+                      No connections yet.{' '}
+                      <Link to="/connections" style={{ color: colors.darkBlue, fontWeight: 500 }}>
+                        Add the clients and trade pros you work with
+                      </Link>
+                      {' '}and they will show up here.
                     </div>
-                    <ChatBubbleLink to="/messages?thread=john" title="Message John Doe" />
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                    <div style={{
-                      width: 48,
-                      height: 48,
-                      borderRadius: '50%',
-                      background: colors.gray200,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      color: colors.gray500,
-                      fontWeight: 600,
-                    }}>JS</div>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: 14, fontWeight: 600, color: colors.gray900 }}>Jane Smith</div>
-                      <div style={{ fontSize: 12, color: colors.gray500 }}>Assistant</div>
+                  )}
+                  {teamMemberConnections.slice(0, 4).map((person) => (
+                    <div key={person.id} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                      <Avatar
+                        name={person.name}
+                        initials={person.initials}
+                        color={person.type === 'client' ? colors.darkBlue : colors.green}
+                      />
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 14, fontWeight: 600, color: colors.gray900 }}>{person.name}</div>
+                        <div style={{ fontSize: 12, color: colors.gray500 }}>
+                          {[person.role, person.location].filter(Boolean).join(' • ')}
+                        </div>
+                      </div>
+                      {/* ?connection=<id> is the form that actually resolves. */}
+                      <ContactLink
+                        to={`/messages?connection=${person.id}`}
+                        title={`Message ${person.name}`}
+                      />
                     </div>
-                    <ChatBubbleLink to="/messages?thread=jane" title="Message Jane Smith" />
-                  </div>
+                  ))}
+                  {teamMemberConnections.length > 4 && (
+                    <Link
+                      to="/connections"
+                      style={{ fontSize: 13, color: colors.darkBlue, textDecoration: 'none', fontWeight: 500 }}
+                    >
+                      View all {teamMemberConnections.length} connections →
+                    </Link>
+                  )}
                 </div>
               </div>
             </div>
@@ -1264,137 +1909,153 @@ export default function ProSourceSettingsRedesign() {
       {/* MY PROJECTS SECTION */}
       {activeSection === 'projects' && (
         <div>
-          {/* Search Bar + Create Button */}
+          {/* Search Bar + Create Button. The search filters every group below;
+              "+ New Project" goes to the real create wizard. */}
           <div className="flex flex-wrap gap-3 mb-6">
             <input
               type="text"
               placeholder="Search by client or project name..."
               className="flex-1 min-w-[200px]"
               style={styles.searchInput}
+              value={projectQuery}
+              onChange={(e) => setProjectQuery(e.target.value)}
             />
-            <button className="whitespace-nowrap shrink-0" style={{ ...styles.btnPrimary, background: colors.green }}>
+            <Link
+              to="/projects/new"
+              className="whitespace-nowrap shrink-0"
+              style={{ ...styles.btnPrimary, background: colors.green, textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }}
+            >
               + New Project
-            </button>
+            </Link>
           </div>
 
-          {/* Working Projects */}
-          <div style={{ marginTop: 8 }}>
-            <div style={styles.sectionHeader}>
-              <h3 style={styles.sectionTitle}>Working Projects</h3>
-              <Select
-                value="recent"
-                onChange={() => {}}
-                options={[
-                  { value: 'recent', label: 'Most Recent' },
-                  { value: 'alpha', label: 'Alphabetical' },
-                  { value: 'oldest', label: 'Oldest First' },
-                ]}
-                size="sm"
-                className="min-w-[160px]"
-              />
+          {projectsLoading ? (
+            <div style={{ padding: 48, textAlign: 'center', fontSize: 14, color: colors.gray500 }}>
+              Loading your projects…
             </div>
-            
-            <div style={styles.projectsGrid}>
+          ) : (
+            <>
+              {/* One renderer for all three status groups: they only ever
+                  differed by which literals they held. */}
               {[
-                { name: 'retrest', notifications: 3, updated: '12/18/2025', status: 'working' },
-                { name: '2566', notifications: 3, updated: '11/20/2025', status: 'working' },
-                { name: '2011', notifications: 3, updated: '11/20/2025', status: 'working' },
-                { name: 'Bathroom Remodel - Cromwell', notifications: 5, updated: '10/30/2025', status: 'working' },
-              ].map((project, i) => (
-                <Link
-                  to="/project"
-                  key={i}
-                  style={{ ...styles.projectCard, textDecoration: 'none', color: 'inherit' }}
-                  onMouseOver={(e) => {
-                    e.currentTarget.style.borderColor = colors.darkBlue;
-                    e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.08)';
-                  }}
-                  onMouseOut={(e) => {
-                    e.currentTarget.style.borderColor = colors.gray200;
-                    e.currentTarget.style.boxShadow = 'none';
-                  }}
-                >
-                  <div style={styles.projectStatus(project.status)}>Working</div>
-                  <div style={styles.projectName}>
-                    {project.name}
-                    {project.notifications > 0 && (
-                      <span style={styles.projectBadge}>{project.notifications}</span>
+                { key: 'working', title: 'Working Projects', sortable: true },
+                { key: 'complete', title: 'Completed Projects', sortable: false },
+                { key: 'published', title: 'Published Projects', sortable: false },
+              ].map(({ key, title, sortable }, groupIndex) => {
+                const all = projectGroups[key];
+                const shown = all.slice(0, visibleCount(key));
+                return (
+                  <div key={key} style={{ marginTop: groupIndex === 0 ? 8 : 40 }}>
+                    <div style={styles.sectionHeader}>
+                      <h3 style={styles.sectionTitle}>{title}</h3>
+                      {sortable && (
+                        <Select
+                          value={projectSort}
+                          onChange={setProjectSort}
+                          options={[
+                            { value: 'recent', label: 'Most Recent' },
+                            { value: 'alpha', label: 'Alphabetical' },
+                            { value: 'oldest', label: 'Oldest First' },
+                          ]}
+                          size="sm"
+                          className="min-w-[160px]"
+                        />
+                      )}
+                    </div>
+
+                    {all.length === 0 ? (
+                      <div style={{
+                        padding: 48,
+                        textAlign: 'center',
+                        background: '#fff',
+                        borderRadius: 8,
+                        border: `1px solid ${colors.gray200}`,
+                      }}>
+                        {projectQuery.trim() ? (
+                          <p style={{ fontSize: 14, color: colors.gray500, margin: 0 }}>
+                            No {title.toLowerCase()} match "{projectQuery.trim()}".
+                          </p>
+                        ) : key === 'published' ? (
+                          <>
+                            <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 16 }}>
+                              <Camera size={48} color={colors.gray300} />
+                            </div>
+                            <h4 style={{ fontSize: 16, fontWeight: 600, marginBottom: 8 }}>No Published Projects Yet</h4>
+                            <p style={{ fontSize: 14, color: colors.gray500, marginBottom: 20 }}>
+                              When you complete a job, publish photos and details to inspire and attract new clients.
+                            </p>
+                            {/* Publishing happens on a project, so this goes to
+                                the project list rather than being a button that
+                                publishes nothing. */}
+                            <Link to="/projects" style={{ ...styles.btnPrimary, textDecoration: 'none', display: 'inline-block' }}>
+                              Go to My Projects
+                            </Link>
+                          </>
+                        ) : (
+                          <p style={{ fontSize: 14, color: colors.gray500, margin: 0 }}>
+                            Nothing here yet.
+                          </p>
+                        )}
+                      </div>
+                    ) : (
+                      <div style={styles.projectsGrid}>
+                        {shown.map((project) => {
+                          const client = projectClient(project);
+                          return (
+                            <Link
+                              to={`/projects/${project.id}`}
+                              key={project.id}
+                              style={{ ...styles.projectCard, textDecoration: 'none', color: 'inherit' }}
+                              onMouseOver={(e) => {
+                                e.currentTarget.style.borderColor = colors.darkBlue;
+                                e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.08)';
+                              }}
+                              onMouseOut={(e) => {
+                                e.currentTarget.style.borderColor = colors.gray200;
+                                e.currentTarget.style.boxShadow = 'none';
+                              }}
+                            >
+                              <div style={styles.projectStatus(key === 'complete' ? 'completed' : key)}>
+                                {key === 'complete' ? 'Completed' : key === 'published' ? 'Published' : 'Working'}
+                              </div>
+                              <div style={styles.projectName}>{project.name || 'Untitled project'}</div>
+                              {project.type && (
+                                <div style={styles.projectMeta}>{project.type}</div>
+                              )}
+                              {client && (
+                                <div style={styles.projectMeta}>Client: {client}</div>
+                              )}
+                              <div style={styles.projectMeta}>
+                                Last Updated: {formatShortDate(project.updatedAt)}
+                              </div>
+                              <div style={styles.projectArrow}>›</div>
+                            </Link>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {/* Only offered when there is genuinely more to load. */}
+                    {all.length > shown.length && (
+                      <div style={{ textAlign: 'center', marginTop: 20 }}>
+                        <button
+                          style={styles.btnOutline}
+                          onClick={() =>
+                            setVisibleCounts((prev) => ({
+                              ...prev,
+                              [key]: visibleCount(key) + PROJECT_PAGE_SIZE,
+                            }))
+                          }
+                        >
+                          Load More {title} ({all.length - shown.length} more)
+                        </button>
+                      </div>
                     )}
                   </div>
-                  <div style={styles.projectMeta}>Project Owner: Suzie Q Snowflake</div>
-                  <div style={styles.projectMeta}>Last Updated: {project.updated}</div>
-                  <div style={styles.projectArrow}>›</div>
-                </Link>
-              ))}
-            </div>
-            
-            <div style={{ textAlign: 'center', marginTop: 20 }}>
-              <button style={styles.btnOutline}>Load More Working Projects</button>
-            </div>
-          </div>
-
-          {/* Completed Projects */}
-          <div style={{ marginTop: 40 }}>
-            <div style={styles.sectionHeader}>
-              <h3 style={styles.sectionTitle}>Completed Projects</h3>
-            </div>
-            
-            <div style={styles.projectsGrid}>
-              {[
-                { name: 'AL Test 2.11', updated: '8/16/2025', status: 'completed' },
-                { name: 'AL Test 12/13', updated: '8/12/2025', status: 'completed' },
-                { name: 'Test 20250729', updated: '7/29/2025', status: 'completed' },
-                { name: 'AL Test 12/11', updated: '6/14/2025', status: 'completed' },
-                { name: 'Add to Cart', updated: '6/7/2025', status: 'completed' },
-              ].map((project, i) => (
-                <Link
-                  to="/project"
-                  key={i}
-                  style={{ ...styles.projectCard, textDecoration: 'none', color: 'inherit' }}
-                  onMouseOver={(e) => {
-                    e.currentTarget.style.borderColor = colors.darkBlue;
-                    e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.08)';
-                  }}
-                  onMouseOut={(e) => {
-                    e.currentTarget.style.borderColor = colors.gray200;
-                    e.currentTarget.style.boxShadow = 'none';
-                  }}
-                >
-                  <div style={styles.projectStatus(project.status)}>Completed</div>
-                  <div style={styles.projectName}>{project.name}</div>
-                  <div style={styles.projectMeta}>Project Owner: Suzie Q Snowflake</div>
-                  <div style={styles.projectMeta}>Last Updated: {project.updated}</div>
-                  <div style={styles.projectArrow}>›</div>
-                </Link>
-              ))}
-            </div>
-            
-            <div style={{ textAlign: 'center', marginTop: 20 }}>
-              <button style={styles.btnOutline}>Load More Completed Projects</button>
-            </div>
-          </div>
-
-          {/* Published Projects */}
-          <div style={{ marginTop: 40 }}>
-            <div style={styles.sectionHeader}>
-              <h3 style={styles.sectionTitle}>Published Projects</h3>
-            </div>
-            
-            <div style={{
-              padding: 48,
-              textAlign: 'center',
-              background: '#fff',
-              borderRadius: 8,
-              border: `1px solid ${colors.gray200}`,
-            }}>
-              <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 16 }}><Camera size={48} color={colors.gray400} /></div>
-              <h4 style={{ fontSize: 16, fontWeight: 600, marginBottom: 8 }}>No Published Projects Yet</h4>
-              <p style={{ fontSize: 14, color: colors.gray500, marginBottom: 20 }}>
-                When you complete a job, publish photos and details to inspire and attract new clients.
-              </p>
-              <button style={styles.btnPrimary}>Publish Your First Project</button>
-            </div>
-          </div>
+                );
+              })}
+            </>
+          )}
         </div>
       )}
 
@@ -1407,99 +2068,60 @@ export default function ProSourceSettingsRedesign() {
             style={{ background: colors.darkBlue, borderRadius: 12, padding: 20, color: '#fff' }}
           >
             <div>
-              <div style={{ fontSize: 13, opacity: 0.8, marginBottom: 4 }}>Calendar Year-to-Date</div>
-              <div style={{ fontSize: 32, fontWeight: 700, lineHeight: 1.1 }}>$615.88</div>
+              <div style={{ fontSize: 13, opacity: 0.8, marginBottom: 4 }}>
+                {referralYtdYear ? `${referralYtdYear.year} Year-to-Date` : 'Calendar Year-to-Date'}
+                {referralShowroom === 'all' ? ' · All Showrooms' : ''}
+              </div>
+              {/* Summed from the rows below, never a literal of its own, so it
+                  cannot disagree with them. */}
+              <div style={{ fontSize: 32, fontWeight: 700, lineHeight: 1.1 }}>
+                ${(referralYtdYear ? yearTotal(referralYtdYear) : 0).toFixed(2)}
+              </div>
             </div>
-            <div className="w-full sm:w-auto">
-              <label style={{ fontSize: 12, opacity: 0.8, marginBottom: 4, display: 'block' }}>Showroom</label>
-              <Select
-                value={referralShowroom}
-                onChange={setReferralShowroom}
-                options={[
-                  { value: 'jackson', label: 'ProSource of Jackson, MS' },
-                  { value: 'stlouis', label: 'ProSource of St. Louis' },
-                ]}
-                className="w-full sm:min-w-[220px]"
-                fullWidth
-              />
-            </div>
+            {/* Only a choice when there is something to choose between: one
+                showroom means one dataset, so the selector is hidden. */}
+            {referralOptions.length > 1 && (
+              <div className="w-full sm:w-auto">
+                <label style={{ fontSize: 12, opacity: 0.8, marginBottom: 4, display: 'block' }}>Showroom</label>
+                <Select
+                  value={referralShowroom}
+                  onChange={(v) => {
+                    setReferralShowroom(v);
+                    // The months on offer change with the dataset, so a month
+                    // selected under the old one is meaningless under the new.
+                    setSelectedMonth(null);
+                    setExpandedYear('auto');
+                  }}
+                  options={referralOptions}
+                  className="w-full sm:min-w-[220px]"
+                  fullWidth
+                />
+              </div>
+            )}
           </div>
 
           <p style={{ fontSize: 14, color: colors.gray500, marginBottom: 24 }}>
-            This section shows your referral bonuses earned for client purchases. As a ProSource member, 
+            This section shows your referral bonuses earned for client purchases. As a ProSource member,
             you earn a referral bonus for purchases made by your clients.
+            {referralOptions.length > 1 && ' "All Showrooms" adds up every showroom you work with.'}
           </p>
 
+          {referralYears.length === 0 && (
+            <div style={{
+              padding: 48,
+              textAlign: 'center',
+              background: '#fff',
+              borderRadius: 8,
+              border: `1px solid ${colors.gray200}`,
+              fontSize: 14,
+              color: colors.gray500,
+            }}>
+              No referral bonuses recorded for this showroom yet.
+            </div>
+          )}
+
           {/* Yearly Breakdown */}
-          {[
-            {
-              year: 2024,
-              total: 615.88,
-              months: [
-                { month: 'January', amount: null, orders: [] },
-                { month: 'February', amount: 87.84, orders: [
-                  { order: 'EC099016', client: 'Bubba Beans', product: 'Shaw Endura Plus LVP', amount: 87.84 },
-                ] },
-                { month: 'March', amount: null, orders: [] },
-                { month: 'April', amount: 87.84, orders: [
-                  { order: 'EC099042', client: 'Sarah Chen', product: 'Mohawk RevWood Select', amount: 52.10 },
-                  { order: 'EC099043', client: 'Martha Wilson', product: 'Daltile Keystones Tile', amount: 35.74 },
-                ] },
-                { month: 'May', amount: 87.84, orders: [
-                  { order: 'EC099058', client: 'Bubba Beans', product: 'MSI Calacatta Laza Quartz', amount: 87.84 },
-                ] },
-                { month: 'June', amount: 87.84, orders: [
-                  { order: 'EC099071', client: 'Martha Wilson', product: 'Shaw Floorte Pro LVP', amount: 87.84 },
-                ] },
-                { month: 'July', amount: 87.84, orders: [
-                  { order: 'EC099085', client: 'Sarah Chen', product: 'Emser Tile Borigni', amount: 45.20 },
-                  { order: 'EC099086', client: 'Bubba Beans', product: 'Shaw Bellera Carpet', amount: 42.64 },
-                ] },
-                { month: 'August', amount: null, orders: [] },
-                { month: 'September', amount: 87.84, orders: [
-                  { order: 'EC099102', client: 'Martha Wilson', product: 'Mohawk SolidTech LVP', amount: 87.84 },
-                ] },
-                { month: 'October', amount: null, orders: [] },
-                { month: 'November', amount: null, orders: [] },
-                { month: 'December', amount: 87.84, orders: [
-                  { order: 'EC099130', client: 'Bubba Beans', product: 'Shaw Inspiring Design Carpet', amount: 87.84 },
-                ] },
-              ]
-            },
-            {
-              year: 2023,
-              total: 615.88,
-              months: [
-                { month: 'January', amount: null, orders: [] },
-                { month: 'February', amount: 87.84, orders: [
-                  { order: 'EC098901', client: 'Bubba Beans', product: 'Shaw Epic Hardwood', amount: 87.84 },
-                ] },
-                { month: 'March', amount: null, orders: [] },
-                { month: 'April', amount: 87.84, orders: [
-                  { order: 'EC098920', client: 'Sarah Chen', product: 'Daltile Perpetuo Tile', amount: 87.84 },
-                ] },
-                { month: 'May', amount: 87.84, orders: [
-                  { order: 'EC098935', client: 'Martha Wilson', product: 'Mohawk UltraStrand Carpet', amount: 87.84 },
-                ] },
-                { month: 'June', amount: 87.84, orders: [
-                  { order: 'EC098948', client: 'Bubba Beans', product: 'Shaw Floorte Plus LVP', amount: 87.84 },
-                ] },
-                { month: 'July', amount: 87.84, orders: [
-                  { order: 'EC098960', client: 'Sarah Chen', product: 'MSI Premium Natural Quartz', amount: 87.84 },
-                ] },
-                { month: 'August', amount: null, orders: [] },
-                { month: 'September', amount: 87.84, orders: [
-                  { order: 'EC098980', client: 'Martha Wilson', product: 'Shaw Exquisite Hardwood', amount: 87.84 },
-                ] },
-                { month: 'October', amount: null, orders: [] },
-                { month: 'November', amount: null, orders: [] },
-                { month: 'December', amount: 87.84, orders: [
-                  { order: 'EC098999', client: 'Bubba Beans', product: 'Mohawk RevWood Plus', amount: 87.84 },
-                ] },
-              ]
-            },
-            { year: 2022, total: 87.84, months: [] },
-          ].map((yearData) => (
+          {referralYears.map((yearData) => (
             <div
               key={yearData.year}
               style={{
@@ -1513,7 +2135,7 @@ export default function ProSourceSettingsRedesign() {
               {/* Year Header */}
               <button
                 onClick={() => {
-                  setExpandedYear(expandedYear === yearData.year ? null : yearData.year);
+                  setExpandedYear(openYear === yearData.year ? null : yearData.year);
                   setSelectedMonth(null);
                 }}
                 style={{
@@ -1525,7 +2147,7 @@ export default function ProSourceSettingsRedesign() {
                   background: 'none',
                   border: 'none',
                   cursor: 'pointer',
-                  borderBottom: expandedYear === yearData.year ? `1px solid ${colors.gray200}` : 'none',
+                  borderBottom: openYear === yearData.year ? `1px solid ${colors.gray200}` : 'none',
                 }}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -1541,12 +2163,12 @@ export default function ProSourceSettingsRedesign() {
                     fontWeight: 600,
                     color: colors.green
                   }}>
-                    ${yearData.total.toFixed(2)}
+                    ${yearTotal(yearData).toFixed(2)}
                   </span>
                 </div>
                 <span style={{
                   color: colors.gray500,
-                  transform: expandedYear === yearData.year ? 'rotate(180deg)' : 'rotate(0deg)',
+                  transform: openYear === yearData.year ? 'rotate(180deg)' : 'rotate(0deg)',
                   transition: 'transform 0.2s ease',
                   display: 'flex',
                 }}>
@@ -1555,17 +2177,20 @@ export default function ProSourceSettingsRedesign() {
               </button>
 
               {/* Monthly Breakdown */}
-              {expandedYear === yearData.year && yearData.months.length > 0 && (
+              {openYear === yearData.year && yearData.months.length > 0 && (
                 <div style={{ padding: '16px 20px' }}>
                   <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-3">
                     {yearData.months.map((monthData, i) => {
                       const monthKey = `${yearData.year}-${i}`;
                       const isSelected = selectedMonth === monthKey;
+                      // Derived from the month's orders, so the tile and the
+                      // detail panel it opens can never disagree.
+                      const total = monthTotal(monthData);
                       return (
                         <div
                           key={i}
                           onClick={() => {
-                            if (monthData.amount) {
+                            if (total) {
                               setSelectedMonth(isSelected ? null : monthKey);
                             }
                           }}
@@ -1574,7 +2199,7 @@ export default function ProSourceSettingsRedesign() {
                             background: isSelected ? colors.darkBlue : colors.gray100,
                             borderRadius: 6,
                             textAlign: 'center',
-                            cursor: monthData.amount ? 'pointer' : 'default',
+                            cursor: total ? 'pointer' : 'default',
                             border: isSelected ? `2px solid ${colors.darkBlue}` : '2px solid transparent',
                             transition: 'all 0.15s ease',
                           }}
@@ -1589,9 +2214,9 @@ export default function ProSourceSettingsRedesign() {
                           <div style={{
                             fontSize: 14,
                             fontWeight: 600,
-                            color: isSelected ? '#fff' : monthData.amount ? colors.green : colors.gray400,
+                            color: isSelected ? '#fff' : total ? colors.green : colors.gray300,
                           }}>
-                            {monthData.amount ? `$${monthData.amount.toFixed(2)}` : '--'}
+                            {total ? `$${total.toFixed(2)}` : '--'}
                           </div>
                         </div>
                       );
@@ -1601,7 +2226,7 @@ export default function ProSourceSettingsRedesign() {
                   {selectedMonth && selectedMonth.startsWith(`${yearData.year}-`) && (() => {
                     const monthIndex = parseInt(selectedMonth.split('-')[1]);
                     const monthData = yearData.months[monthIndex];
-                    if (!monthData || !monthData.amount) return null;
+                    if (!monthData || !monthTotal(monthData)) return null;
                     return (
                       <div style={{
                         background: colors.gray100,
@@ -1631,7 +2256,11 @@ export default function ProSourceSettingsRedesign() {
                           >
                             <div style={{ minWidth: 0 }}>
                               <div style={{ fontSize: 13, fontWeight: 600, color: colors.darkBlue }}>{order.order}</div>
-                              <div style={{ fontSize: 12, color: colors.gray500 }}>{order.client} · {order.product}</div>
+                              <div style={{ fontSize: 12, color: colors.gray500 }}>
+                                {order.client} · {order.product}
+                                {/* Only worth saying when the view mixes showrooms. */}
+                                {order.showroomName ? ` · ${order.showroomName}` : ''}
+                              </div>
                             </div>
                             <div style={{ fontSize: 14, fontWeight: 600, color: colors.green, flexShrink: 0, marginLeft: 12 }}>
                               +${order.amount.toFixed(2)}
@@ -1722,7 +2351,14 @@ export default function ProSourceSettingsRedesign() {
             </div>
           </div>
 
-          {/* Login & Security */}
+          {/* Login & Security.
+              Both controls here used to be dead, and the password one was worse
+              than dead: this app is OTP-only and has no password, so a row of
+              dots above an "Update" button described an account that does not
+              exist. Replaced with what is actually true about signing in.
+              Changing the sign-in email is not offered because the email IS the
+              account key (userId is derived from it at verify time), so it is a
+              support operation, not a self-serve toggle. */}
           <div style={styles.card}>
             <div style={styles.cardHeader}>
               <h3 style={styles.cardTitle}>Login & Security</h3>
@@ -1733,15 +2369,23 @@ export default function ProSourceSettingsRedesign() {
                   <div style={styles.settingTitle}>Email Address</div>
                   <div style={styles.settingDesc}>{userEmail || 'No email on file'}</div>
                 </div>
-                <button style={{ ...styles.btnOutline, ...styles.btnSmall }}>Change</button>
               </div>
               <div style={styles.settingRow}>
                 <div style={styles.settingInfo}>
-                  <div style={styles.settingTitle}>Password</div>
-                  <div style={styles.settingDesc}>••••••••••••</div>
+                  <div style={styles.settingTitle}>Sign-in Method</div>
+                  <div style={styles.settingDesc}>
+                    Email code. We send a 6 digit code to your email address each time you sign in,
+                    so there is no password to remember or update.
+                  </div>
                 </div>
-                <button style={{ ...styles.btnOutline, ...styles.btnSmall }}>Update</button>
               </div>
+              <p style={{ fontSize: 13, color: colors.gray500, margin: '4px 4px 0' }}>
+                Your email address is your account. To change it, contact
+                {accountManager?.name ? ` ${accountManager.name}` : ' your account manager'}
+                {accountManager?.email ? (
+                  <> at <a href={`mailto:${accountManager.email}`} style={{ color: colors.darkBlue }}>{accountManager.email}</a></>
+                ) : null}.
+              </p>
             </div>
           </div>
 
@@ -1749,6 +2393,7 @@ export default function ProSourceSettingsRedesign() {
           <div style={styles.card}>
             <div style={styles.cardHeader}>
               <h3 style={styles.cardTitle}>Notification Preferences</h3>
+              {prefsStatus}
             </div>
             <div style={styles.cardBody}>
               <div style={styles.settingRow}>
@@ -1757,10 +2402,11 @@ export default function ProSourceSettingsRedesign() {
                   <div style={styles.settingDesc}>Receive order status updates to your email address</div>
                 </div>
                 <button
-                  onClick={() => setNotifyEmail(!notifyEmail)}
-                  style={styles.toggle(notifyEmail)}
+                  onClick={() => savePrefs({ email: !prefs.email })}
+                  disabled={prefsSaving}
+                  style={styles.toggle(prefs.email)}
                 >
-                  <div style={styles.toggleKnob(notifyEmail)} />
+                  <div style={styles.toggleKnob(prefs.email)} />
                 </button>
               </div>
               <div style={styles.settingRow}>
@@ -1769,10 +2415,11 @@ export default function ProSourceSettingsRedesign() {
                   <div style={styles.settingDesc}>Receive updates via text message (standard rates may apply)</div>
                 </div>
                 <button
-                  onClick={() => setNotifySms(!notifySms)}
-                  style={styles.toggle(notifySms)}
+                  onClick={() => savePrefs({ sms: !prefs.sms })}
+                  disabled={prefsSaving}
+                  style={styles.toggle(prefs.sms)}
                 >
-                  <div style={styles.toggleKnob(notifySms)} />
+                  <div style={styles.toggleKnob(prefs.sms)} />
                 </button>
               </div>
             </div>
@@ -1782,6 +2429,7 @@ export default function ProSourceSettingsRedesign() {
           <div style={styles.card}>
             <div style={styles.cardHeader}>
               <h3 style={styles.cardTitle}>Communication Frequency</h3>
+              {prefsStatus}
             </div>
             <div style={styles.cardBody}>
               <p style={{ fontSize: 14, color: colors.gray500, marginBottom: 16 }}>
@@ -1791,16 +2439,17 @@ export default function ProSourceSettingsRedesign() {
                 {['Daily', 'Weekly', 'Monthly'].map(freq => (
                   <button
                     key={freq}
-                    onClick={() => setCommFrequency(freq)}
+                    onClick={() => savePrefs({ frequency: freq })}
+                    disabled={prefsSaving}
                     style={{
                       padding: '10px 24px',
-                      border: `1px solid ${commFrequency === freq ? colors.darkBlue : colors.gray300}`,
+                      border: `1px solid ${prefs.frequency === freq ? colors.darkBlue : colors.gray300}`,
                       borderRadius: 4,
-                      background: commFrequency === freq ? colors.darkBlue : '#fff',
-                      color: commFrequency === freq ? '#fff' : colors.gray700,
+                      background: prefs.frequency === freq ? colors.darkBlue : '#fff',
+                      color: prefs.frequency === freq ? '#fff' : colors.gray700,
                       fontSize: 14,
                       fontWeight: 500,
-                      cursor: 'pointer',
+                      cursor: prefsSaving ? 'wait' : 'pointer',
                     }}
                   >
                     {freq}
@@ -1814,24 +2463,26 @@ export default function ProSourceSettingsRedesign() {
           <div style={styles.card}>
             <div style={styles.cardHeader}>
               <h3 style={styles.cardTitle}>ProSource Leads</h3>
+              {prefsStatus}
             </div>
             <div style={styles.cardBody}>
               <div style={styles.settingRow}>
                 <div style={styles.settingInfo}>
                   <div style={styles.settingTitle}>Receive Client Referrals</div>
                   <div style={styles.settingDesc}>
-                    Get matched with potential clients who use ProSource. Your account manager will refer 
+                    Get matched with potential clients who use ProSource. Your account manager will refer
                     homeowners looking for trade professionals like you.
                   </div>
                 </div>
                 <button
-                  onClick={() => setAcceptingLeads(!acceptingLeads)}
-                  style={styles.toggle(acceptingLeads)}
+                  onClick={() => savePrefs({ acceptingLeads: !prefs.acceptingLeads })}
+                  disabled={prefsSaving}
+                  style={styles.toggle(prefs.acceptingLeads)}
                 >
-                  <div style={styles.toggleKnob(acceptingLeads)} />
+                  <div style={styles.toggleKnob(prefs.acceptingLeads)} />
                 </button>
               </div>
-              {acceptingLeads && (
+              {prefs.acceptingLeads && (
                 <div style={{ 
                   marginTop: 16, 
                   padding: 16, 
@@ -1849,13 +2500,24 @@ export default function ProSourceSettingsRedesign() {
             </div>
           </div>
 
-          {/* Danger Zone */}
+          {/* Danger Zone.
+              The button is gone rather than wired. Nothing in this app reads a
+              "deactivated" flag, so a self-serve button could only ever set a
+              field no code enforces: it would report success and leave the
+              account fully working, which is a worse lie than the dead button
+              it replaced. Deactivation is a real support operation, so this
+              points at the person who can actually do it. */}
           <div style={styles.dangerZone}>
             <div style={styles.dangerTitle}>Deactivate Account</div>
-            <p style={{ fontSize: 14, color: colors.gray500, marginBottom: 16 }}>
-              Permanently deactivate your account. This will hide your profile and stop all notifications.
+            <p style={{ fontSize: 14, color: colors.gray500, margin: 0 }}>
+              Deactivating hides your profile and stops all notifications. Your account manager
+              handles this for you: contact
+              {accountManager?.name ? ` ${accountManager.name}` : ' your account manager'}
+              {accountManager?.email ? (
+                <> at <a href={`mailto:${accountManager.email}?subject=Deactivate%20my%20account`} style={{ color: colors.red, fontWeight: 500 }}>{accountManager.email}</a></>
+              ) : null}
+              {showroom?.phone ? ` or call ${showroom.phone}` : ''} and they will close it.
             </p>
-            <button style={styles.btnDanger}>Deactivate Account</button>
           </div>
         </div>
       )}
@@ -1863,38 +2525,79 @@ export default function ProSourceSettingsRedesign() {
       {/* TEAM MANAGEMENT SECTION */}
       {activeSection === 'team' && (
         <div>
-          {/* Success Notice */}
-          {userSaved && (
+          {/* Invitation result.
+              Reports what the server actually did. This used to be a hardcoded
+              "Invitation Sent!" that fired without calling anything at all. */}
+          {inviteResult && (
             <div style={{
-              background: '#dcfce7',
-              border: '1px solid #bbf7d0',
+              background: inviteResult.emailSent ? '#dcfce7' : '#fef3c7',
+              border: `1px solid ${inviteResult.emailSent ? '#bbf7d0' : '#fde68a'}`,
               borderRadius: 8,
               padding: '16px 20px',
               marginBottom: 24,
               display: 'flex',
-              alignItems: 'center',
+              alignItems: 'flex-start',
               gap: 12,
             }}>
-              <Check size={20} color={colors.green} />
-              <div>
-                <div style={{ fontWeight: 600, color: colors.green, marginBottom: 2 }}>Invitation Sent!</div>
+              {inviteResult.emailSent
+                ? <Check size={20} color={colors.green} style={{ flexShrink: 0 }} />
+                : <AlertCircle size={20} color="#92400e" style={{ flexShrink: 0 }} />}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontWeight: 600, color: inviteResult.emailSent ? colors.green : '#92400e', marginBottom: 2 }}>
+                  {inviteResult.emailSent ? 'Invitation Sent' : 'Invitation Recorded, no email sent'}
+                </div>
                 <div style={{ fontSize: 13, color: colors.gray700 }}>
-                  An email has been sent to the new user with instructions to activate their account.
+                  {inviteResult.emailSent ? (
+                    'An email has been sent to the new user with instructions to activate their account.'
+                  ) : (
+                    <>
+                      The user is on your account below with an invite on file
+                      {inviteResult.token ? ' and a real invite token' : ''}, but no email went out
+                      {inviteResult.reason === 'email-not-configured'
+                        ? ' because email delivery is not configured in this environment.'
+                        : '.'}
+                      {inviteResult.error && (
+                        <><br /><span style={{ fontSize: 12, color: colors.red }}>{inviteResult.error}</span></>
+                      )}
+                    </>
+                  )}
                 </div>
               </div>
               <button
-                onClick={() => setUserSaved(false)}
-                style={{ marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer', color: colors.gray500 }}
+                onClick={() => setInviteResult(null)}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: colors.gray500 }}
               >
                 <X size={18} />
               </button>
             </div>
           )}
 
+          {teamError && !addUserModalOpen && (
+            <div style={{
+              background: '#fff5f5',
+              border: `1px solid #f5c6cb`,
+              borderRadius: 8,
+              padding: '12px 16px',
+              marginBottom: 16,
+              fontSize: 13,
+              color: colors.red,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+            }}>
+              <AlertCircle size={16} /> {teamError}
+            </div>
+          )}
+
           {/* Add User Button */}
           <div className="flex justify-stretch sm:justify-end mb-6">
             <button
-              onClick={() => setAddUserModalOpen(true)}
+              onClick={() => {
+                setEditingUserId(null);
+                setTeamError('');
+                setNewUser({ firstName: '', lastName: '', email: '', phone: '', role: '', access: 'full' });
+                setAddUserModalOpen(true);
+              }}
               className="w-full sm:w-auto whitespace-nowrap"
               style={styles.btnPrimary}
             >
@@ -1908,87 +2611,115 @@ export default function ProSourceSettingsRedesign() {
               <h3 style={styles.cardTitle}>Existing Users</h3>
             </div>
 
-            {(() => {
-              const users = [
-                { initials: 'JB', name: 'Jim Biggs', email: 'bigtimeremodeling@proton.me', access: 'view', accessLabel: 'View Only', status: 'active', statusLabel: 'Accepted' },
-              ];
-              return (
-                <>
-                  {/* Mobile: card list */}
-                  <div className="md:hidden">
-                    {users.map((u, i) => (
-                      <div
-                        key={u.email}
-                        className="p-4"
-                        style={{ borderTop: i === 0 ? 'none' : `1px solid ${colors.gray200}` }}
-                      >
-                        <div className="flex items-center gap-3 mb-3">
-                          <div style={{
-                            width: 40, height: 40, borderRadius: '50%',
-                            background: colors.lightBlue, color: '#fff',
-                            display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            fontWeight: 600, fontSize: 14, flexShrink: 0,
-                          }}>{u.initials}</div>
-                          <div className="min-w-0 flex-1">
-                            <div className="font-semibold truncate" style={{ color: colors.gray900 }}>{u.name}</div>
-                            <div className="text-sm truncate" style={{ color: colors.gray500 }}>{u.email}</div>
-                          </div>
-                        </div>
-                        <div className="flex flex-wrap gap-2 mb-3">
-                          <span style={styles.accessBadge(u.access)}>{u.accessLabel}</span>
-                          <span style={styles.statusBadge(u.status)}>{u.statusLabel}</span>
-                        </div>
-                        <div className="flex gap-2">
-                          <button className="flex-1 whitespace-nowrap" style={{ ...styles.btnOutline, ...styles.btnSmall, justifyContent: 'center' }}>Edit</button>
-                          <button className="flex-1 whitespace-nowrap" style={{ ...styles.btnDanger, ...styles.btnSmall, justifyContent: 'center' }}>Remove</button>
+            {/* The user list is the real `team` blob now, not a literal.
+                Empty is a real state: an account that has invited nobody has no
+                users, and saying so beats inventing one. */}
+            {teamLoading ? (
+              <div style={{ padding: 32, textAlign: 'center', fontSize: 14, color: colors.gray500 }}>
+                Loading users…
+              </div>
+            ) : teamUsers.length === 0 ? (
+              <div style={{ padding: 40, textAlign: 'center' }}>
+                <p style={{ fontSize: 14, color: colors.gray500, margin: 0 }}>
+                  No other users on your account yet. Add someone to let them view your orders and estimates.
+                </p>
+              </div>
+            ) : (
+              <>
+                {/* Mobile: card list */}
+                <div className="md:hidden">
+                  {teamUsers.map((u, i) => (
+                    <div
+                      key={u.id}
+                      className="p-4"
+                      style={{ borderTop: i === 0 ? 'none' : `1px solid ${colors.gray200}` }}
+                    >
+                      <div className="flex items-center gap-3 mb-3">
+                        <Avatar name={u.name} initials={u.initials} size={40} />
+                        <div className="min-w-0 flex-1">
+                          <div className="font-semibold truncate" style={{ color: colors.gray900 }}>{u.name}</div>
+                          <div className="text-sm truncate" style={{ color: colors.gray500 }}>{u.email}</div>
                         </div>
                       </div>
-                    ))}
-                  </div>
+                      <div className="flex flex-wrap gap-2 mb-3">
+                        <span style={styles.accessBadge(u.access)}>{ACCESS_LABEL[u.access] || u.access}</span>
+                        <span style={styles.statusBadge(u.status)}>{STATUS_LABEL[u.status] || u.status}</span>
+                        {u.status === 'invited' && (
+                          <span style={{ fontSize: 12, color: colors.gray500, alignSelf: 'center' }}>
+                            {u.inviteEmailSent ? 'Invitation emailed' : 'Invite recorded · no email sent'}
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => openEditUser(u)}
+                          disabled={teamBusy}
+                          className="flex-1 whitespace-nowrap"
+                          style={{ ...styles.btnOutline, ...styles.btnSmall, justifyContent: 'center' }}
+                        >Edit</button>
+                        <button
+                          onClick={() => removeUser(u)}
+                          disabled={teamBusy}
+                          className="flex-1 whitespace-nowrap"
+                          style={{ ...styles.btnDanger, ...styles.btnSmall, justifyContent: 'center' }}
+                        >Remove</button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
 
-                  {/* Desktop: table */}
-                  <div className="hidden md:block" style={{ overflowX: 'auto' }}>
-                    <table style={styles.table}>
-                      <thead style={styles.tableHeader}>
-                        <tr>
-                          <th style={styles.th}>Name</th>
-                          <th style={styles.th}>Access Level</th>
-                          <th style={styles.th}>Email</th>
-                          <th style={styles.th}>Status</th>
-                          <th style={styles.th}>Actions</th>
+                {/* Desktop: table */}
+                <div className="hidden md:block" style={{ overflowX: 'auto' }}>
+                  <table style={styles.table}>
+                    <thead style={styles.tableHeader}>
+                      <tr>
+                        <th style={styles.th}>Name</th>
+                        <th style={styles.th}>Access Level</th>
+                        <th style={styles.th}>Email</th>
+                        <th style={styles.th}>Status</th>
+                        <th style={styles.th}>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {teamUsers.map(u => (
+                        <tr key={u.id}>
+                          <td style={styles.td}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                              <Avatar name={u.name} initials={u.initials} size={36} />
+                              <span style={{ fontWeight: 500 }}>{u.name}</span>
+                            </div>
+                          </td>
+                          <td style={styles.td}><span style={styles.accessBadge(u.access)}>{ACCESS_LABEL[u.access] || u.access}</span></td>
+                          <td style={styles.td}>{u.email}</td>
+                          <td style={styles.td}>
+                            <span style={styles.statusBadge(u.status)}>{STATUS_LABEL[u.status] || u.status}</span>
+                            {u.status === 'invited' && (
+                              <div style={{ fontSize: 12, color: colors.gray500, marginTop: 4 }}>
+                                {u.inviteEmailSent ? 'Invitation emailed' : 'Invite recorded · no email sent'}
+                              </div>
+                            )}
+                          </td>
+                          <td style={styles.td}>
+                            <div style={{ display: 'flex', gap: 8 }}>
+                              <button
+                                onClick={() => openEditUser(u)}
+                                disabled={teamBusy}
+                                style={{ ...styles.btnOutline, ...styles.btnSmall }}
+                              >Edit</button>
+                              <button
+                                onClick={() => removeUser(u)}
+                                disabled={teamBusy}
+                                style={{ ...styles.btnDanger, ...styles.btnSmall }}
+                              >Remove</button>
+                            </div>
+                          </td>
                         </tr>
-                      </thead>
-                      <tbody>
-                        {users.map(u => (
-                          <tr key={u.email}>
-                            <td style={styles.td}>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                                <div style={{
-                                  width: 36, height: 36, borderRadius: '50%',
-                                  background: colors.lightBlue, color: '#fff',
-                                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                  fontWeight: 600, fontSize: 13,
-                                }}>{u.initials}</div>
-                                <span style={{ fontWeight: 500 }}>{u.name}</span>
-                              </div>
-                            </td>
-                            <td style={styles.td}><span style={styles.accessBadge(u.access)}>{u.accessLabel}</span></td>
-                            <td style={styles.td}>{u.email}</td>
-                            <td style={styles.td}><span style={styles.statusBadge(u.status)}>{u.statusLabel}</span></td>
-                            <td style={styles.td}>
-                              <div style={{ display: 'flex', gap: 8 }}>
-                                <button style={{ ...styles.btnOutline, ...styles.btnSmall }}>Edit</button>
-                                <button style={{ ...styles.btnDanger, ...styles.btnSmall }}>Remove</button>
-                              </div>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </>
-              );
-            })()}
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}
@@ -2033,9 +2764,11 @@ export default function ProSourceSettingsRedesign() {
               justifyContent: 'space-between',
               alignItems: 'center',
             }}>
-              <h2 style={{ fontSize: 20, fontWeight: 600, color: colors.gray900, margin: 0 }}>Add New User</h2>
+              <h2 style={{ fontSize: 20, fontWeight: 600, color: colors.gray900, margin: 0 }}>
+                {editingUserId ? 'Edit User' : 'Add New User'}
+              </h2>
               <button
-                onClick={() => setAddUserModalOpen(false)}
+                onClick={resetUserModal}
                 style={{ background: 'none', border: 'none', cursor: 'pointer', color: colors.gray500, padding: 4 }}
               >
                 <X size={24} />
@@ -2045,8 +2778,27 @@ export default function ProSourceSettingsRedesign() {
             {/* Modal Body */}
             <div style={{ padding: 24 }}>
               <p style={{ fontSize: 14, color: colors.gray500, marginBottom: 20 }}>
-                Add team members to view orders and estimates. They'll receive an email to activate their account.
+                {editingUserId
+                  ? 'Update this user\'s details and access level. No new invitation is sent.'
+                  : 'Add team members to view orders and estimates. We will email them an invitation to activate their account.'}
               </p>
+
+              {teamError && (
+                <div style={{
+                  background: '#fff5f5',
+                  border: `1px solid #f5c6cb`,
+                  borderRadius: 6,
+                  padding: '10px 14px',
+                  marginBottom: 16,
+                  fontSize: 13,
+                  color: colors.red,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                }}>
+                  <AlertCircle size={16} /> {teamError}
+                </div>
+              )}
 
               <div style={styles.formRow}>
                 <div style={styles.formGroup}>
@@ -2144,20 +2896,22 @@ export default function ProSourceSettingsRedesign() {
               gap: 12,
             }}>
               <button
-                onClick={() => setAddUserModalOpen(false)}
+                onClick={resetUserModal}
+                disabled={teamBusy}
                 style={styles.btnOutline}
               >
                 Cancel
               </button>
               <button
-                onClick={() => {
-                  setAddUserModalOpen(false);
-                  setUserSaved(true);
-                  setNewUser({ firstName: '', lastName: '', email: '', phone: '', role: '', access: 'full' });
-                }}
-                style={styles.btnPrimary}
+                onClick={saveUser}
+                disabled={teamBusy}
+                style={{ ...styles.btnPrimary, opacity: teamBusy ? 0.7 : 1, cursor: teamBusy ? 'wait' : 'pointer' }}
               >
-                Send Invitation
+                {teamBusy
+                  ? 'Saving…'
+                  : editingUserId
+                  ? 'Save Changes'
+                  : 'Send Invitation'}
               </button>
             </div>
           </div>
