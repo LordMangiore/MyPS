@@ -68,7 +68,7 @@ export default function ProSourceShop() {
   const navigate = useNavigate();
   const location = useLocation();
   const params = useParams();
-  const { userId, userName, userEmail, showroom, accountManager, loadUserData, saveUserData } = useAuth();
+  const { userId, userName, userEmail, showroom, showrooms, accountManager, loadUserData, saveUserData } = useAuth();
   // Canonical PDP route is /shop/:sku. `?product=<id>` is the old link shape.
   // Still honored, resolved through the catalog and redirected below so old
   // bookmarks and stored links don't rot.
@@ -265,6 +265,51 @@ export default function ProSourceShop() {
   };
 
   /**
+   * Put a just-submitted quote on the account manager's work queue.
+   *
+   * A cart quote isn't attached to a project, so there is nothing better to go
+   * on than the member's primary showroom, which is the one whose account
+   * manager they already deal with. `showroom` is always `showrooms[0]`, but a
+   * session written straight from a multi-showroom profile can carry only the
+   * list, so read both.
+   *
+   * Best-effort by design. The member's quote is already saved in their own
+   * orders blob by the time this runs, so a queue write that fails must not
+   * turn a recorded quote into an error message telling them to try again (and
+   * submit it twice). It is logged and the submit stands.
+   */
+  const enqueueForAccountManager = async (quote) => {
+    try {
+      const showroomId = showroom?.id || showrooms?.[0]?.id || 'unassigned';
+      const res = await fetch('/api/am-queue', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'enqueue',
+          item: {
+            type: 'quote',
+            showroomId,
+            memberUserId: userId,
+            memberName: userName || 'Member',
+            memberEmail: userEmail || '',
+            docId: quote.id,
+            projectId: quote.projectId || null,
+            summary: `Cart quote, ${quote.items.length} item${quote.items.length !== 1 ? 's' : ''}`,
+            itemCount: quote.items.length,
+            submittedAt: quote.submittedAt,
+          },
+        }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || `Request failed (${res.status})`);
+      }
+    } catch (err) {
+      console.warn('Quote saved, but the account manager queue write failed:', err.message);
+    }
+  };
+
+  /**
    * Member quote submit.
    *
    * This used to flip a local flag and clear the cart. The "your account
@@ -276,6 +321,12 @@ export default function ProSourceShop() {
    *
    * The record is read back before writing because three pages write this
    * blob; `user-data` replaces it wholesale.
+   *
+   * Writing the member's blob is only half of it. That blob is per-user, so a
+   * quote sitting in it is invisible to the account manager who has to price
+   * it: nothing outside this member's own account can find it. The submit
+   * therefore also enqueues the quote onto the showroom's work queue
+   * (/api/am-queue), which is the cross-member index the AM console reads.
    */
   const submitQuote = async () => {
     // Guests go through the wizard: project type, zip, timing, OTP. The
@@ -325,6 +376,7 @@ export default function ProSourceShop() {
       const stored = await loadUserData('orders', null);
       const list = Array.isArray(stored?.list) ? stored.list : [];
       await saveUserData('orders', { ...(stored || {}), list: [quote, ...list] });
+      await enqueueForAccountManager(quote);
       setSubmittedQuoteId(quoteId);
       setCartSubmitted(true);
       setQuoteNotes('');

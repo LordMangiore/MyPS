@@ -5,6 +5,7 @@ import {
   getRestClient,
   ensureConversation,
 } from "./lib/twilio.mjs";
+import { enqueueItem } from "./am-queue.mjs";
 
 const FROM_ADDRESS = process.env.RESEND_FROM || "ProSource <onboarding@resend.dev>";
 const DEV_BYPASS = process.env.OTP_DEV_BYPASS === "true" || !process.env.RESEND_API_KEY;
@@ -24,11 +25,13 @@ const escapeHtml = (s) =>
  *
  * Side effects:
  *   1. Save into `ps-consultation-requests/{toProUserId}` (or unassigned bucket)
- *   2. If both sides have user IDs AND Twilio is live: create a Conversation
+ *   2. Put the request on the territory showroom's AM work queue, which is the
+ *      only thing that reads consultation requests at all
+ *   3. If both sides have user IDs AND Twilio is live: create a Conversation
  *      between fromUserId and toProUserId, post the message as the first
  *      message, attribute it to fromUserId
- *   3. Email the pro a heads-up (if their email is known)
- *   4. Email the requester a confirmation
+ *   4. Email the pro a heads-up (if their email is known)
+ *   5. Email the requester a confirmation
  */
 export default async function handler(req) {
   if (req.method !== "POST") {
@@ -91,7 +94,54 @@ export default async function handler(req) {
       console.warn("consultation persist failed:", err.message);
     }
 
-    // 2) If both identities are known + Twilio is live, kick off a thread.
+    // 2) Put it on the AM work queue.
+    //
+    // The bucket written above has never had a reader: a consultation request
+    // got `status: 'new'` and sat there forever with no lifecycle and no UI.
+    // The bucket stays (it is the full record, and it is what the pro's own
+    // lead views would read), but the queue is what puts the request in front
+    // of a human.
+    //
+    // Routed by the requester's zip, the same territory lookup submit-quote
+    // uses. The request is addressed to a pro, but the pro can be a contractor
+    // rather than a showroom account manager, so the pro's identity is not a
+    // showroom. The territory is. No zip means no territory to route to, and
+    // the item goes to 'unassigned' rather than being dropped.
+    try {
+      let showroomId = "unassigned";
+      if (zip) {
+        const baseUrl =
+          process.env.URL ||
+          `${req.headers.get("x-forwarded-proto") || "http"}://${req.headers.get("host")}`;
+        const lookupRes = await fetch(`${baseUrl}/api/lookup-showroom`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ zip }),
+        });
+        const lookupData = await lookupRes.json().catch(() => ({}));
+        showroomId = lookupData?.showroom?.id || "unassigned";
+      }
+      await enqueueItem({
+        type: "consultation",
+        showroomId,
+        // A consultation can come from a guest who has no account yet. The
+        // queue item carries null for them rather than inventing an id.
+        memberUserId: fromUserId || null,
+        memberName: fromName,
+        memberEmail: record.fromEmail,
+        // Nothing to price: a consultation request is a conversation to have,
+        // not a document. The console can only dismiss it.
+        docId: null,
+        projectId: null,
+        summary: `Consultation request, ${projectType}`,
+        itemCount: null,
+        submittedAt: record.createdAt,
+      });
+    } catch (err) {
+      console.warn("AM queue enqueue failed:", err.message);
+    }
+
+    // 3) If both identities are known + Twilio is live, kick off a thread.
     let conversationSid = null;
     if (TWILIO_ENABLED && fromUserId && toProUserId) {
       try {
@@ -121,7 +171,7 @@ export default async function handler(req) {
       }
     }
 
-    // 3) Email the pro (best-effort).
+    // 4) Email the pro (best-effort).
     if (!DEV_BYPASS) {
       try {
         // The pro's email lives on their saved profile.
@@ -161,7 +211,7 @@ export default async function handler(req) {
           });
         }
 
-        // 4) Confirmation to the requester.
+        // 5) Confirmation to the requester.
         await getResend().emails.send({
           from: FROM_ADDRESS,
           to: fromEmail,

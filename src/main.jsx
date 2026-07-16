@@ -19,6 +19,7 @@ import ProSourceOrders from './prosource-orders.jsx'
 import ProSourceMessages from './prosource-messages.jsx'
 import ProSourceNotifications from './prosource-notifications.jsx'
 import ProSourceOrderDetail from './prosource-order-detail.jsx'
+import ProSourceAmConsole from './prosource-am-console.jsx'
 
 /* Routes that only exist while signed in. A logged-out visitor asking for one
    of these is expressing intent we can honor after they authenticate, so we
@@ -26,6 +27,7 @@ import ProSourceOrderDetail from './prosource-order-detail.jsx'
 const PROTECTED_PREFIXES = [
   '/connections', '/projects', '/project', '/settings',
   '/products', '/orders', '/messages', '/notifications',
+  '/am',
 ]
 
 const isProtectedPath = (pathname) =>
@@ -52,7 +54,13 @@ const NotFoundRedirect = () => {
 }
 
 const AppRouter = () => {
-  const { isLoggedIn } = useAuth()
+  const { isLoggedIn, userType } = useAuth()
+  /* The console is staff-only, so it is mounted only for the one userType that
+     has a work queue. A signed-in member who types /am falls through to the
+     wildcard and goes home, which is the same thing every other URL they have
+     no business at does. This is not a security boundary (nothing here is one):
+     it keeps a screen that would be empty and confusing out of their way. */
+  const isAccountManager = isLoggedIn && userType === 'accountmanager'
 
   return (
     <Routes>
@@ -74,7 +82,16 @@ const AppRouter = () => {
         {/* Protected routes: only mounted when logged in */}
         {isLoggedIn && (
           <>
-            <Route path="/" element={<ProSourceSettings />} />
+            {/* Home means different things to a member and to showroom staff.
+                The member dashboard is a customer surface: my projects, my
+                saved carts, shop now. An account manager owns none of those,
+                so landing them there greets them with an empty version of
+                someone else's app. Their home is the work their members are
+                waiting on. */}
+            <Route
+              path="/"
+              element={isAccountManager ? <Navigate to="/am" replace /> : <ProSourceSettings />}
+            />
             <Route path="/connections" element={<ProSourceConnections />} />
             <Route path="/projects" element={<ProSourceProjects />} />
             <Route path="/projects/new" element={<ProSourceProjectCreate />} />
@@ -88,6 +105,10 @@ const AppRouter = () => {
             <Route path="/notifications" element={<ProSourceNotifications />} />
           </>
         )}
+
+        {/* Staff-only, alongside the protected routes rather than inside them:
+            its own gate, so it cannot be reached by being merely signed in. */}
+        {isAccountManager && <Route path="/am" element={<ProSourceAmConsole />} />}
       </Route>
 
       {/* Logged-out / shows the marketing landing page: value pitch plus

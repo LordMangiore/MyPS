@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react'
 import { Link, Outlet, useLocation } from 'react-router-dom'
-import { Bell, MessageCircle, Menu, X, ShoppingCart } from 'lucide-react'
+import { Bell, MessageCircle, Menu, X, ShoppingCart, ClipboardList } from 'lucide-react'
 import { useAuth } from './auth-context'
 import { guestCartCount, subscribeGuestCart, syncActiveCartToAccount } from './guest-cart'
 
@@ -17,7 +17,21 @@ const Layout = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [hoveredIcon, setHoveredIcon] = useState(null)
   const location = useLocation()
-  const { logout, userId, loadUserData, isLoggedIn } = useAuth()
+  const { logout, userId, loadUserData, isLoggedIn, userType } = useAuth()
+
+  /**
+   * Staff, not a shopper.
+   *
+   * An account manager has no cart, buys nothing, and does not need a pro found
+   * for her: she IS the showroom. So the member chrome (category nav, cart,
+   * Find a Pro, Saved Carts, Referral Bonus, Estimates & Orders) is dropped for
+   * her and the work queue takes its place, because that is the one thing she
+   * came here to do. What stays is what she genuinely uses: Messages and
+   * Notifications (her book of business talks to her through both) and Account
+   * Settings. The member header is untouched: every branch below is additive
+   * and keyed on this one flag.
+   */
+  const isAccountManager = isLoggedIn && userType === 'accountmanager'
   const [projects, setProjects] = useState([])
   const [threads, setThreads] = useState([])
   const [readIds, setReadIds] = useState(new Set())
@@ -112,25 +126,57 @@ const Layout = () => {
             <Menu size={22} />
           </button>
 
-          <Link to="/" className="no-underline shrink-0">
+          {/* Home for an account manager is her queue, not the storefront. */}
+          <Link to={isAccountManager ? '/am' : '/'} className="no-underline shrink-0 flex items-center gap-2">
             <span style={{ fontSize: 18, fontWeight: 700, color: '#003087' }}>
               ProSource<span style={{ fontWeight: 400, fontSize: 12, color: '#003087', marginLeft: 2 }}>WHOLESALE</span>
             </span>
+            {/* Says which side of the glass you are on. The app is otherwise
+                identical after sign-in, so without this the only clue that you
+                are staff is the nav quietly having fewer things in it. */}
+            {isAccountManager && (
+              <span
+                className="hidden sm:inline"
+                style={{
+                  fontSize: 10, fontWeight: 700, letterSpacing: 0.4,
+                  textTransform: 'uppercase', color: '#fff', background: '#003087',
+                  borderRadius: 4, padding: '2px 6px', whiteSpace: 'nowrap',
+                }}
+              >Showroom</span>
+            )}
           </Link>
 
           <nav className="hidden md:flex gap-6 flex-1 justify-center">
-            {categories.map(c => (
+            {isAccountManager ? (
               <Link
-                key={c.label}
-                to={`/shop?dept=${c.dept}`}
-                style={{ color: '#525252', fontSize: 14, textDecoration: 'none' }}
-              >{c.label}</Link>
-            ))}
+                to="/am"
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 6,
+                  color: location.pathname === '/am' ? '#003087' : '#525252',
+                  fontSize: 14, fontWeight: location.pathname === '/am' ? 600 : 400,
+                  textDecoration: 'none',
+                }}
+              >
+                <ClipboardList size={16} /> Work Queue
+              </Link>
+            ) : (
+              categories.map(c => (
+                <Link
+                  key={c.label}
+                  to={`/shop?dept=${c.dept}`}
+                  style={{ color: '#525252', fontSize: 14, textDecoration: 'none' }}
+                >{c.label}</Link>
+              ))
+            )}
           </nav>
         </div>
 
         <div className="flex items-center gap-3 md:gap-4 text-sm">
-          <Link to={isLoggedIn ? "/connections" : "/profile"} className="hidden md:inline" style={{ color: '#525252', textDecoration: 'none' }}>Find a Pro</Link>
+          {/* "Find a Pro" is a customer's errand. Tessa's equivalent is her
+              connections list, which is already in the account menu. */}
+          {!isAccountManager && (
+            <Link to={isLoggedIn ? "/connections" : "/profile"} className="hidden md:inline" style={{ color: '#525252', textDecoration: 'none' }}>Find a Pro</Link>
+          )}
 
           {isLoggedIn && (
           <Link
@@ -156,6 +202,8 @@ const Layout = () => {
           </Link>
           )}
 
+          {/* An account manager does not shop the storefront she sells from. */}
+          {!isAccountManager && (
           <Link
             to="/cart"
             onMouseEnter={() => setHoveredIcon('cart')}
@@ -180,6 +228,7 @@ const Layout = () => {
               }}>{cartItemCount > 99 ? '99+' : cartItemCount}</span>
             )}
           </Link>
+          )}
 
           {isLoggedIn && (
           <Link
@@ -251,19 +300,36 @@ const Layout = () => {
 
             {accountMenuOpen && (
               <div className="absolute top-full right-0 mt-2 bg-white border border-neutral-200 rounded-lg shadow-lg min-w-[200px] z-50">
-                <Link to="/settings" style={menuItemStyle} onClick={() => setAccountMenuOpen(false)}>Dashboard</Link>
-                <Link to="/projects" style={menuItemStyle} onClick={() => setAccountMenuOpen(false)}>My Projects</Link>
-                <Link to="/settings?section=referrals" style={menuItemStyle} onClick={() => setAccountMenuOpen(false)}>Referral Bonus</Link>
-                <Link to="/orders" style={menuItemStyle} onClick={() => setAccountMenuOpen(false)}>Estimates & Orders</Link>
-                <div style={{ borderTop: '1px solid #e5e5e5', margin: '8px 0' }} />
-                <Link to="/carts" style={menuItemStyle} onClick={() => setAccountMenuOpen(false)}>Saved Carts</Link>
-                <Link to="/connections" style={menuItemStyle} onClick={() => setAccountMenuOpen(false)}>Connections</Link>
-                <Link to="/messages" style={menuItemStyle} onClick={() => setAccountMenuOpen(false)}>Messages</Link>
-                <Link to="/notifications" style={menuItemStyle} onClick={() => setAccountMenuOpen(false)}>Notifications</Link>
-                <Link to="/profile?own=1" style={menuItemStyle} onClick={() => setAccountMenuOpen(false)}>My Profile</Link>
-                <div style={{ borderTop: '1px solid #e5e5e5', margin: '8px 0' }} />
-                <Link to="/settings?section=account" style={menuItemStyle} onClick={() => setAccountMenuOpen(false)}>Account Settings</Link>
-                <Link to="/settings?section=team" style={menuItemStyle} onClick={() => setAccountMenuOpen(false)}>Manage Users</Link>
+                {/* Staff menu: the customer entries above the divider (projects,
+                    referral bonus, estimates, saved carts) are things Tessa does
+                    not have. Her work queue takes their place. */}
+                {isAccountManager ? (
+                  <>
+                    <Link to="/am" style={menuItemStyle} onClick={() => setAccountMenuOpen(false)}>Work Queue</Link>
+                    <div style={{ borderTop: '1px solid #e5e5e5', margin: '8px 0' }} />
+                    <Link to="/connections" style={menuItemStyle} onClick={() => setAccountMenuOpen(false)}>Connections</Link>
+                    <Link to="/messages" style={menuItemStyle} onClick={() => setAccountMenuOpen(false)}>Messages</Link>
+                    <Link to="/notifications" style={menuItemStyle} onClick={() => setAccountMenuOpen(false)}>Notifications</Link>
+                    <div style={{ borderTop: '1px solid #e5e5e5', margin: '8px 0' }} />
+                    <Link to="/settings?section=account" style={menuItemStyle} onClick={() => setAccountMenuOpen(false)}>Account Settings</Link>
+                  </>
+                ) : (
+                  <>
+                    <Link to="/settings" style={menuItemStyle} onClick={() => setAccountMenuOpen(false)}>Dashboard</Link>
+                    <Link to="/projects" style={menuItemStyle} onClick={() => setAccountMenuOpen(false)}>My Projects</Link>
+                    <Link to="/settings?section=referrals" style={menuItemStyle} onClick={() => setAccountMenuOpen(false)}>Referral Bonus</Link>
+                    <Link to="/orders" style={menuItemStyle} onClick={() => setAccountMenuOpen(false)}>Estimates & Orders</Link>
+                    <div style={{ borderTop: '1px solid #e5e5e5', margin: '8px 0' }} />
+                    <Link to="/carts" style={menuItemStyle} onClick={() => setAccountMenuOpen(false)}>Saved Carts</Link>
+                    <Link to="/connections" style={menuItemStyle} onClick={() => setAccountMenuOpen(false)}>Connections</Link>
+                    <Link to="/messages" style={menuItemStyle} onClick={() => setAccountMenuOpen(false)}>Messages</Link>
+                    <Link to="/notifications" style={menuItemStyle} onClick={() => setAccountMenuOpen(false)}>Notifications</Link>
+                    <Link to="/profile?own=1" style={menuItemStyle} onClick={() => setAccountMenuOpen(false)}>My Profile</Link>
+                    <div style={{ borderTop: '1px solid #e5e5e5', margin: '8px 0' }} />
+                    <Link to="/settings?section=account" style={menuItemStyle} onClick={() => setAccountMenuOpen(false)}>Account Settings</Link>
+                    <Link to="/settings?section=team" style={menuItemStyle} onClick={() => setAccountMenuOpen(false)}>Manage Users</Link>
+                  </>
+                )}
                 <div style={{ borderTop: '1px solid #e5e5e5', margin: '8px 0' }} />
                 <button style={{ ...menuItemStyle, width: '100%', textAlign: 'left', background: 'none', border: 'none', color: '#BA0C2F', cursor: 'pointer' }} onClick={() => { setAccountMenuOpen(false); logout(); }}>Sign Out</button>
               </div>
@@ -286,23 +352,38 @@ const Layout = () => {
               </button>
             </div>
             <nav className="flex-1 overflow-auto py-2">
-              <div className="px-4 py-2 text-xs uppercase tracking-wider text-neutral-500">Shop</div>
-              {categories.map(c => (
-                <Link
-                  key={c.label}
-                  to={`/shop?dept=${c.dept}`}
-                  onClick={closeMobile}
-                  className="block px-4 py-3 text-sm text-neutral-700 hover:bg-neutral-50"
-                >{c.label}</Link>
-              ))}
-              <div className="border-t border-neutral-200 my-2" />
-              <Link to={isLoggedIn ? "/connections" : "/profile"} onClick={closeMobile} className="block px-4 py-3 text-sm text-neutral-700 hover:bg-neutral-50">Find a Pro</Link>
-              <Link to="/cart" onClick={closeMobile} className="block px-4 py-3 text-sm text-neutral-700 hover:bg-neutral-50">Your cart</Link>
-              {!isLoggedIn && (
+              {/* Same split as the desktop header: staff get their queue, not a
+                  storefront and a cart they will never use. */}
+              {isAccountManager ? (
                 <>
+                  <div className="px-4 py-2 text-xs uppercase tracking-wider text-neutral-500">Showroom</div>
+                  <Link to="/am" onClick={closeMobile} className="block px-4 py-3 text-sm text-neutral-700 hover:bg-neutral-50">Work Queue</Link>
                   <div className="border-t border-neutral-200 my-2" />
-                  <Link to="/sign-in" onClick={closeMobile} className="block px-4 py-3 text-sm font-semibold text-blue-700 hover:bg-neutral-50">Sign In</Link>
-                  <Link to="/create-account" onClick={closeMobile} className="block px-4 py-3 text-sm font-semibold text-blue-700 hover:bg-neutral-50">Create Account</Link>
+                  <Link to="/connections" onClick={closeMobile} className="block px-4 py-3 text-sm text-neutral-700 hover:bg-neutral-50">Connections</Link>
+                  <Link to="/messages" onClick={closeMobile} className="block px-4 py-3 text-sm text-neutral-700 hover:bg-neutral-50">Messages</Link>
+                  <Link to="/notifications" onClick={closeMobile} className="block px-4 py-3 text-sm text-neutral-700 hover:bg-neutral-50">Notifications</Link>
+                </>
+              ) : (
+                <>
+                  <div className="px-4 py-2 text-xs uppercase tracking-wider text-neutral-500">Shop</div>
+                  {categories.map(c => (
+                    <Link
+                      key={c.label}
+                      to={`/shop?dept=${c.dept}`}
+                      onClick={closeMobile}
+                      className="block px-4 py-3 text-sm text-neutral-700 hover:bg-neutral-50"
+                    >{c.label}</Link>
+                  ))}
+                  <div className="border-t border-neutral-200 my-2" />
+                  <Link to={isLoggedIn ? "/connections" : "/profile"} onClick={closeMobile} className="block px-4 py-3 text-sm text-neutral-700 hover:bg-neutral-50">Find a Pro</Link>
+                  <Link to="/cart" onClick={closeMobile} className="block px-4 py-3 text-sm text-neutral-700 hover:bg-neutral-50">Your cart</Link>
+                  {!isLoggedIn && (
+                    <>
+                      <div className="border-t border-neutral-200 my-2" />
+                      <Link to="/sign-in" onClick={closeMobile} className="block px-4 py-3 text-sm font-semibold text-blue-700 hover:bg-neutral-50">Sign In</Link>
+                      <Link to="/create-account" onClick={closeMobile} className="block px-4 py-3 text-sm font-semibold text-blue-700 hover:bg-neutral-50">Create Account</Link>
+                    </>
+                  )}
                 </>
               )}
             </nav>

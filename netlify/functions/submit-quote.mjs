@@ -1,5 +1,6 @@
 import { getStore } from "@netlify/blobs";
 import { Resend } from "resend";
+import { enqueueItem } from "./am-queue.mjs";
 
 const FROM_ADDRESS = process.env.RESEND_FROM || "ProSource <onboarding@resend.dev>";
 const DEV_BYPASS = process.env.OTP_DEV_BYPASS === "true" || !process.env.RESEND_API_KEY;
@@ -35,11 +36,13 @@ const TIMING_TO_TARGET = {
  *   2. Persist/refresh the user's profile with name, phone, showroom, AM
  *   3. Create a project in ps-user-data/projects with the cart items as products
  *      and the AM + Designer auto-added to the team
- *   4. Save a copy into ps-consultation-requests so the AM can find leads later
+ *   4. For intent 'quote': write the quote itself into the requester's own
+ *      `orders` blob as an unpriced estimate, and put it on the showroom's AM
+ *      work queue so somebody can actually price it
  *   5. Email the AM (the in-app "AM notification") with the lead summary
  *   6. Email the requester confirming the quote
  *
- * Returns { projectId, userId, showroom, accountManager }.
+ * Returns { projectId, quoteId, userId, showroom, accountManager }.
  */
 export default async function handler(req) {
   if (req.method !== "POST") {
@@ -195,40 +198,96 @@ export default async function handler(req) {
       return Response.json({ error: "Failed to create project: " + err.message }, { status: 500 });
     }
 
-    // 4) Record the lead for the AM (separate bucket so they can manage leads).
-    try {
-      const leadStore = getStore({ name: "ps-consultation-requests", consistency: "strong" });
-      const bucketKey = accountManager?.email || showroom?.id || "unassigned";
-      const existing = await leadStore.get(bucketKey, { type: "json" }).catch(() => null);
-      const list = Array.isArray(existing?.list) ? existing.list : [];
-      await leadStore.setJSON(bucketKey, {
-        list: [
-          ...list,
-          {
-            id: `lead-${now}-${Math.random().toString(36).slice(2, 7)}`,
-            kind: isSave ? "project-save" : "quote",
-            projectId,
-            fromName: [firstName, lastName].filter(Boolean).join(" ") || normalizedEmail,
-            fromEmail: normalizedEmail,
-            fromPhone: phone,
-            fromUserId: userId,
-            audience,
-            projectType,
-            zip,
-            budget,
-            timing,
-            notes,
-            cartItemCount: cartItems.length,
-            cartSubtotal: cartItems.reduce((s, i) => s + (i.price || 0) * (i.qty || 1), 0),
-            showroomId: showroom?.id,
-            accountManagerEmail: accountManager?.email,
-            createdAt: now,
-          },
-        ],
-        updatedAt: now,
-      });
-    } catch (err) {
-      console.warn("lead persist failed:", err.message);
+    // 4) The quote itself, plus the AM work queue.
+    //
+    // This used to append a lead record to a `ps-consultation-requests` bucket
+    // keyed by the AM's email. Nothing in the app has ever read that bucket, so
+    // a wizard quote reached a human only if the AM happened to read the email
+    // in step 5. It is replaced (not supplemented) by the queue below, which is
+    // the one index the AM console reads.
+    //
+    // The lead record also wasn't a quote: it recorded that someone WANTED
+    // pricing without creating anything to price. So the quote is written into
+    // the requester's own `orders` blob first, exactly as the member cart path
+    // does (src/prosource-shop.jsx `submitQuote`), and the queue item points at
+    // it. That is what makes the AM's price action able to land real money on a
+    // real document, and it means the wizard's "your quote is in" email is true:
+    // the quote is on their Estimates tab when they sign in.
+    //
+    // intent 'save' deliberately produces neither. That path says "no quote
+    // yet" (quoteRequested: false on the project); enqueueing it would put work
+    // in front of an AM that the customer never asked for.
+    const quoteId = isSave ? null : `Q${String(now).slice(-8)}`;
+    if (!isSave) {
+      const requesterName = [firstName, lastName].filter(Boolean).join(" ") || normalizedEmail;
+      // Money stays null, not 0: null means "not priced yet", 0 would render as
+      // "$0.00" and read as "this job is free" (see src/order-model.js).
+      const quoteRecord = {
+        id: quoteId,
+        kind: "quote",
+        projectId,
+        jobName: projectName,
+        orderDate: new Date(now).toLocaleDateString("en-US"),
+        orderDateTs: now,
+        submittedAt: now,
+        status: "requested",
+        statusText: "Quote Requested",
+        docType: "estimate",
+        soldTo: requesterName.toUpperCase(),
+        client: requesterName,
+        showroom: showroom?.name || null,
+        accountManager: accountManager?.name || null,
+        notes: notes || null,
+        invoiceTotal: null,
+        material: null,
+        salesTax: null,
+        service: null,
+        totalPaid: null,
+        balanceDue: null,
+        items: cartItems.map((item, idx) => ({
+          id: item.id || idx + 1,
+          name: item.name || "Product",
+          sku: item.sku || `SKU-${idx + 1}`,
+          category: item.category || "Other",
+          qty: item.qty || 1,
+          price: item.price || 0,
+        })),
+        listSubtotal: cartItems.reduce((s, i) => s + (i.price || 0) * (i.qty || 1), 0),
+      };
+
+      try {
+        const userData = getStore({ name: "ps-user-data", consistency: "strong" });
+        const ordersKey = `${userId}::orders`;
+        const existingOrders = await userData.get(ordersKey, { type: "json" }).catch(() => null);
+        const payload = existingOrders?.value;
+        const list = Array.isArray(payload?.list) ? payload.list : [];
+        await userData.setJSON(ordersKey, {
+          value: { ...(payload || {}), schemaVersion: 2, list: [quoteRecord, ...list] },
+          updatedAt: now,
+        });
+      } catch (err) {
+        console.warn("quote persist failed:", err.message);
+      }
+
+      // Best-effort: the project and the quote are already saved, so a queue
+      // write that fails must not fail the whole submit and send the requester
+      // back through the wizard.
+      try {
+        await enqueueItem({
+          type: "quote",
+          showroomId: showroom?.id || "unassigned",
+          memberUserId: userId,
+          memberName: [firstName, lastName].filter(Boolean).join(" ") || normalizedEmail,
+          memberEmail: normalizedEmail,
+          docId: quoteId,
+          projectId,
+          summary: `${projectType} quote, ${cartItems.length} item${cartItems.length !== 1 ? "s" : ""}`,
+          itemCount: cartItems.length,
+          submittedAt: now,
+        });
+      } catch (err) {
+        console.warn("AM queue enqueue failed:", err.message);
+      }
     }
 
     // 5) Email the AM. Skip in dev bypass.
@@ -304,6 +363,7 @@ export default async function handler(req) {
     return Response.json({
       success: true,
       projectId,
+      quoteId,
       userId,
       showroom,
       accountManager,
