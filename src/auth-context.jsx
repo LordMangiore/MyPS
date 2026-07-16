@@ -276,21 +276,37 @@ export const AuthProvider = ({ children }) => {
     if (dest) navigate(dest, { replace: true });
   };
 
-  /** Local login override (legacy "Demo: Skip Signup" flow). */
-  const login = ({ email, newUser = false, name }) => {
-    const session = {
-      email,
-      name: name || (email ? email.split('@')[0] : 'Member'),
-      userId: null,
-      token: null,
-      isNewUser: !!newUser,
-      firebaseUid: null,
-    };
-    persist(session);
-    setUserEmail(session.email);
-    setUserName(session.name);
-    setIsNewUser(session.isNewUser);
-    setIsLoggedIn(true);
+  /**
+   * "Demo: Skip Signup" — sign into the shared, pre-seeded demo account.
+   *
+   * This used to fake a session locally with `userId: null`, which made every
+   * persistence helper above a silent no-op (saveUserData threw "Not signed
+   * in"). It now goes through /api/demo-session for a real userId + token, so
+   * the demo app saves like any other account — and its data survives across
+   * clicks, because the endpoint seeds only what's missing.
+   *
+   * Async and throws: callers must await and surface the failure.
+   * `name` only overrides the display name (the demo's greeting) — the account
+   * itself is fixed server-side.
+   */
+  const login = async ({ name } = {}) => {
+    const res = await fetch('/api/demo-session', { method: 'POST' });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.user?.id) {
+      throw new Error(data.error || 'Could not start the demo session');
+    }
+    finalizeSession({
+      email: data.user.email,
+      name: name || data.user.name,
+      userId: data.user.id,
+      token: data.token,
+      isNewUser: !!data.isNewUser,
+      firebaseUid: data.user.firebaseUid || null,
+      userType: data.userType,
+      showroom: data.showroom,
+      accountManager: data.accountManager,
+    });
+    return data;
   };
 
   const logout = () => {

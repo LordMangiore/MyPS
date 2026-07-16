@@ -243,9 +243,11 @@ const ProSourceLogin = ({ initialPage = 'email', initialMode = 'signin' }) => {
         accountManager: crmLookup?.manager || null,
       });
     } else {
-      // No verified session behind this wizard — fall back to the local-only
-      // login, which derives a name from the email when we don't have one.
-      login({ email, newUser: true, name: firstName.trim() || undefined });
+      // No verified session behind this wizard (only reachable if someone lands
+      // on the onboarding steps without verifying a code — handleVerify always
+      // sets pendingSession). We can't mint a real account without OTP verify,
+      // so fall back to the demo account rather than a session that can't save.
+      await login({ name: firstName.trim() || undefined });
     }
   };
 
@@ -748,25 +750,56 @@ const ProSourceLogin = ({ initialPage = 'email', initialMode = 'signin' }) => {
     </nav>
   );
 
+  // ---------- Demo: Skip Signup ----------
+  // Signs into the shared pre-seeded demo account via /api/demo-session, so the
+  // demo session is a real one that actually persists. It's a network call now:
+  // show progress, and never fail silently.
+  const [demoLoading, setDemoLoading] = useState(false);
+  const [demoError, setDemoError] = useState('');
+
+  const handleDemoSkip = async () => {
+    setDemoLoading(true);
+    setDemoError('');
+    try {
+      await login({ name: 'Justin' });
+    } catch (err) {
+      setDemoError(err.message || 'Could not start the demo session. Try again.');
+      setDemoLoading(false);
+    }
+    // On success this component unmounts as the router swaps to the dashboard —
+    // leave `demoLoading` on so the button can't be double-fired mid-navigation.
+  };
+
   const renderDemoSkip = () => (
-    <button
-      onClick={() => login({ email: 'demo@prosource.com', newUser: false, name: 'Justin' })}
-      style={{
-        marginTop: 14,
-        width: '100%',
-        padding: '10px 14px',
-        background: 'transparent',
-        border: `1px dashed ${colors.gray300}`,
-        borderRadius: 6,
-        fontSize: 12,
-        fontWeight: 500,
-        color: colors.gray500,
-        cursor: 'pointer',
-        fontFamily: 'inherit',
-      }}
-    >
-      Demo: Skip Signup →
-    </button>
+    <>
+      <button
+        onClick={handleDemoSkip}
+        disabled={demoLoading}
+        style={{
+          marginTop: 14,
+          width: '100%',
+          padding: '10px 14px',
+          background: 'transparent',
+          border: `1px dashed ${demoError ? colors.red : colors.gray300}`,
+          borderRadius: 6,
+          fontSize: 12,
+          fontWeight: 500,
+          color: demoLoading ? colors.gray300 : colors.gray500,
+          cursor: demoLoading ? 'default' : 'pointer',
+          fontFamily: 'inherit',
+        }}
+      >
+        {demoLoading ? 'Starting demo…' : 'Demo: Skip Signup →'}
+      </button>
+      {demoError && (
+        <div
+          role="alert"
+          style={{ marginTop: 6, fontSize: 12, color: colors.red, textAlign: 'center' }}
+        >
+          {demoError}
+        </div>
+      )}
+    </>
   );
 
   // ---------- AUTH LEFT PANEL ----------

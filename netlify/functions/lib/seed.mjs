@@ -524,47 +524,84 @@ const buildSeedAppointments = (now) => {
   };
 };
 
+// Twilio identity for each seeded counterparty. These MUST match the
+// DEMO_PARTICIPANTS identities in netlify/functions/twilio-conversations.mjs —
+// that's how a connection card lines up with the conversation seeded for the
+// same person. Contract for the messaging layer:
+//   demoIdentity → a seeded demo contact; message them at this Twilio identity
+//   userId       → a real signed-up user; message them at their userId
+//   neither      → invited only, no messaging identity yet
+// James Anderson and Mike Torres are deliberately absent: twilio-conversations
+// seeds no conversation for them, so claiming an identity would be a lie.
+const DEMO_IDENTITY_BY_NAME = {
+  'Kim Marks': 'demo-kim-marks',
+  'Bubba Beans': 'demo-bubba-beans',
+  "Ryan O'Toole": 'demo-ryan-otoole',
+  'Sarah Chen': 'demo-sarah-chen',
+  'Heather Yager': 'demo-heather-yager',
+};
+
 // Seeded connections — same counterparties that appear in seeded messages
 // (Kim, Bubba, Ryan, Sarah, Heather) plus a couple of extra tradepros.
-const buildSeedConnections = () => ({
-  list: [
-    {
-      id: 1, name: 'Kim Marks', initials: 'KM', role: 'Account Manager',
-      type: 'prosource', email: 'kim.marks@prosource.com',
-      phone: '(314) 555-0142', location: 'ProSource of St. Louis', projects: null,
-    },
-    {
-      id: 2, name: 'Heather Yager', initials: 'HY', role: 'Designer',
-      type: 'prosource', email: 'heather.yager@prosource.com',
-      phone: '(314) 555-0188', location: 'ProSource of St. Louis', projects: null,
-    },
-    {
-      id: 3, name: 'Bubba Beans', initials: 'BB', role: 'Homeowner',
-      type: 'client', email: 'bubba.beans@email.com',
-      phone: '(314) 555-0123', location: 'St. Louis, MO', projects: 1,
-    },
-    {
-      id: 4, name: 'Sarah Chen', initials: 'SC', role: 'Homeowner',
-      type: 'client', email: 'sarah.chen@email.com',
-      phone: '(314) 555-5678', location: 'Chesterfield, MO', projects: 1,
-    },
-    {
-      id: 5, name: "Ryan O'Toole", initials: 'RO', role: 'Flooring Installer',
-      type: 'tradepro', email: 'ryan@otooleinstalls.com',
-      phone: '(314) 555-0789', location: 'St. Charles, MO', projects: 5,
-    },
-    {
-      id: 6, name: 'James Anderson', initials: 'JA', role: 'General Contractor',
-      type: 'tradepro', email: 'james@andersonbuilds.com',
-      phone: '(314) 555-1234', location: 'Chesterfield, MO', projects: 3,
-    },
-    {
-      id: 7, name: 'Mike Torres', initials: 'MT', role: 'Tile Installer',
-      type: 'tradepro', email: 'mike@torrestile.com',
-      phone: '(314) 555-9012', location: 'Kirkwood, MO', projects: 4,
-    },
-  ],
-});
+//
+// `projects` is the count of SEEDED PROJECTS THIS PERSON IS ON, derived from the
+// project `team` arrays rather than hand-written, so the card's "N shared
+// projects" is always true. It is never null: null means "unknown", and the
+// showroom team's ProSource-ness is carried by `type: 'prosource'`, not by an
+// absent project count.
+const buildSeedConnections = (projectList = []) => {
+  const sharedProjects = (connectionId) =>
+    projectList.filter((p) =>
+      (p.team || []).some((m) => m.connectionId === connectionId)
+    ).length;
+
+  const connection = (fields) => ({
+    ...fields,
+    projects: sharedProjects(fields.id),
+    demoIdentity: DEMO_IDENTITY_BY_NAME[fields.name] || null,
+    status: 'connected',
+  });
+
+  return {
+    list: [
+      connection({
+        id: 1, name: 'Kim Marks', initials: 'KM', role: 'Account Manager',
+        type: 'prosource', email: 'kim.marks@prosource.com',
+        phone: '(314) 555-0142', location: 'ProSource of St. Louis',
+      }),
+      connection({
+        id: 2, name: 'Heather Yager', initials: 'HY', role: 'Designer',
+        type: 'prosource', email: 'heather.yager@prosource.com',
+        phone: '(314) 555-0188', location: 'ProSource of St. Louis',
+      }),
+      connection({
+        id: 3, name: 'Bubba Beans', initials: 'BB', role: 'Homeowner',
+        type: 'client', email: 'bubba.beans@email.com',
+        phone: '(314) 555-0123', location: 'St. Louis, MO',
+      }),
+      connection({
+        id: 4, name: 'Sarah Chen', initials: 'SC', role: 'Homeowner',
+        type: 'client', email: 'sarah.chen@email.com',
+        phone: '(314) 555-5678', location: 'Chesterfield, MO',
+      }),
+      connection({
+        id: 5, name: "Ryan O'Toole", initials: 'RO', role: 'Flooring Installer',
+        type: 'tradepro', email: 'ryan@otooleinstalls.com',
+        phone: '(314) 555-0789', location: 'St. Charles, MO',
+      }),
+      connection({
+        id: 6, name: 'James Anderson', initials: 'JA', role: 'General Contractor',
+        type: 'tradepro', email: 'james@andersonbuilds.com',
+        phone: '(314) 555-1234', location: 'Chesterfield, MO',
+      }),
+      connection({
+        id: 7, name: 'Mike Torres', initials: 'MT', role: 'Tile Installer',
+        type: 'tradepro', email: 'mike@torrestile.com',
+        phone: '(314) 555-9012', location: 'Kirkwood, MO',
+      }),
+    ],
+  };
+};
 
 // Seeded saved carts tied to the seeded projects.
 const buildSeedCarts = (now, projectIds, displayName) => {
@@ -664,15 +701,21 @@ export async function seedNewUser(userId) {
       store.get(connectionsKey, { type: "json" }).catch(() => null),
     ]);
 
+    // Built up front (pure — nothing is written unless the key is empty) because
+    // the connections seed derives its shared-project counts from the team
+    // arrays on these projects.
+    const seedProjects = buildSeedProjects(now);
+    let projectList = seedProjects.payload.list;
+
     let projectIds;
     if (!existingProjects) {
-      const { ids, payload } = buildSeedProjects(now);
-      projectIds = ids;
-      await store.setJSON(projectsKey, { value: payload, updatedAt: now });
+      projectIds = seedProjects.ids;
+      await store.setJSON(projectsKey, { value: seedProjects.payload, updatedAt: now });
     } else {
       // Try to extract IDs from existing list so messages can still link.
       try {
         const list = existingProjects?.value?.list || [];
+        projectList = list;
         projectIds = {
           working: list.find((p) => p.status === "working")?.id || null,
           complete: list.find((p) => p.status === "complete")?.id || null,
@@ -707,7 +750,7 @@ export async function seedNewUser(userId) {
     }
 
     if (!existingConns) {
-      const conns = buildSeedConnections();
+      const conns = buildSeedConnections(projectList);
       await store.setJSON(connectionsKey, { value: conns, updatedAt: now });
     }
   } catch (err) {
