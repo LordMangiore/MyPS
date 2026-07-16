@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { ShoppingBag } from 'lucide-react';
+import { ShoppingBag, Headset, Home } from 'lucide-react';
 import { useAuth } from './auth-context';
 import AddressAutocomplete from './components/AddressAutocomplete';
 
@@ -751,36 +751,114 @@ const ProSourceLogin = ({ initialPage = 'email', initialMode = 'signin' }) => {
   );
 
   // ---------- Demo: Skip Signup ----------
-  // Signs into the shared pre-seeded demo account via /api/demo-session, so the
-  // demo session is a real one that actually persists. It's a network call now:
+  // Signs into one of the pre-seeded demo accounts via /api/demo-session, so the
+  // demo session is a real one that actually persists. It's a network call:
   // show progress, and never fail silently.
-  const [demoLoading, setDemoLoading] = useState(false);
-  const [demoError, setDemoError] = useState('');
+  //
+  // Three accounts, so the same app can be shown from all three sides of a job:
+  // the trade pro buying the materials, the account manager selling them, and
+  // the homeowner the job is for. The trade pro is the original button and the
+  // default, unchanged: same label, same place, same call.
+  //
+  // `demoLoading` holds the persona currently signing in (or null), rather than
+  // three booleans: it doubles as the mutual exclusion between the buttons, so a
+  // second click while one is in flight can't start a race between two
+  // identities. Errors are per persona, so a failure marks the button that
+  // caused it and leaves the other two usable.
+  const [demoLoading, setDemoLoading] = useState(null);
+  const [demoErrors, setDemoErrors] = useState({});
 
-  const handleDemoSkip = async () => {
-    setDemoLoading(true);
-    setDemoError('');
-    try {
+  /**
+   * Sign in as one of the demo personas.
+   *
+   * The trade pro goes through auth-context's `login()`, which is exactly what
+   * it has always done. `login()` takes no persona and POSTs an empty body,
+   * which the endpoint reads as the default (the trade pro), so that path is
+   * untouched.
+   *
+   * The other two can't use `login()`: there's no way to get a persona through
+   * it. Rather than change that shared function's signature, they do what
+   * `login()` does (POST, then hand the response to `finalizeSession`) with the
+   * persona in the body. Same endpoint, same response shape, same session
+   * plumbing: only the account on the other end differs.
+   */
+  const startDemo = async (persona) => {
+    if (persona === 'tradepro') {
       await login({ name: 'Justin' });
+      return;
+    }
+    const res = await fetch('/api/demo-session', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ persona }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.user?.id) {
+      throw new Error(data.error || 'Could not start the demo session');
+    }
+    finalizeSession({
+      email: data.user.email,
+      name: data.user.name,
+      userId: data.user.id,
+      token: data.token,
+      isNewUser: !!data.isNewUser,
+      firebaseUid: data.user.firebaseUid || null,
+      userType: data.userType,
+      showroom: data.showroom,
+      accountManager: data.accountManager,
+    });
+  };
+
+  const handleDemo = (persona) => async () => {
+    setDemoLoading(persona);
+    setDemoErrors((prev) => ({ ...prev, [persona]: '' }));
+    try {
+      await startDemo(persona);
     } catch (err) {
-      setDemoError(err.message || 'Could not start the demo session. Try again.');
-      setDemoLoading(false);
+      setDemoErrors((prev) => ({
+        ...prev,
+        [persona]: err.message || 'Could not start the demo session. Try again.',
+      }));
+      setDemoLoading(null);
     }
     // On success this component unmounts as the router swaps to the dashboard.
-    // Leave `demoLoading` on so the button can't be double-fired mid-navigation.
+    // Leave `demoLoading` set so the buttons can't be fired mid-navigation.
   };
+
+  // The two extra personas. The trade pro isn't here: it keeps its own button
+  // above these, at full width, with the label it has always had.
+  const extraDemoPersonas = [
+    { key: 'am', label: 'Account manager', Icon: Headset },
+    { key: 'homeowner', label: 'Homeowner', Icon: Home },
+  ];
+
+  const demoErrorText = (
+    <>
+      {Object.entries(demoErrors)
+        .filter(([, msg]) => msg)
+        .map(([key, msg]) => (
+          <div
+            key={key}
+            role="alert"
+            style={{ marginTop: 6, fontSize: 12, color: colors.red, textAlign: 'center' }}
+          >
+            {msg}
+          </div>
+        ))}
+    </>
+  );
 
   const renderDemoSkip = () => (
     <>
       <button
-        onClick={handleDemoSkip}
-        disabled={demoLoading}
+        onClick={handleDemo('tradepro')}
+        disabled={!!demoLoading}
         style={{
           marginTop: 14,
           width: '100%',
           padding: '10px 14px',
           background: 'transparent',
-          border: `1px dashed ${demoError ? colors.red : colors.gray300}`,
+          border: `1px dashed ${demoErrors.tradepro ? colors.red : colors.gray300}`,
           borderRadius: 6,
           fontSize: 12,
           fontWeight: 500,
@@ -789,16 +867,52 @@ const ProSourceLogin = ({ initialPage = 'email', initialMode = 'signin' }) => {
           fontFamily: 'inherit',
         }}
       >
-        {demoLoading ? 'Starting demo…' : 'Demo: Skip Signup →'}
+        {demoLoading === 'tradepro' ? 'Starting demo…' : 'Demo: Skip Signup →'}
       </button>
-      {demoError && (
-        <div
-          role="alert"
-          style={{ marginTop: 6, fontSize: 12, color: colors.red, textAlign: 'center' }}
-        >
-          {demoError}
-        </div>
-      )}
+
+      {/* Says what the button above actually signs you in as, and introduces the
+          two alternatives, without touching that button's own label. */}
+      <div
+        style={{
+          marginTop: 8,
+          fontSize: 11,
+          color: colors.gray300,
+          textAlign: 'center',
+        }}
+      >
+        Trade pro view. Or explore as:
+      </div>
+
+      <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
+        {extraDemoPersonas.map(({ key, label, Icon }) => (
+          <button
+            key={key}
+            onClick={handleDemo(key)}
+            disabled={!!demoLoading}
+            style={{
+              flex: 1,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 5,
+              padding: '7px 8px',
+              background: 'transparent',
+              border: `1px dashed ${demoErrors[key] ? colors.red : colors.gray300}`,
+              borderRadius: 6,
+              fontSize: 11,
+              fontWeight: 500,
+              color: demoLoading ? colors.gray300 : colors.gray500,
+              cursor: demoLoading ? 'default' : 'pointer',
+              fontFamily: 'inherit',
+            }}
+          >
+            <Icon size={12} strokeWidth={2} />
+            {demoLoading === key ? 'Starting…' : label}
+          </button>
+        ))}
+      </div>
+
+      {demoErrorText}
     </>
   );
 

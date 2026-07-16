@@ -37,6 +37,7 @@ const DEMO_PARTICIPANTS = {
   ryan: "demo-ryan-otoole",
   sarah: "demo-sarah-chen",
   heather: "demo-heather-yager",
+  denise: "demo-denise-okafor",
 };
 
 const PROJECT_KEY_BY_PARTICIPANT = {
@@ -45,6 +46,10 @@ const PROJECT_KEY_BY_PARTICIPANT = {
   [DEMO_PARTICIPANTS.ryan]: "complete",
   [DEMO_PARTICIPANTS.sarah]: "published",
   [DEMO_PARTICIPANTS.heather]: "published",
+  // Denise is the Chicago showroom's AM, and the working project is where the
+  // account's second showroom actually touches the demo: she is on that
+  // project's team in lib/seed.mjs for the same reason.
+  [DEMO_PARTICIPANTS.denise]: "working",
 };
 
 const DEMO_DETAILS = {
@@ -122,6 +127,26 @@ const DEMO_DETAILS = {
       {
         from: "heather",
         body: "Uploaded the Chen patio render variants. Let me know which lighting layout you want me to spec out.",
+      },
+    ],
+  },
+  // Kept identical to Denise's thread in lib/seed.mjs (buildSeedMessages), so
+  // the conversation reads the same whether Messages is backed by Twilio or by
+  // the blob.
+  [DEMO_PARTICIPANTS.denise]: {
+    name: "Denise Okafor",
+    initials: "DO",
+    role: "Account Manager",
+    type: "prosource",
+    history: [
+      {
+        from: "denise",
+        body: "Denise at ProSource Chicago. Kim looped me in on the Beans kitchen: the Pembroke Pine LVP is back-ordered out of St. Louis and I have it on the floor here.",
+      },
+      { from: "user", body: "Good to know. What would it take to get it down to us?" },
+      {
+        from: "denise",
+        body: "Our truck runs to St. Louis on Thursdays. Get me the square footage today and it goes on this week's run.",
       },
     ],
   },

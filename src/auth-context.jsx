@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { adoptActiveCartForUser, releaseActiveCart } from './guest-cart';
 
@@ -75,6 +75,21 @@ const loadSession = () => {
   }
 };
 
+/**
+ * Every showroom the account works with, primary first.
+ *
+ * An account can work with more than one showroom (each with its own account
+ * manager), but `showroom` (singular) predates that and is read all over the
+ * app, so it stays: it is always `showrooms[0]`. This derivation is the bridge.
+ * Sessions and profiles written before multi-showroom carry only the singular
+ * field, so promote it to a one-element list rather than reporting no showrooms
+ * at all. Returns [] only when there is genuinely nothing to show.
+ */
+const deriveShowrooms = (list, single) => {
+  if (Array.isArray(list) && list.length) return list;
+  return single ? [single] : [];
+};
+
 const loadCachedProfile = () => {
   try {
     const raw = localStorage.getItem(PROFILE_KEY);
@@ -100,9 +115,25 @@ export const AuthProvider = ({ children }) => {
   const [token, setToken] = useState(initial?.token || null);
   const [userType, setUserType] = useState(initial?.userType || 'tradepro');
   const [showroom, setShowroom] = useState(initial?.showroom || null);
+  // Raw list as supplied by the session/profile, or null when the record
+  // predates multi-showroom. `showrooms` below is what consumers read.
+  const [showroomList, setShowroomList] = useState(initial?.showrooms || null);
   const [accountManager, setAccountManager] = useState(initial?.accountManager || null);
   const [profile, setProfile] = useState(cachedProfile);
   const [profileLoading, setProfileLoading] = useState(false);
+
+  /**
+   * All showrooms the account works with, primary first. Additive: `showroom`
+   * and `accountManager` keep meaning exactly what they mean today (the
+   * primary's), so nothing reading the singular fields changes.
+   */
+  const showrooms = useMemo(
+    // The cached profile is a source too, not just the session. A session
+    // persisted before `showrooms` existed has only the singular `showroom`,
+    // and the profile blob is where the full list actually lives.
+    () => deriveShowrooms(showroomList || profile?.showrooms, showroom),
+    [showroomList, profile, showroom]
+  );
 
   /**
    * Adopt the active cart into the account.
@@ -119,6 +150,27 @@ export const AuthProvider = ({ children }) => {
       console.warn('Cart adoption failed:', err.message)
     );
   }, [userId]);
+
+  /**
+   * Backfill `showrooms` for a session that predates multi-showroom.
+   *
+   * `finalizeSession` persists the list, but only fires at sign-in, and the
+   * profile is never refetched on a returning visit. So a browser holding a
+   * session from before that change would keep reporting a single showroom
+   * forever: the project wizard would never offer a choice, and the feature
+   * would look broken rather than absent. Fetch the profile once, and only for
+   * the sessions that are actually missing the list. Everyone else pays nothing.
+   */
+  const backfilledShowrooms = useRef(false);
+  useEffect(() => {
+    if (!userId || backfilledShowrooms.current) return;
+    if (showroomList?.length || profile?.showrooms?.length) return;
+    backfilledShowrooms.current = true;
+    refreshProfile().catch((err) =>
+      console.warn('Showroom backfill failed:', err.message)
+    );
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userId, showroomList, profile]);
 
   const persist = (session) => {
     try {
@@ -229,6 +281,7 @@ export const AuthProvider = ({ children }) => {
       persistProfile(p);
       if (p?.firstName) setUserName(p.firstName);
       if (p?.showroom) setShowroom(p.showroom);
+      if (p?.showrooms?.length) setShowroomList(p.showrooms);
       if (p?.accountManager) setAccountManager(p.accountManager);
       return p;
     } finally {
@@ -271,6 +324,16 @@ export const AuthProvider = ({ children }) => {
       firebaseUid: sessionInput.firebaseUid || null,
       userType: sessionInput.userType || 'tradepro',
       showroom: sessionInput.showroom || null,
+      // Carry the full list, not just the primary. This object is what `persist`
+      // writes and `loadSession` reads back, so a key missing here is a key the
+      // app can never see again: an account with several showrooms would look
+      // like it had one, and anything gated on having a choice (the project
+      // wizard's showroom step) would never appear. Callers that predate
+      // multi-showroom pass nothing, which is fine: `showrooms` below falls back
+      // to the singular one.
+      showrooms: Array.isArray(sessionInput.showrooms) && sessionInput.showrooms.length
+        ? sessionInput.showrooms
+        : null,
       accountManager: sessionInput.accountManager || null,
     };
     persist(session);
@@ -281,6 +344,7 @@ export const AuthProvider = ({ children }) => {
     setIsNewUser(session.isNewUser);
     setUserType(session.userType);
     setShowroom(session.showroom);
+    setShowroomList(session.showrooms);
     setAccountManager(session.accountManager);
     setIsLoggedIn(true);
 
@@ -349,6 +413,7 @@ export const AuthProvider = ({ children }) => {
       firebaseUid: data.user.firebaseUid || null,
       userType: data.userType,
       showroom: data.showroom,
+      showrooms: data.showrooms,
       accountManager: data.accountManager,
     });
     return data;
@@ -382,6 +447,7 @@ export const AuthProvider = ({ children }) => {
         token,
         userType,
         showroom,
+        showrooms,
         accountManager,
         profile,
         profileLoading,

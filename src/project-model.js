@@ -11,10 +11,23 @@
  *     id, name, type, description, address, budgetRange,
  *     targetStart, targetCompletion, squareFootage, notes,
  *     status, archived, team: [...],
+ *     showroomId: 'st-louis' | 'chicago' | null,
  *     rooms: [{ id, name, type?, squareFootage?, notes?, createdAt }],
  *     products: [{ id, sku, name, category, qty, price, roomId, ...snapshot }],
  *     createdAt, updatedAt,
  *   }
+ *
+ * `showroomId` names the showroom supplying the job, matching an `id` in the
+ * account's `showrooms` list (see auth-context). Most accounts work with exactly
+ * one showroom and never see a choice; the field exists for the ones that work
+ * with several. It is deliberately just the id, not a copy of the showroom
+ * record: names, addresses and account managers change, and the account's list
+ * is the one place that should say what they are today.
+ *
+ * null means "not assigned", which is what every project created before this
+ * field existed is. That is a real state, not a missing value to be guessed at:
+ * readers should say so rather than assume the primary showroom, which would be
+ * wrong for exactly the multi-showroom accounts the field is for.
  *
  * `rooms` used to be an array of plain strings ("Kitchen") and products had no
  * room reference at all. `normalizeStored` migrates both shapes on read, so
@@ -104,6 +117,7 @@ export const DEFAULT_PROJECT = {
   targetStart: '',
   targetCompletion: '',
   squareFootage: '',
+  showroomId: null,
   rooms: [],
   products: [],
   notes: '',
@@ -304,12 +318,26 @@ export const groupProductsByRoom = (project) => {
 
 // -------- Project / collection --------
 
+/**
+ * Migrate a project's showroom reference. Projects stored before showrooms
+ * existed simply have no `showroomId`, which normalizes to an explicit null:
+ * present and unassigned, rather than absent and ambiguous. Anything that isn't
+ * a usable id (empty string, a leftover object, junk) is unassigned too.
+ * Idempotent.
+ */
+export const normalizeShowroomId = (value) => {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  return trimmed || null;
+};
+
 /** Apply every migration to a single project record. Idempotent. */
 export const normalizeProject = (project) => {
   if (!project || typeof project !== 'object') return project;
   const rooms = normalizeRooms(project.rooms, project.createdAt ?? null);
   return {
     ...project,
+    showroomId: normalizeShowroomId(project.showroomId),
     rooms,
     products: normalizeProducts(project.products, rooms),
   };

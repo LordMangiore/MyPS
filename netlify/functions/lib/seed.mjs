@@ -92,8 +92,30 @@ const buildSeedProjects = (now) => {
           id: ids.working,
           name: "Beans Kitchen Remodel",
           type: "Kitchen Remodel",
+          // The showroom SUPPLYING the job, per src/project-model.js. Every
+          // seeded project is a St. Louis job and says so three times over (its
+          // address, Kim as its account manager on the team, and the
+          // 'ProSource of St. Louis' stamped on its seeded orders), so that is
+          // what they carry. Without this they render "No showroom assigned".
+          //
+          // Deliberately NOT 'chicago' on any of them: project detail resolves
+          // the header's account manager FROM this id, so flipping one to
+          // Chicago would print "Denise Okafor" above a team whose account
+          // manager is Kim and orders that say St. Louis. Chicago earns its
+          // place in the demo honestly instead: Denise is on this project's
+          // team (she supplies its LVP), she is a connection with her own
+          // thread, and creating a project lets you pick her showroom.
+          showroomId: 'st-louis',
           team: [
             ...showroomTeam,
+            // The account's second showroom (Chicago) reaches the demo through
+            // this one project: Denise is on the team because the LVP for this
+            // kitchen is being sourced out of Chicago, which is the whole reason
+            // an account works with more than one showroom. Her seeded thread
+            // (buildSeedMessages / twilio-conversations DEMO_DETAILS) is that
+            // same conversation, so the connection, the project and the thread
+            // all tell one story.
+            teamMember(8, 'Denise Okafor', 'DO', 'Account Manager', 'prosource'),
             teamMember(3, 'Bubba Beans', 'BB', 'Homeowner', 'client'),
             teamMember(5, "Ryan O'Toole", 'RO', 'Flooring Installer', 'tradepro'),
           ],
@@ -147,6 +169,7 @@ const buildSeedProjects = (now) => {
           id: ids.complete,
           name: "Wilson Master Bath",
           type: "Bathroom Remodel",
+          showroomId: 'st-louis',
           team: [
             ...showroomTeam,
             teamMember(5, "Ryan O'Toole", 'RO', 'Flooring Installer', 'tradepro'),
@@ -187,6 +210,7 @@ const buildSeedProjects = (now) => {
           id: ids.published,
           name: "Chen Outdoor Patio & Outdoor Kitchen",
           type: "Other",
+          showroomId: 'st-louis',
           team: [
             ...showroomTeam,
             teamMember(4, 'Sarah Chen', 'SC', 'Homeowner', 'client'),
@@ -244,6 +268,9 @@ const buildSeedMessages = (now, projectIds) => {
   const sarahMsg1 = now - days(8) - minutes(20);
 
   const heatherMsg = now - days(14);
+
+  const deniseMsg2 = now - days(2);
+  const deniseMsg1 = now - days(2) - minutes(45);
 
   return {
     threads: [
@@ -422,6 +449,53 @@ const buildSeedMessages = (now, projectIds) => {
           },
         ],
       },
+      // The Chicago showroom's account manager. Same conversation as her Twilio
+      // history in twilio-conversations.mjs, so the thread reads identically
+      // whether Messages is running against Twilio or against this blob.
+      {
+        id: 6,
+        projectId: projectIds.working,
+        name: "Denise Okafor",
+        initials: "DO",
+        type: "prosource",
+        role: "Account Manager",
+        lastMessage:
+          "Our truck runs to St. Louis on Thursdays. Get me the square footage today and it goes on this week's run.",
+        timestamp: fmtRelativeTimestamp(deniseMsg2),
+        unread: true,
+        updatedAt: deniseMsg2,
+        messages: [
+          {
+            id: 1,
+            sender: "Denise Okafor",
+            isMe: false,
+            text:
+              "Denise at ProSource Chicago. Kim looped me in on the Beans kitchen: the Pembroke Pine LVP is back-ordered out of St. Louis and I have it on the floor here.",
+            time: fmtTime(deniseMsg1),
+            date: fmtDate(deniseMsg1),
+            timestamp: deniseMsg1,
+          },
+          {
+            id: 2,
+            sender: "Me",
+            isMe: true,
+            text: "Good to know. What would it take to get it down to us?",
+            time: fmtTime(deniseMsg1 + minutes(20)),
+            date: fmtDate(deniseMsg1 + minutes(20)),
+            timestamp: deniseMsg1 + minutes(20),
+          },
+          {
+            id: 3,
+            sender: "Denise Okafor",
+            isMe: false,
+            text:
+              "Our truck runs to St. Louis on Thursdays. Get me the square footage today and it goes on this week's run.",
+            time: fmtTime(deniseMsg2),
+            date: fmtDate(deniseMsg2),
+            timestamp: deniseMsg2,
+          },
+        ],
+      },
     ],
   };
 };
@@ -456,56 +530,60 @@ const orderLine = ({ category, product, color, brand, qty, unit, unitPrice, stat
   status,
 });
 
-const buildSeedOrders = (now, projectIds, displayName) => {
-  const soldTo = (displayName || 'You').toUpperCase();
-  const showroom = 'ProSource of St. Louis';
-  const usDate = (ts) => new Date(ts).toLocaleDateString('en-US');
+const usDate = (ts) => new Date(ts).toLocaleDateString('en-US');
 
-  // Every money figure below is derived: material from the lines, tax from
-  // material, total from both, balance from what's been paid. Nothing to keep
-  // in sync by hand.
-  const doc = ({
+// One document. Every money figure is derived: material from the lines, tax from
+// material, total from both, balance from what's been paid. Nothing to keep in
+// sync by hand.
+//
+// `soldTo` and `showroom` are the account's, so they're bound once per persona
+// by the caller below rather than repeated on every document.
+const buildDoc = (soldTo, showroom) => ({
+  id,
+  docType,
+  projectId,
+  jobName,
+  client,
+  date,
+  expectedDelivery = null,
+  status,
+  statusText,
+  paidRatio = 0,
+  service = 0,
+  referralBonus = null,
+  lines,
+}) => {
+  const material = round2(lines.reduce((sum, l) => sum + l.subtotal, 0));
+  const salesTax = round2(material * TAX_RATE);
+  const invoiceTotal = round2(material + salesTax + service);
+  const totalPaid = round2(invoiceTotal * paidRatio);
+  return {
     id,
     docType,
-    projectId,
+    projectId: projectId || null,
     jobName,
     client,
-    date,
-    expectedDelivery = null,
+    orderDate: usDate(date),
+    orderDateTs: date,
+    expectedDelivery,
     status,
     statusText,
-    paidRatio = 0,
-    service = 0,
-    referralBonus = null,
-    lines,
-  }) => {
-    const material = round2(lines.reduce((sum, l) => sum + l.subtotal, 0));
-    const salesTax = round2(material * TAX_RATE);
-    const invoiceTotal = round2(material + salesTax + service);
-    const totalPaid = round2(invoiceTotal * paidRatio);
-    return {
-      id,
-      docType,
-      projectId: projectId || null,
-      jobName,
-      client,
-      orderDate: usDate(date),
-      orderDateTs: date,
-      expectedDelivery,
-      status,
-      statusText,
-      soldTo,
-      showroom,
-      material,
-      salesTax,
-      service,
-      invoiceTotal,
-      totalPaid,
-      balanceDue: round2(invoiceTotal - totalPaid),
-      referralBonus,
-      lineItems: lines,
-    };
+    soldTo,
+    showroom,
+    material,
+    salesTax,
+    service,
+    invoiceTotal,
+    totalPaid,
+    balanceDue: round2(invoiceTotal - totalPaid),
+    referralBonus,
+    lineItems: lines,
   };
+};
+
+const buildSeedOrders = (now, projectIds, displayName) => {
+  const soldTo = (displayName || 'You').toUpperCase();
+  const doc = buildDoc(soldTo, 'ProSource of St. Louis');
 
   return {
     schemaVersion: ORDERS_SCHEMA_VERSION,
@@ -810,6 +888,7 @@ const DEMO_IDENTITY_BY_NAME = {
   "Ryan O'Toole": 'demo-ryan-otoole',
   'Sarah Chen': 'demo-sarah-chen',
   'Heather Yager': 'demo-heather-yager',
+  'Denise Okafor': 'demo-denise-okafor',
 };
 
 // Seeded connections: same counterparties that appear in seeded messages
@@ -844,6 +923,16 @@ const buildSeedConnections = (projectList = []) => {
         id: 2, name: 'Heather Yager', initials: 'HY', role: 'Designer',
         type: 'prosource', email: 'heather.yager@prosource.com',
         phone: '(314) 555-0188', location: 'ProSource of St. Louis',
+      }),
+      // Account manager at the account's second showroom. Her email and phone
+      // are the values the showroom record itself carries (see CHICAGO in
+      // demo-session.mjs and the 'chicago' entry in lookup-showroom.mjs), so the
+      // connection card and the showroom card cannot disagree about how to
+      // reach her.
+      connection({
+        id: 8, name: 'Denise Okafor', initials: 'DO', role: 'Account Manager',
+        type: 'prosource', email: 'denise.okafor@prosource.example',
+        phone: '(312) 555-0164', location: 'ProSource of Chicago',
       }),
       connection({
         id: 3, name: 'Bubba Beans', initials: 'BB', role: 'Homeowner',
@@ -937,15 +1026,598 @@ const buildSeedCarts = (now, projectIds, displayName) => {
   };
 };
 
+// ===========================================================================
+// Homeowner persona: Alicia Navarro
+// ===========================================================================
+//
+// A client of the St. Louis showroom with exactly one job of her own. Nothing
+// here overlaps Justin's world: different job, different address, different
+// money, different conversations. The only thing the two accounts share is the
+// showroom and its people, which is the point: Kim really does work with both.
+//
+// The counterparties she talks to (Kim, Heather, Ryan) are the demo's AI
+// personas, which is the sanctioned direction: Alicia is a person you sign in
+// AS, they are people she talks TO. She has no `demoIdentity` herself.
+
+const HOMEOWNER_ADDRESS = '7319 Delmar Blvd, University City, MO 63130';
+
+const buildHomeownerProjects = (now) => {
+  const ids = {
+    working: `seed-ho-${now}-working`,
+    complete: null,
+    published: null,
+  };
+
+  const teamMember = (id, name, initials, role, type) => ({
+    connectionId: id, name, initials, role, type, addedAt: now - days(21),
+  });
+
+  return {
+    ids,
+    payload: {
+      list: [
+        {
+          id: ids.working,
+          name: 'Navarro Guest Bath Refresh',
+          type: 'Bathroom Remodel',
+          // Same convention as the trade pro's projects: the showroom SUPPLYING
+          // the job. Alicia is a St. Louis customer and buys from nowhere else.
+          showroomId: 'st-louis',
+          // Her ProSource team, and only her ProSource team. A homeowner working
+          // through the showroom has no contractor of her own on the job, which
+          // is exactly why she is working through the showroom.
+          team: [
+            teamMember(1, 'Kim Marks', 'KM', 'Account Manager', 'prosource'),
+            teamMember(2, 'Heather Yager', 'HY', 'Designer', 'prosource'),
+            teamMember(5, "Ryan O'Toole", 'RO', 'Flooring Installer', 'tradepro'),
+          ],
+          description:
+            'Guest bath off the hallway. Keeping the tub, replacing the floor, the vanity top and the hallway runner of hardwood outside the door. Want it done before family visit in the spring.',
+          address: HOMEOWNER_ADDRESS,
+          budgetRange: '$10,000 - $25,000',
+          targetStart: new Date(now + days(12)).toISOString().slice(0, 10),
+          targetCompletion: new Date(now + days(46)).toISOString().slice(0, 10),
+          squareFootage: '58',
+          rooms: [
+            room('Guest Bathroom', now - days(21), { type: 'Bathroom', squareFootage: '42', notes: 'Tub stays. Floor and vanity top only.' }),
+            room('Hallway', now - days(19), { type: 'Hallway', squareFootage: '16', notes: 'Runs from the guest bath door to the stairs.' }),
+          ],
+          products: [
+            product({
+              id: 'prod-003', sku: 'sku-prod-003', name: 'Daltile Perpetuo Porcelain Floor Tile 12x24',
+              brand: 'Daltile', category: 'Tile & Stone', colorName: 'Brilliant White',
+              price: 6.49, unit: 'SF', sfPerBox: 15.6, qty: 4, image: IMG.tile,
+              roomId: 'room-guest-bathroom', addedAt: now - days(16),
+            }),
+            product({
+              id: 'prod-005', sku: 'sku-prod-005', name: 'Silestone Calacatta Gold Quartz Countertop',
+              brand: 'Silestone', category: 'Countertops', colorName: 'Calacatta Gold',
+              price: 72.0, unit: 'SF', qty: 14, image: IMG.quartz,
+              roomId: 'room-guest-bathroom', addedAt: now - days(15),
+            }),
+            // Deliberately unassigned, same reason as the trade pro's LVP: it
+            // shows the "Unassigned" group and gives the demo something to drag
+            // into a room. Alicia is still deciding whether the hallway is in.
+            product({
+              id: 'prod-001', sku: 'sku-prod-001', name: 'Factory Direct Pier Engineered 6-3/8" Oak Hardwood Flooring',
+              brand: 'Factory Direct', category: 'Hardwood', colorName: 'Strawthorne Oak',
+              price: 7.6, unit: 'SF', sfPerBox: 32.81, qty: 1, image: IMG.oak,
+              roomId: null, addedAt: now - days(4),
+            }),
+          ],
+          notes:
+            'Heather is drawing up two vanity layouts. Decide on the hallway hardwood before the tile goes on order.',
+          status: 'working',
+          archived: false,
+          createdAt: now - days(21),
+          updatedAt: now - days(4),
+        },
+      ],
+    },
+  };
+};
+
+const buildHomeownerMessages = (now, projectIds) => {
+  const kim2 = now - minutes(50);
+  const kim1 = now - days(1) - minutes(10);
+  const heather2 = now - days(2);
+  const heather1 = now - days(2) - minutes(35);
+
+  return {
+    threads: [
+      {
+        id: 1,
+        projectId: projectIds.working,
+        name: 'Kim Marks',
+        initials: 'KM',
+        type: 'prosource',
+        role: 'Account Manager',
+        lastMessage:
+          "Ryan has you penciled in for the week of the 12th. I'll confirm once the tile lands.",
+        timestamp: fmtRelativeTimestamp(kim2),
+        unread: true,
+        updatedAt: kim2,
+        messages: [
+          {
+            id: 1,
+            sender: 'Kim Marks',
+            isMe: false,
+            text:
+              "Hi Alicia! The Perpetuo tile is in stock, so once you sign off on the estimate we can have it here in about two weeks.",
+            time: fmtTime(kim1),
+            date: fmtDate(kim1),
+            timestamp: kim1,
+          },
+          {
+            id: 2,
+            sender: 'Me',
+            isMe: true,
+            text:
+              "That works. Can we hold off on the hallway hardwood until I've seen Heather's layouts?",
+            time: fmtTime(kim1 + minutes(45)),
+            date: fmtDate(kim1 + minutes(45)),
+            timestamp: kim1 + minutes(45),
+          },
+          {
+            id: 3,
+            sender: 'Kim Marks',
+            isMe: false,
+            text:
+              "Ryan has you penciled in for the week of the 12th. I'll confirm once the tile lands.",
+            time: fmtTime(kim2),
+            date: fmtDate(kim2),
+            timestamp: kim2,
+          },
+        ],
+      },
+      {
+        id: 2,
+        projectId: projectIds.working,
+        name: 'Heather Yager',
+        initials: 'HY',
+        type: 'prosource',
+        role: 'Designer',
+        lastMessage:
+          'Two vanity layouts coming your way. One keeps the linen closet, one trades it for a wider top.',
+        timestamp: fmtRelativeTimestamp(heather2),
+        unread: false,
+        updatedAt: heather2,
+        messages: [
+          {
+            id: 1,
+            sender: 'Me',
+            isMe: true,
+            text:
+              'Hi Heather, is there any way to get a wider vanity in there without losing the linen closet?',
+            time: fmtTime(heather1),
+            date: fmtDate(heather1),
+            timestamp: heather1,
+          },
+          {
+            id: 2,
+            sender: 'Heather Yager',
+            isMe: false,
+            text:
+              'Two vanity layouts coming your way. One keeps the linen closet, one trades it for a wider top.',
+            time: fmtTime(heather2),
+            date: fmtDate(heather2),
+            timestamp: heather2,
+          },
+        ],
+      },
+    ],
+  };
+};
+
+const buildHomeownerConnections = (projectList = []) => {
+  const sharedProjects = (connectionId) =>
+    projectList.filter((p) =>
+      (p.team || []).some((m) => m.connectionId === connectionId)
+    ).length;
+
+  // Same derivation and the same ids as the trade pro's list, so Kim is
+  // connection 1 to everyone who knows her. Nobody here is an account Alicia
+  // could sign in as, so `demoIdentity` is the right messaging identity for all
+  // three.
+  const connection = (fields) => ({
+    ...fields,
+    projects: sharedProjects(fields.id),
+    demoIdentity: DEMO_IDENTITY_BY_NAME[fields.name] || null,
+    status: 'connected',
+  });
+
+  return {
+    list: [
+      connection({
+        id: 1, name: 'Kim Marks', initials: 'KM', role: 'Account Manager',
+        type: 'prosource', email: 'kim.marks@prosource.com',
+        phone: '(314) 555-0142', location: 'ProSource of St. Louis',
+      }),
+      connection({
+        id: 2, name: 'Heather Yager', initials: 'HY', role: 'Designer',
+        type: 'prosource', email: 'heather.yager@prosource.com',
+        phone: '(314) 555-0188', location: 'ProSource of St. Louis',
+      }),
+      connection({
+        id: 5, name: "Ryan O'Toole", initials: 'RO', role: 'Flooring Installer',
+        type: 'tradepro', email: 'ryan@otooleinstalls.com',
+        phone: '(314) 555-0789', location: 'St. Charles, MO',
+      }),
+    ],
+  };
+};
+
+const buildHomeownerCarts = (now, projectIds, displayName) => ({
+  list: [
+    {
+      id: `cart-ho-${now}-bath-floor`,
+      name: 'Guest Bath: Floor Samples',
+      projectId: projectIds.working || null,
+      updatedAt: new Date(now - days(6)).toLocaleDateString('en-US'),
+      updatedAtTs: now - days(6),
+      updatedBy: displayName,
+      itemCount: 2,
+      products: [
+        {
+          id: 'prod-003', sku: 'sku-prod-003', name: 'Daltile Perpetuo Porcelain Floor Tile 12x24',
+          brand: 'Daltile', category: 'Tile & Stone', colorName: 'Brilliant White',
+          qty: 1, price: 6.49, unit: 'SF', sfPerBox: 15.6, image: IMG.tile, isSample: true,
+        },
+        {
+          id: 'prod-001', sku: 'sku-prod-001', name: 'Factory Direct Pier Engineered 6-3/8" Oak Hardwood Flooring',
+          brand: 'Factory Direct', category: 'Hardwood', colorName: 'Strawthorne Oak',
+          qty: 1, price: 7.6, unit: 'SF', sfPerBox: 32.81, image: IMG.oak, isSample: true,
+        },
+      ],
+    },
+  ],
+});
+
+const buildHomeownerOrders = (now, projectIds, displayName) => {
+  const doc = buildDoc((displayName || 'You').toUpperCase(), 'ProSource of St. Louis');
+
+  return {
+    schemaVersion: ORDERS_SCHEMA_VERSION,
+    list: [
+      // The estimate she is being asked to approve: the live decision in her
+      // account, and the thing Kim's unread message is about.
+      doc({
+        id: 'ES-2088',
+        docType: 'estimate',
+        projectId: projectIds.working,
+        jobName: 'Navarro Guest Bath Refresh',
+        client: 'Alicia Navarro',
+        date: now - days(3),
+        status: 'ready',
+        statusText: 'Quote Ready for Approval',
+        lines: [
+          orderLine({
+            category: 'TILE / FLOOR TILE', product: 'Daltile Perpetuo Porcelain Floor Tile 12x24',
+            color: 'Brilliant White', brand: 'Daltile',
+            qty: 58, unit: 'sq ft', unitPrice: 6.49, status: 'pending',
+          }),
+          orderLine({
+            category: 'COUNTERTOPS / QUARTZ', product: 'Silestone Calacatta Gold Quartz Countertop',
+            color: 'Calacatta Gold', brand: 'Silestone',
+            qty: 14, unit: 'sq ft', unitPrice: 72.0, status: 'pending',
+          }),
+        ],
+      }),
+      // Already bought and sitting at the showroom, so /orders has history as
+      // well as a decision, and the dashboard's pickup card has something real.
+      doc({
+        id: 'EC099204',
+        docType: 'order',
+        projectId: projectIds.working,
+        jobName: 'Navarro Guest Bath Refresh',
+        client: 'Alicia Navarro',
+        date: now - days(11),
+        expectedDelivery: 'Ready now',
+        status: 'pickup',
+        statusText: 'Ready for Pickup',
+        paidRatio: 1,
+        lines: [
+          orderLine({
+            category: 'K&B HARDWARE', product: 'Moen Align Towel Bar 24"',
+            color: 'Brushed Nickel', brand: 'Moen',
+            qty: 2, unit: 'units', unitPrice: 74.99, status: 'ready-for-pickup',
+          }),
+          orderLine({
+            category: 'K&B HARDWARE', product: 'Moen Align Bath Faucet',
+            color: 'Brushed Nickel', brand: 'Moen',
+            qty: 1, unit: 'unit', unitPrice: 219.0, status: 'ready-for-pickup',
+          }),
+        ],
+      }),
+    ],
+  };
+};
+
+// Her design consult, not a trade counter appointment: a different person, a
+// different time of day and a different week from the trade pro's, so the two
+// dashboards can't be mistaken for each other.
+const buildHomeownerAppointments = (now) => {
+  const target = new Date(now + days(5));
+  return {
+    list: [
+      {
+        id: `appt-ho-seed-${now}`,
+        person: 'Heather Yager',
+        personRole: 'Designer',
+        showroom: 'ProSource of St. Louis',
+        day: target.toLocaleDateString('en-US', { weekday: 'short' }),
+        date: target.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+        time: '4:15 PM',
+        bookedAt: now - days(2),
+        status: 'confirmed',
+      },
+    ],
+  };
+};
+
+// ===========================================================================
+// Account manager persona: Tessa Brandt
+// ===========================================================================
+//
+// Staff at the St. Louis showroom, so her account is shaped nothing like a
+// customer's: the jobs, the carts and the orders belong to the people she sells
+// to, not to her. What she owns is a book of business and the conversations in
+// it, which is what this seeds. Her queue lives in the AM console, which keys
+// off `userType: 'accountmanager'` and sources its own data.
+//
+// Deliberately no projects/carts/orders key: an empty Projects tab is a real,
+// honest state for a member of staff, and inventing copies of her customers'
+// jobs would put the same job in two accounts under two owners.
+
+// The other demo accounts, addressed by the userId they really sign in with.
+// Must match `userIdForEmail` in demo-session.mjs, which is otp-verify.mjs's
+// `legacyUserId` convention: "ps-" + the email with every character outside
+// [a-z0-9] replaced by a dash.
+//
+// This is what makes Tessa's customer connections messageable: per
+// `identityForConnection` in src/twilio-client.js, a connection carrying a
+// `userId` is a real signed-up user and is messaged at that userId. So a thread
+// Tessa opens with Justin here is the same thread Justin sees when he signs in.
+const DEMO_ACCOUNT_USER_ID = {
+  tradepro: 'ps-demo-prosource-com',
+  homeowner: 'ps-alicia-navarro-email-com',
+};
+
+const buildAmConnections = () => {
+  // No `projects` derivation to do: Tessa owns no projects, so she shares none.
+  // 0 is the honest count, and the field is never null (null would mean
+  // "unknown"). Her colleagues carry a demoIdentity because they are AI personas
+  // she can talk to; her customers carry a userId because they are real accounts
+  // somebody can sign in as. Nobody gets both, and Tessa gets neither.
+  const connection = (fields) => ({
+    projects: 0,
+    demoIdentity: DEMO_IDENTITY_BY_NAME[fields.name] || null,
+    userId: null,
+    status: 'connected',
+    ...fields,
+  });
+
+  return {
+    list: [
+      // --- Her customers ---
+      connection({
+        id: 9, name: 'Justin Reyes', initials: 'JR', role: 'General Contractor',
+        type: 'tradepro', email: 'demo@prosource.com',
+        phone: '(314) 555-0117', location: 'St. Louis, MO',
+        userId: DEMO_ACCOUNT_USER_ID.tradepro,
+      }),
+      connection({
+        id: 10, name: 'Alicia Navarro', initials: 'AN', role: 'Homeowner',
+        type: 'client', email: 'alicia.navarro@email.com',
+        phone: '(314) 555-0264', location: 'University City, MO',
+        userId: DEMO_ACCOUNT_USER_ID.homeowner,
+      }),
+      // --- Her colleagues ---
+      connection({
+        id: 1, name: 'Kim Marks', initials: 'KM', role: 'Account Manager',
+        type: 'prosource', email: 'kim.marks@prosource.com',
+        phone: '(314) 555-0142', location: 'ProSource of St. Louis',
+      }),
+      connection({
+        id: 2, name: 'Heather Yager', initials: 'HY', role: 'Designer',
+        type: 'prosource', email: 'heather.yager@prosource.com',
+        phone: '(314) 555-0188', location: 'ProSource of St. Louis',
+      }),
+      connection({
+        id: 8, name: 'Denise Okafor', initials: 'DO', role: 'Account Manager',
+        type: 'prosource', email: 'denise.okafor@prosource.example',
+        phone: '(312) 555-0164', location: 'ProSource of Chicago',
+      }),
+    ],
+  };
+};
+
+// Threads carry no projectId: the jobs they're about live in her customers'
+// accounts, not hers, so there is no project of Tessa's to link to. Null is the
+// same value the trade pro's threads take when their project can't be resolved,
+// so the client already handles it.
+const buildAmMessages = (now) => {
+  const justin2 = now - minutes(18);
+  const justin1 = now - minutes(95);
+  const alicia2 = now - days(1);
+  const alicia1 = now - days(1) - minutes(40);
+  const kimMsg = now - days(4);
+
+  return {
+    threads: [
+      {
+        id: 1,
+        projectId: null,
+        name: 'Justin Reyes',
+        initials: 'JR',
+        type: 'tradepro',
+        role: 'General Contractor',
+        lastMessage:
+          "Quote's with me now. I'll have the cabinet numbers back to you before close today.",
+        timestamp: fmtRelativeTimestamp(justin2),
+        unread: true,
+        updatedAt: justin2,
+        messages: [
+          {
+            id: 1,
+            sender: 'Justin Reyes',
+            isMe: false,
+            text:
+              'Morning Tessa, any movement on the Beans kitchen cabinet quote? Client is asking.',
+            time: fmtTime(justin1),
+            date: fmtDate(justin1),
+            timestamp: justin1,
+          },
+          {
+            id: 2,
+            sender: 'Me',
+            isMe: true,
+            text:
+              "Quote's with me now. I'll have the cabinet numbers back to you before close today.",
+            time: fmtTime(justin2),
+            date: fmtDate(justin2),
+            timestamp: justin2,
+          },
+        ],
+      },
+      {
+        id: 2,
+        projectId: null,
+        name: 'Alicia Navarro',
+        initials: 'AN',
+        type: 'client',
+        role: 'Homeowner',
+        lastMessage:
+          "No rush at all. Take the weekend with Heather's layouts and we'll pick it up Monday.",
+        timestamp: fmtRelativeTimestamp(alicia2),
+        unread: false,
+        updatedAt: alicia2,
+        messages: [
+          {
+            id: 1,
+            sender: 'Alicia Navarro',
+            isMe: false,
+            text:
+              "Sorry, I know Kim sent the estimate over. I'm still deciding on the hallway before I sign anything.",
+            time: fmtTime(alicia1),
+            date: fmtDate(alicia1),
+            timestamp: alicia1,
+          },
+          {
+            id: 2,
+            sender: 'Me',
+            isMe: true,
+            text:
+              "No rush at all. Take the weekend with Heather's layouts and we'll pick it up Monday.",
+            time: fmtTime(alicia2),
+            date: fmtDate(alicia2),
+            timestamp: alicia2,
+          },
+        ],
+      },
+      {
+        id: 3,
+        projectId: null,
+        name: 'Kim Marks',
+        initials: 'KM',
+        type: 'prosource',
+        role: 'Account Manager',
+        lastMessage:
+          "Covering your accounts Thursday while you're at the Daltile thing. Anything I should watch?",
+        timestamp: fmtRelativeTimestamp(kimMsg),
+        unread: false,
+        updatedAt: kimMsg,
+        messages: [
+          {
+            id: 1,
+            sender: 'Kim Marks',
+            isMe: false,
+            text:
+              "Covering your accounts Thursday while you're at the Daltile thing. Anything I should watch?",
+            time: fmtTime(kimMsg),
+            date: fmtDate(kimMsg),
+            timestamp: kimMsg,
+          },
+        ],
+      },
+    ],
+  };
+};
+
+// A counter appointment with a customer, which is what an AM's day is made of.
+// Different person, time and week again from the other two personas'.
+const buildAmAppointments = (now) => {
+  const target = new Date(now + days(2));
+  return {
+    list: [
+      {
+        id: `appt-am-seed-${now}`,
+        person: 'Justin Reyes',
+        personRole: 'General Contractor',
+        showroom: 'ProSource of St. Louis',
+        day: target.toLocaleDateString('en-US', { weekday: 'short' }),
+        date: target.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+        time: '9:00 AM',
+        bookedAt: now - days(3),
+        status: 'confirmed',
+      },
+    ],
+  };
+};
+
+// ===========================================================================
+
+/**
+ * What each persona's account is seeded with. A null builder means "this
+ * persona owns nothing under this key": the key is left untouched, not written
+ * empty, so the app's own empty state does the talking.
+ *
+ * The builders keep the signatures they already had, so `tradepro` is the exact
+ * same seed it was before this map existed.
+ */
+const WORLD_BY_PERSONA = {
+  tradepro: {
+    projects: buildSeedProjects,
+    messages: buildSeedMessages,
+    carts: buildSeedCarts,
+    appointments: buildSeedAppointments,
+    orders: buildSeedOrders,
+    connections: buildSeedConnections,
+  },
+  homeowner: {
+    projects: buildHomeownerProjects,
+    messages: buildHomeownerMessages,
+    carts: buildHomeownerCarts,
+    appointments: buildHomeownerAppointments,
+    orders: buildHomeownerOrders,
+    connections: buildHomeownerConnections,
+  },
+  am: {
+    projects: null,
+    messages: buildAmMessages,
+    carts: null,
+    appointments: buildAmAppointments,
+    orders: null,
+    connections: buildAmConnections,
+  },
+};
+
+const DEFAULT_PERSONA = 'tradepro';
+
 const blobKey = (userId, key) => `${userId}::${key}`;
 
 /**
- * Seed a new user. Writes projects + messages only if their key is currently
- * empty so re-running doesn't clobber edits.
+ * Seed a new user. Writes each key only if it is currently empty so re-running
+ * doesn't clobber edits.
+ *
+ * `persona` picks which world to seed. It defaults to 'tradepro', which is the
+ * only world that existed before and is what otp-verify.mjs still asks for by
+ * calling this with one argument.
  */
-export async function seedNewUser(userId) {
+export async function seedNewUser(userId, persona = DEFAULT_PERSONA) {
   if (!userId) return;
   try {
+    const world = WORLD_BY_PERSONA[persona] || WORLD_BY_PERSONA[DEFAULT_PERSONA];
     const store = getStore({ name: "ps-user-data", consistency: "strong" });
     const now = Date.now();
 
@@ -975,13 +1647,20 @@ export async function seedNewUser(userId) {
     // Built up front (pure, since nothing is written unless the key is empty) because
     // the connections seed derives its shared-project counts from the team
     // arrays on these projects.
-    const seedProjects = buildSeedProjects(now);
-    let projectList = seedProjects.payload.list;
+    const seedProjects = world.projects ? world.projects(now) : null;
+    let projectList = seedProjects ? seedProjects.payload.list : [];
 
     let projectIds;
     if (!existingProjects) {
-      projectIds = seedProjects.ids;
-      await store.setJSON(projectsKey, { value: seedProjects.payload, updatedAt: now });
+      // A persona with no projects of its own still needs the shape: the keys
+      // are all null, which is what a thread with nothing to link to already
+      // gets when an existing list has no project in that state.
+      projectIds = seedProjects
+        ? seedProjects.ids
+        : { working: null, complete: null, published: null };
+      if (seedProjects) {
+        await store.setJSON(projectsKey, { value: seedProjects.payload, updatedAt: now });
+      }
     } else {
       // Try to extract IDs from existing list so messages can still link.
       try {
@@ -997,21 +1676,21 @@ export async function seedNewUser(userId) {
       }
     }
 
-    if (!existingMessages) {
-      const messages = buildSeedMessages(now, projectIds);
+    if (!existingMessages && world.messages) {
+      const messages = world.messages(now, projectIds);
       await store.setJSON(messagesKey, { value: messages, updatedAt: now });
     }
 
-    if (!existingCarts) {
+    if (!existingCarts && world.carts) {
       // We don't know the user's display name here yet: save-profile is called
       // after onboarding and the cart "updatedBy" is purely cosmetic. Use a
       // generic "You" and the frontend overrides for new entries.
-      const carts = buildSeedCarts(now, projectIds, "You");
+      const carts = world.carts(now, projectIds, "You");
       await store.setJSON(cartsKey, { value: carts, updatedAt: now });
     }
 
-    if (!existingAppts) {
-      const appts = buildSeedAppointments(now);
+    if (!existingAppts && world.appointments) {
+      const appts = world.appointments(now);
       await store.setJSON(appointmentsKey, { value: appts, updatedAt: now });
     }
 
@@ -1023,13 +1702,13 @@ export async function seedNewUser(userId) {
     // the user's approvals and payments live in it and we never touch it again.
     const ordersAreLegacy =
       existingOrders && existingOrders?.value?.schemaVersion !== ORDERS_SCHEMA_VERSION;
-    if (!existingOrders || ordersAreLegacy) {
-      const orders = buildSeedOrders(now, projectIds, "You");
+    if ((!existingOrders || ordersAreLegacy) && world.orders) {
+      const orders = world.orders(now, projectIds, "You");
       await store.setJSON(ordersKey, { value: orders, updatedAt: now });
     }
 
-    if (!existingConns) {
-      const conns = buildSeedConnections(projectList);
+    if (!existingConns && world.connections) {
+      const conns = world.connections(projectList);
       await store.setJSON(connectionsKey, { value: conns, updatedAt: now });
     }
   } catch (err) {

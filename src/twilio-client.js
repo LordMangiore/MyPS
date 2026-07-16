@@ -21,6 +21,7 @@
  */
 export const DEMO_CONTACTS = {
   kim: { identity: 'demo-kim-marks', name: 'Kim Marks' },
+  denise: { identity: 'demo-denise-okafor', name: 'Denise Okafor' },
   bubba: { identity: 'demo-bubba-beans', name: 'Bubba Beans' },
   ryan: { identity: 'demo-ryan-otoole', name: "Ryan O'Toole" },
   sarah: { identity: 'demo-sarah-chen', name: 'Sarah Chen' },

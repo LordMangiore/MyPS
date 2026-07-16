@@ -28,7 +28,8 @@ import {
   Archive,
   Edit2,
   Trash2,
-  ArrowRight
+  ArrowRight,
+  User
 } from 'lucide-react';
 import {
   DEFAULT_PROJECT,
@@ -91,6 +92,7 @@ const DEMO_IDENTITY_BY_NAME = {
   "Ryan O'Toole": 'demo-ryan-otoole',
   'Sarah Chen': 'demo-sarah-chen',
   'Heather Yager': 'demo-heather-yager',
+  'Denise Okafor': 'demo-denise-okafor',
 };
 
 /**
@@ -180,27 +182,34 @@ const scoreRule = (text, keywords) =>
  * `candidates` are team members already resolved to a demo persona.
  * Default is the account manager, the member's main point of contact, and who
  * they'd expect to hear from when nothing more specific applies.
+ *
+ * `preferredName` breaks ties: a project on a multi-showroom account can have
+ * two account managers on its team (its own showroom's, plus the primary's from
+ * the default team selection), and both match the account-manager rule equally.
+ * The one whose showroom is actually supplying the job is who would answer, so
+ * name them and they win. Without a preference this picks the first match, which
+ * is what it has always done.
  */
-const pickResponder = (message, candidates) => {
+const pickResponder = (message, candidates, preferredName = null) => {
   if (!candidates.length) return null;
   const text = String(message || '').toLowerCase();
+  const preferred = (list) =>
+    (preferredName && list.find((c) => c.name === preferredName)) || list[0];
   const ranked = RESPONDER_RULES
     .map((rule) => ({ rule, score: scoreRule(text, rule.keywords) }))
     .filter((r) => r.score > 0)
     .sort((a, b) => b.score - a.score);
   for (const { rule } of ranked) {
-    const hit = candidates.find((c) => rule.matches(c));
-    if (hit) return hit;
+    const hits = candidates.filter((c) => rule.matches(c));
+    if (hits.length) return preferred(hits);
   }
-  return (
-    candidates.find((c) => /account manager/i.test(c.role || '')) ||
-    candidates.find((c) => c.type === 'prosource') ||
-    candidates[0]
-  );
+  const managers = candidates.filter((c) => /account manager/i.test(c.role || ''));
+  if (managers.length) return preferred(managers);
+  return candidates.find((c) => c.type === 'prosource') || candidates[0];
 };
 
 export default function ProjectDetailPage() {
-  const { loadUserData, saveUserData, userId, userName, accountManager } = useAuth();
+  const { loadUserData, saveUserData, userId, userName, accountManager, showrooms } = useAuth();
   // Estimates & Orders tab. Reads the same `orders` blob as /orders. Seeded
   // documents already carry a projectId, it just had nothing reading it.
   const {
@@ -273,6 +282,25 @@ export default function ProjectDetailPage() {
     return () => { cancelled = true; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId, projectId]);
+
+  // -------- Showroom --------
+
+  /**
+   * The showroom supplying this project, resolved from the account's list.
+   *
+   * The project stores only `showroomId`, so the name, address and account
+   * manager shown here are always today's, not a copy frozen at creation.
+   *
+   * Resolves to null in two cases, both of which mean "we cannot name it":
+   * projects created before projects carried a showroom (no `showroomId`), and
+   * an id the account's list no longer contains. We say so rather than guess.
+   * Falling back to the primary would put "ProSource of St. Louis" under a
+   * Chicago project, which is the exact bug this replaced.
+   */
+  const projectShowroom = useMemo(
+    () => (showrooms || []).find((s) => s.id === projectData.showroomId) || null,
+    [showrooms, projectData.showroomId]
+  );
 
   // Build the updated list with the current project upserted into it. Always
   // carries the current `team` state through so team edits made before first
@@ -528,7 +556,12 @@ export default function ProjectDetailPage() {
    * back through here, so replies cannot chain.
    */
   const requestPersonaReply = async (post, thread) => {
-    const responder = pickResponder(post.body, teamPersonas);
+    // The project's own showroom decides which account manager answers it.
+    const responder = pickResponder(
+      post.body,
+      teamPersonas,
+      projectShowroom?.accountManager?.name || null
+    );
     if (!responder) return;
     const token = ++replyToken.current;
     const targetId = projectId;
@@ -1473,8 +1506,21 @@ export default function ProjectDetailPage() {
                   </span>
                 </div>
                 <div style={styles.metaItem}>
-                  <MapPin size={14} /> <strong>ProSource of St. Louis</strong>
+                  <MapPin size={14} />
+                  {projectShowroom ? (
+                    <strong>{projectShowroom.name}</strong>
+                  ) : (
+                    <span style={{ color: colors.gray500 }}>No showroom assigned</span>
+                  )}
                 </div>
+                {projectShowroom?.accountManager?.name && (
+                  <div style={styles.metaItem}>
+                    <User size={14} /> {projectShowroom.accountManager.name}
+                    {projectShowroom.accountManager.title
+                      ? `, ${projectShowroom.accountManager.title}`
+                      : ''}
+                  </div>
+                )}
                 <div style={styles.metaItem}>
                   <Calendar size={14} /> Last updated Dec 18, 2025
                 </div>

@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Check, ChevronRight, X, Plus, Home } from 'lucide-react';
+import { ArrowLeft, Check, ChevronRight, X, Plus, Home, Store } from 'lucide-react';
 import { useAuth } from './auth-context';
 import {
   PROJECT_TYPES,
@@ -28,19 +28,52 @@ const colors = {
 
 const STATES = ['MO', 'IL', 'TX', 'CA', 'FL', 'NY', 'NC', 'OH', 'PA', 'GA', 'WA', 'CO'];
 
-const stepIds = ['type', 'name', 'address', 'scope', 'rooms', 'team', 'review'];
+/**
+ * Every step the wizard can show, in order. Not every account sees all of them:
+ * `buildStepIds` is what an account actually walks through.
+ */
+const ALL_STEP_IDS = ['type', 'name', 'address', 'showroom', 'scope', 'rooms', 'team', 'review'];
+
+/**
+ * The steps this account walks through.
+ *
+ * One list drives everything downstream: the "Step X of N" eyebrow, the progress
+ * bar, next/back, and which step renders. So a conditional step has to be
+ * conditional *here*, in the list itself, and nowhere else. Filter the canonical
+ * order rather than splicing into it: the order stays declared in one literal,
+ * and the only thing the condition decides is whether a step is in or out.
+ *
+ * The showroom step is dropped for accounts with a single showroom (nearly all
+ * of them). There is nothing to choose, so asking would be a step whose answer
+ * is a foregone conclusion. `createProject` assigns it silently instead.
+ */
+const buildStepIds = (multiShowroom) =>
+  ALL_STEP_IDS.filter((id) => id !== 'showroom' || multiShowroom);
 
 export default function ProSourceProjectCreate() {
-  const { userId, userName, loadUserData, saveUserData } = useAuth();
+  const { userId, userName, loadUserData, saveUserData, showrooms } = useAuth();
   const navigate = useNavigate();
 
-  const [stepIndex, setStepIndex] = useState(0);
+  // Showrooms come off the session, which is read synchronously at mount, but a
+  // profile fetch can widen the list a moment later. Treat it as data that
+  // changes: `stepIds` is derived, never a snapshot taken at mount.
+  const showroomOptions = showrooms || [];
+  const multiShowroom = showroomOptions.length > 1;
+  const stepIds = useMemo(() => buildStepIds(multiShowroom), [multiShowroom]);
+
+  const [rawStepIndex, setStepIndex] = useState(0);
+  // If the step list changes under an open wizard (see above), a raw index kept
+  // in state could point past the end. Deriving the real index keeps it inside
+  // the list, so "Step X of N" can never read "Step 8 of 7".
+  const stepIndex = Math.min(rawStepIndex, stepIds.length - 1);
   const step = stepIds[stepIndex];
 
   const [type, setType] = useState('');
   const [name, setName] = useState('');
   const [touchedName, setTouchedName] = useState(false);
   const [address, setAddress] = useState({ street: '', city: '', state: 'MO', zip: '' });
+  const [showroomId, setShowroomId] = useState(null);
+  const [touchedShowroom, setTouchedShowroom] = useState(false);
   const [budgetRange, setBudgetRange] = useState('Not Sure Yet');
   const [targetCompletion, setTargetCompletion] = useState('');
   const [rooms, setRooms] = useState([]);
@@ -141,6 +174,21 @@ export default function ProSourceProjectCreate() {
     }
   };
 
+  /**
+   * Default to the primary showroom, and keep that default honest if the list
+   * only arrives after mount. `touchedShowroom` stops it overwriting a choice
+   * the user has already made, the same way `touchedName` and `touchedRooms` do.
+   *
+   * This is also the whole of the single-showroom path: the one showroom is the
+   * primary, so it lands here with nothing on screen and nothing to click. An
+   * account with no showrooms at all resolves to null, which the project model
+   * reads as unassigned.
+   */
+  useEffect(() => {
+    if (touchedShowroom) return;
+    setShowroomId(showrooms?.[0]?.id ?? null);
+  }, [showrooms, touchedShowroom]);
+
   // Suggest a default name based on type and a client name from the team
   // (e.g. "Beans Kitchen Remodel"). Only applies before the user types anything.
   const suggestedName = useMemo(() => {
@@ -239,6 +287,9 @@ export default function ProSourceProjectCreate() {
         targetStart: '',
         targetCompletion,
         squareFootage: '',
+        // Chosen on the showroom step, or defaulted to the account's primary
+        // when there was no choice to make.
+        showroomId,
         rooms,
         products: [],
         notes: '',
@@ -367,6 +418,65 @@ export default function ProSourceProjectCreate() {
                     style={styles.input}
                   />
                 </div>
+              </div>
+            </Step>
+          )}
+
+          {step === 'showroom' && (
+            <Step
+              eyebrow={`Step ${stepIndex + 1} of ${stepIds.length}`}
+              title="Which showroom is this project with?"
+              sub="You work with more than one. Pick the one supplying this job so quotes, samples and questions go to the right team."
+            >
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {showroomOptions.map((s) => {
+                  const selected = showroomId === s.id;
+                  return (
+                    <button
+                      key={s.id}
+                      onClick={() => { setShowroomId(s.id); setTouchedShowroom(true); }}
+                      style={{
+                        ...styles.showroomCard,
+                        borderColor: selected ? colors.darkBlue : colors.gray200,
+                        background: selected ? '#f0f5ff' : '#fff',
+                      }}
+                    >
+                      <Store
+                        size={22}
+                        strokeWidth={1.5}
+                        color={selected ? colors.darkBlue : colors.gray500}
+                        style={{ flexShrink: 0 }}
+                      />
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 15, fontWeight: 600, color: colors.gray900 }}>
+                          {s.name}
+                        </div>
+                        {s.address && (
+                          <div style={{ fontSize: 12.5, color: colors.gray500, marginTop: 3 }}>
+                            {s.address}
+                          </div>
+                        )}
+                        {s.accountManager?.name && (
+                          <div style={{ fontSize: 12.5, color: colors.gray700, marginTop: 5 }}>
+                            {s.accountManager.name}
+                            {s.accountManager.title ? `, ${s.accountManager.title}` : ''}
+                          </div>
+                        )}
+                      </div>
+                      {/* Radio, not a checkbox: a project has one showroom. */}
+                      <div
+                        style={{
+                          width: 22, height: 22, borderRadius: '50%', flexShrink: 0,
+                          border: `2px solid ${selected ? colors.darkBlue : colors.gray300}`,
+                          background: selected ? colors.darkBlue : '#fff',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        }}
+                      >
+                        {selected && <Check size={13} color="#fff" />}
+                      </div>
+                    </button>
+                  );
+                })}
               </div>
             </Step>
           )}
@@ -667,6 +777,14 @@ export default function ProSourceProjectCreate() {
                 <ReviewRow label="Project name" value={name || 'Not set'} />
                 <ReviewRow label="Type" value={type || 'Not set'} />
                 <ReviewRow label="Address" value={(address.street || address.city || address.zip) ? [address.street, address.city, address.state, address.zip].filter(Boolean).join(', ') : 'Not set'} />
+                {/* Only worth reviewing when it was a decision. With one
+                    showroom this row would just restate the obvious. */}
+                {multiShowroom && (
+                  <ReviewRow
+                    label="Showroom"
+                    value={showroomOptions.find((s) => s.id === showroomId)?.name || 'Not set'}
+                  />
+                )}
                 <ReviewRow label="Budget" value={budgetRange} />
                 <ReviewRow label="Target completion" value={targetCompletion || 'Not set'} />
                 <ReviewRow
@@ -826,6 +944,21 @@ const styles = {
     flexDirection: 'column',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  // A row, not a tile like typeCard: a showroom carries an address and an
+  // account manager, which want to read left to right against the icon.
+  showroomCard: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 14,
+    width: '100%',
+    border: '2px solid',
+    borderRadius: 12,
+    padding: '16px 16px',
+    cursor: 'pointer',
+    textAlign: 'left',
+    fontFamily: 'inherit',
+    transition: 'all 0.12s ease',
   },
   chipRow: {
     display: 'flex',
