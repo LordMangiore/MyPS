@@ -1,7 +1,15 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Check, ChevronRight, X, Plus } from 'lucide-react';
+import { ArrowLeft, Check, ChevronRight, X, Plus, Home } from 'lucide-react';
 import { useAuth } from './auth-context';
+import {
+  PROJECT_TYPES,
+  BUDGET_RANGES,
+  ROOM_OPTIONS,
+  DEFAULT_ROOMS_BY_TYPE,
+  makeRoom,
+  normalizeStored,
+} from './project-model';
 
 const colors = {
   red: '#BA0C2F',
@@ -17,32 +25,9 @@ const colors = {
   gray900: '#212529',
 };
 
-const PROJECT_TYPES = [
-  { value: 'Kitchen Remodel', label: 'Kitchen', emoji: '🍳' },
-  { value: 'Bathroom Remodel', label: 'Bathroom', emoji: '🛁' },
-  { value: 'Flooring', label: 'Flooring', emoji: '🪵' },
-  { value: 'Full Home Renovation', label: 'Whole home', emoji: '🏡' },
-  { value: 'New Construction', label: 'New build', emoji: '🏗️' },
-  { value: 'Commercial', label: 'Commercial', emoji: '🏢' },
-  { value: 'Countertops Only', label: 'Countertops', emoji: '🪨' },
-  { value: 'Cabinets Only', label: 'Cabinets', emoji: '🗄️' },
-  { value: 'Other', label: 'Other', emoji: '✨' },
-];
-
-const BUDGET_RANGES = [
-  'Under $5,000',
-  '$5,000 - $10,000',
-  '$10,000 - $15,000',
-  '$15,000 - $25,000',
-  '$25,000 - $50,000',
-  '$50,000 - $100,000',
-  '$100,000+',
-  'Not Sure Yet',
-];
-
 const STATES = ['MO', 'IL', 'TX', 'CA', 'FL', 'NY', 'NC', 'OH', 'PA', 'GA', 'WA', 'CO'];
 
-const stepIds = ['type', 'name', 'address', 'scope', 'team', 'review'];
+const stepIds = ['type', 'name', 'address', 'scope', 'rooms', 'team', 'review'];
 
 export default function ProSourceProjectCreate() {
   const { userId, userName, loadUserData, saveUserData } = useAuth();
@@ -57,6 +42,9 @@ export default function ProSourceProjectCreate() {
   const [address, setAddress] = useState({ street: '', city: '', state: 'MO', zip: '' });
   const [budgetRange, setBudgetRange] = useState('Not Sure Yet');
   const [targetCompletion, setTargetCompletion] = useState('');
+  const [rooms, setRooms] = useState([]);
+  const [touchedRooms, setTouchedRooms] = useState(false);
+  const [newRoomName, setNewRoomName] = useState('');
   const [connections, setConnections] = useState([]);
   const [teamSelections, setTeamSelections] = useState({}); // connectionId → bool
   const [saving, setSaving] = useState(false);
@@ -98,6 +86,31 @@ export default function ProSourceProjectCreate() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [suggestedName]);
 
+  // Seed rooms from the project type ("Kitchen Remodel" → a Kitchen room) until
+  // the user edits the list themselves.
+  useEffect(() => {
+    if (touchedRooms) return;
+    const defaults = DEFAULT_ROOMS_BY_TYPE[type] || [];
+    setRooms(defaults.reduce((acc, room) => [...acc, makeRoom(room, acc)], []));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [type]);
+
+  const addRoom = (roomName) => {
+    const trimmed = String(roomName || '').trim();
+    if (!trimmed) return;
+    setTouchedRooms(true);
+    setRooms((current) => {
+      if (current.some((r) => r.name.toLowerCase() === trimmed.toLowerCase())) return current;
+      return [...current, makeRoom(trimmed, current)];
+    });
+    setNewRoomName('');
+  };
+
+  const removeRoom = (roomId) => {
+    setTouchedRooms(true);
+    setRooms((current) => current.filter((r) => r.id !== roomId));
+  };
+
   const goNext = () => {
     setError('');
     if (stepIndex === stepIds.length - 1) return;
@@ -120,7 +133,7 @@ export default function ProSourceProjectCreate() {
     setError('');
     try {
       const stored = await loadUserData('projects', null);
-      const list = Array.isArray(stored?.list) ? stored.list : [];
+      const list = normalizeStored(stored);
       const id = `proj-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
       const now = Date.now();
       const team = connections
@@ -147,7 +160,8 @@ export default function ProSourceProjectCreate() {
         targetStart: '',
         targetCompletion,
         squareFootage: '',
-        rooms: [],
+        rooms,
+        products: [],
         notes: '',
         status: 'working',
         archived: false,
@@ -302,6 +316,91 @@ export default function ProSourceProjectCreate() {
             </Step>
           )}
 
+          {step === 'rooms' && (
+            <Step
+              eyebrow={`Step ${stepIndex + 1} of ${stepIds.length} · Optional`}
+              title="Which rooms are involved?"
+              sub="Rooms let you keep products, estimates, and photos organized by space. Add or remove any time."
+            >
+              {rooms.length > 0 && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 24 }}>
+                  {rooms.map((room) => (
+                    <div
+                      key={room.id}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: 12,
+                        padding: '12px 14px',
+                        border: `1.5px solid ${colors.gray200}`,
+                        borderRadius: 10,
+                        background: '#fff',
+                      }}
+                    >
+                      <Home size={16} color={colors.darkBlue} />
+                      <span style={{ flex: 1, fontSize: 14, fontWeight: 600, color: colors.gray900 }}>
+                        {room.name}
+                      </span>
+                      <button
+                        onClick={() => removeRoom(room.id)}
+                        title={`Remove ${room.name}`}
+                        style={{
+                          background: 'none', border: 'none', cursor: 'pointer',
+                          color: colors.gray500, display: 'flex', padding: 4,
+                        }}
+                      >
+                        <X size={16} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div style={{ display: 'flex', gap: 8, marginBottom: 24 }}>
+                <input
+                  type="text"
+                  value={newRoomName}
+                  onChange={(e) => setNewRoomName(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addRoom(newRoomName); } }}
+                  placeholder="Add a room — e.g. Butler's Pantry"
+                  style={{ ...styles.input, flex: 1 }}
+                />
+                <button
+                  onClick={() => addRoom(newRoomName)}
+                  disabled={!newRoomName.trim()}
+                  style={{
+                    ...styles.navBtnPrimary,
+                    padding: '10px 18px',
+                    display: 'inline-flex', alignItems: 'center', gap: 6,
+                    opacity: newRoomName.trim() ? 1 : 0.5,
+                    cursor: newRoomName.trim() ? 'pointer' : 'not-allowed',
+                  }}
+                >
+                  <Plus size={15} /> Add
+                </button>
+              </div>
+
+              <div style={styles.sectionLabel}>Common rooms</div>
+              <div style={styles.chipRow}>
+                {ROOM_OPTIONS
+                  .filter((option) => !rooms.some((r) => r.name.toLowerCase() === option.toLowerCase()))
+                  .map((option) => (
+                    <button
+                      key={option}
+                      onClick={() => addRoom(option)}
+                      style={{
+                        ...styles.chip,
+                        borderColor: colors.gray300,
+                        background: '#fff',
+                        color: colors.gray700,
+                        display: 'inline-flex', alignItems: 'center', gap: 5,
+                      }}
+                    >
+                      <Plus size={13} /> {option}
+                    </button>
+                  ))}
+              </div>
+            </Step>
+          )}
+
           {step === 'team' && (
             <Step
               eyebrow={`Step ${stepIndex + 1} of ${stepIds.length}`}
@@ -384,6 +483,10 @@ export default function ProSourceProjectCreate() {
                 <ReviewRow label="Budget" value={budgetRange} />
                 <ReviewRow label="Target completion" value={targetCompletion || 'Not set'} />
                 <ReviewRow
+                  label="Rooms"
+                  value={rooms.map((r) => r.name).join(', ') || 'None yet'}
+                />
+                <ReviewRow
                   label="Team"
                   value={
                     connections.filter((c) => teamSelections[c.id]).map((c) => c.name).join(', ') || 'No teammates yet'
@@ -425,8 +528,8 @@ export default function ProSourceProjectCreate() {
                   cursor: stepValid() ? 'pointer' : 'not-allowed',
                 }}
               >
-                {(step === 'address' || step === 'scope') && 'Skip / Continue →'}
-                {step !== 'address' && step !== 'scope' && 'Continue →'}
+                {(step === 'address' || step === 'scope' || step === 'rooms') && 'Skip / Continue →'}
+                {step !== 'address' && step !== 'scope' && step !== 'rooms' && 'Continue →'}
               </button>
             )}
           </div>

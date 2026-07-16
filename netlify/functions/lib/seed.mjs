@@ -41,6 +41,30 @@ const fmtRelativeTimestamp = (ts) => {
   return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 };
 
+// Rooms are real entities: { id, name, type?, squareFootage?, notes?, createdAt }.
+// The id must match `roomIdFromName` in src/project-model.js — that's the
+// contract that lets the client migrate legacy string rooms onto the same ids.
+const room = (name, createdAt, extra = {}) => ({
+  id: `room-${name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')}`,
+  name,
+  createdAt,
+  ...extra,
+});
+
+// Product lines on a project. Shape mirrors the shop's cart snapshot plus a
+// roomId (null = Unassigned). SKUs match the storefront catalog's
+// `sku-<productId>` convention, so re-adding one of these from /shop merges
+// into the existing line instead of duplicating it.
+const product = (fields) => ({ qty: 1, roomId: null, ...fields });
+
+const IMG = {
+  oak: 'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=500&h=500&fit=crop',
+  lvp: 'https://images.unsplash.com/photo-1581858726788-75bc0f6a952d?w=500&h=500&fit=crop',
+  tile: 'https://images.unsplash.com/photo-1600566753190-17f0baa2a6c3?w=500&h=500&fit=crop',
+  quartz: 'https://images.unsplash.com/photo-1600585152220-90363fe7e115?w=500&h=500&fit=crop',
+  cabinet: 'https://images.unsplash.com/photo-1600489000022-c2086d79f9d4?w=500&h=500&fit=crop',
+};
+
 // Project seed builder. IDs are stable per call so seeded messages can
 // cross-reference projects via projectId.
 const buildSeedProjects = (now) => {
@@ -80,7 +104,38 @@ const buildSeedProjects = (now) => {
           targetStart: new Date(now + days(7)).toISOString().slice(0, 10),
           targetCompletion: new Date(now + days(75)).toISOString().slice(0, 10),
           squareFootage: "180",
-          rooms: ["Kitchen", "Pantry"],
+          rooms: [
+            room('Kitchen', now - days(14), { type: 'Kitchen', squareFootage: '180', notes: 'Sight-line to dining stays open — no upper cabinets on the south wall.' }),
+            room('Pantry', now - days(12), { type: 'Pantry', squareFootage: '32' }),
+          ],
+          products: [
+            product({
+              id: 'prod-006', sku: 'sku-prod-006', name: 'KraftMaid Durham Maple Shaker Cabinet',
+              brand: 'KraftMaid', category: 'Cabinets', colorName: 'Dove White',
+              price: 485.0, unit: 'EA', qty: 14, image: IMG.cabinet,
+              roomId: 'room-kitchen', addedAt: now - days(9),
+            }),
+            product({
+              id: 'prod-005', sku: 'sku-prod-005', name: 'Silestone Calacatta Gold Quartz Countertop',
+              brand: 'Silestone', category: 'Countertops', colorName: 'Calacatta Gold',
+              price: 72.0, unit: 'SF', qty: 46, image: IMG.quartz,
+              roomId: 'room-kitchen', addedAt: now - days(8),
+            }),
+            product({
+              id: 'prod-003', sku: 'sku-prod-003', name: 'Daltile Perpetuo Porcelain Floor Tile 12x24',
+              brand: 'Daltile', category: 'Tile & Stone', colorName: 'Brilliant White',
+              price: 6.49, unit: 'SF', sfPerBox: 15.6, qty: 3, image: IMG.tile,
+              roomId: 'room-pantry', addedAt: now - days(6),
+            }),
+            // Deliberately unassigned — shows the "Unassigned" group and gives
+            // the demo something to drag into a room.
+            product({
+              id: 'prod-002', sku: 'sku-prod-002', name: 'COREtec Pro Plus Enhanced Luxury Vinyl Plank',
+              brand: 'COREtec', category: 'LVP / LVT', colorName: 'Pembroke Pine',
+              price: 4.99, unit: 'SF', sfPerBox: 36.64, qty: 2, image: IMG.lvp,
+              roomId: null, addedAt: now - days(2),
+            }),
+          ],
           notes:
             "Client prefers appointments after 2pm. Dog in backyard — use side gate.",
           status: "working",
@@ -104,7 +159,23 @@ const buildSeedProjects = (now) => {
           targetStart: new Date(now - days(95)).toISOString().slice(0, 10),
           targetCompletion: new Date(now - days(20)).toISOString().slice(0, 10),
           squareFootage: "90",
-          rooms: ["Master Bathroom"],
+          rooms: [
+            room('Master Bathroom', now - days(110), { type: 'Bathroom', squareFootage: '90', notes: 'Curbless shower — floor slopes to the linear drain.' }),
+          ],
+          products: [
+            product({
+              id: 'prod-003', sku: 'sku-prod-003', name: 'Daltile Perpetuo Porcelain Floor Tile 12x24',
+              brand: 'Daltile', category: 'Tile & Stone', colorName: 'Brilliant White',
+              price: 6.49, unit: 'SF', sfPerBox: 15.6, qty: 7, image: IMG.tile,
+              roomId: 'room-master-bathroom', addedAt: now - days(80),
+            }),
+            product({
+              id: 'prod-005', sku: 'sku-prod-005', name: 'Silestone Calacatta Gold Quartz Countertop',
+              brand: 'Silestone', category: 'Countertops', colorName: 'Calacatta Gold',
+              price: 72.0, unit: 'SF', qty: 12, image: IMG.quartz,
+              roomId: 'room-master-bathroom', addedAt: now - days(78),
+            }),
+          ],
           notes:
             "Client has been great. Watch for tile manufacturer recall on the wall mosaic — bumped to v2 lot.",
           status: "complete",
@@ -128,7 +199,24 @@ const buildSeedProjects = (now) => {
           targetStart: new Date(now - days(200)).toISOString().slice(0, 10),
           targetCompletion: new Date(now - days(95)).toISOString().slice(0, 10),
           squareFootage: "640",
-          rooms: ["Outdoor/Patio"],
+          rooms: [
+            room('Outdoor/Patio', now - days(220), { type: 'Outdoor', squareFootage: '520' }),
+            room('Grill Island', now - days(210), { type: 'Outdoor', squareFootage: '120' }),
+          ],
+          products: [
+            product({
+              id: 'prod-003', sku: 'sku-prod-003', name: 'Daltile Perpetuo Porcelain Floor Tile 12x24',
+              brand: 'Daltile', category: 'Tile & Stone', colorName: 'Brilliant White',
+              price: 6.49, unit: 'SF', sfPerBox: 15.6, qty: 34, image: IMG.tile,
+              roomId: 'room-outdoor-patio', addedAt: now - days(180),
+            }),
+            product({
+              id: 'prod-005', sku: 'sku-prod-005', name: 'Silestone Calacatta Gold Quartz Countertop',
+              brand: 'Silestone', category: 'Countertops', colorName: 'Calacatta Gold',
+              price: 72.0, unit: 'SF', qty: 18, image: IMG.quartz,
+              roomId: 'room-grill-island', addedAt: now - days(175),
+            }),
+          ],
           notes:
             "Owner okayed photos for our public profile and ProSource case study.",
           status: "published",
@@ -485,16 +573,30 @@ const buildSeedCarts = (now, projectIds, displayName) => {
     list: [
       {
         id: `cart-${now}-beans-lvp`,
-        name: 'Beans Kitchen — LVP Samples',
+        name: 'Beans Kitchen — Flooring Options',
         projectId: projectIds.working || null,
         updatedAt: fmt(now - days(2)),
         updatedAtTs: now - days(2),
         updatedBy: displayName,
         itemCount: 3,
+        // Catalog-aligned: loading this cart and saving it to a project drops
+        // real, room-assignable product cards on the project's Products tab.
         products: [
-          { id: 1, name: 'Shaw Greige Oak LVP', sku: 'SH-GO-LVP', category: 'Flooring', qty: 1, price: 0 },
-          { id: 2, name: 'Shaw Smoked Walnut LVP', sku: 'SH-SW-LVP', category: 'Flooring', qty: 1, price: 0 },
-          { id: 3, name: 'Daltile Mission Stone 12x24 Gray', sku: 'MS-T1224-GR', category: 'Tile', qty: 1, price: 0 },
+          {
+            id: 'prod-002', sku: 'sku-prod-002', name: 'COREtec Pro Plus Enhanced Luxury Vinyl Plank',
+            brand: 'COREtec', category: 'LVP / LVT', colorName: 'Pembroke Pine',
+            qty: 1, price: 4.99, unit: 'SF', sfPerBox: 36.64, image: IMG.lvp, isSample: true,
+          },
+          {
+            id: 'prod-001', sku: 'sku-prod-001', name: 'Factory Direct Pier Engineered 6-3/8" Oak Hardwood Flooring',
+            brand: 'Factory Direct', category: 'Hardwood', colorName: 'Strawthorne Oak',
+            qty: 1, price: 7.6, unit: 'SF', sfPerBox: 32.81, image: IMG.oak, isSample: true,
+          },
+          {
+            id: 'prod-003', sku: 'sku-prod-003', name: 'Daltile Perpetuo Porcelain Floor Tile 12x24',
+            brand: 'Daltile', category: 'Tile & Stone', colorName: 'Brilliant White',
+            qty: 1, price: 6.49, unit: 'SF', sfPerBox: 15.6, image: IMG.tile, isSample: true,
+          },
         ],
       },
       {

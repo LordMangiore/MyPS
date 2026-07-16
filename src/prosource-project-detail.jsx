@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useAuth } from './auth-context';
 import {
   FileText,
@@ -23,12 +23,28 @@ import {
   Home,
   Circle,
   Image,
+  Minus,
   MoreHorizontal,
   Archive,
   Edit2,
   Trash2,
   ArrowRight
 } from 'lucide-react';
+import {
+  DEFAULT_PROJECT,
+  PROJECT_TYPE_VALUES,
+  BUDGET_RANGES,
+  ROOM_OPTIONS,
+  normalizeStored,
+  makeRoom,
+  removeRoomFromProject,
+  renameRoomInProject,
+  groupProductsByRoom,
+  moveProductToRoom,
+  setProductQty,
+  removeProductAt,
+  countProductsInRoom,
+} from './project-model';
 
 // ProSource Brand Colors
 const colors = {
@@ -44,9 +60,16 @@ const colors = {
   gray900: '#212529',
 };
 
+const TAB_IDS = ['overview', 'products', 'designs', 'photos', 'estimates', 'activity'];
+
 export default function ProjectDetailPage() {
   const { loadUserData, saveUserData, userId, userName, accountManager } = useAuth();
-  const [activeTab, setActiveTab] = useState('overview');
+  // ?tab=products lets the shop's save-to-project flow land on the right tab.
+  const [searchParams] = useSearchParams();
+  const requestedTab = searchParams.get('tab');
+  const [activeTab, setActiveTab] = useState(
+    TAB_IDS.includes(requestedTab) ? requestedTab : 'overview'
+  );
   const [isEditingDetails, setIsEditingDetails] = useState(false);
   const [editingTitle, setEditingTitle] = useState(false);
   const [projectStatus, setProjectStatus] = useState('working'); // working, complete, published
@@ -80,39 +103,9 @@ export default function ProjectDetailPage() {
     }
   }, [activeTab, unreadActivity]);
 
-  const DEFAULT_PROJECT = {
-    name: 'New Project',
-    type: 'Kitchen Remodel',
-    description: '',
-    address: '',
-    budgetRange: 'Not Sure Yet',
-    targetStart: '',
-    targetCompletion: '',
-    squareFootage: '',
-    rooms: [],
-    notes: '',
-  };
-
   const [projectData, setProjectData] = useState(DEFAULT_PROJECT);
   const [projectList, setProjectList] = useState([]); // full collection
   const [loadedProject, setLoadedProject] = useState(false);
-
-  // Normalize the blob into a flat array, migrating the old single-project shape.
-  const normalizeStored = (stored) => {
-    if (!stored) return [];
-    if (Array.isArray(stored.list)) return stored.list;
-    if (stored.project) {
-      return [{
-        id: 'legacy-' + Date.now(),
-        ...stored.project,
-        status: stored.status || 'working',
-        archived: !!stored.archived,
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
-      }];
-    }
-    return [];
-  };
 
   // Load persisted projects on mount, hydrate the one matching the URL :id.
   // For /projects/new (or no id) we stay on defaults until first save.
@@ -377,49 +370,83 @@ export default function ProjectDetailPage() {
       ' at ' + d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
   };
 
-  const projectTypes = [
-    'Kitchen Remodel',
-    'Bathroom Remodel', 
-    'Flooring',
-    'Full Home Renovation',
-    'New Construction',
-    'Commercial',
-    'Countertops Only',
-    'Cabinets Only',
-    'Other',
-  ];
+  // -------- Rooms + products --------
+  const rooms = projectData.rooms || [];
+  const products = projectData.products || [];
 
-  const budgetRanges = [
-    'Under $5,000',
-    '$5,000 - $10,000',
-    '$10,000 - $15,000',
-    '$15,000 - $25,000',
-    '$25,000 - $50,000',
-    '$50,000 - $100,000',
-    '$100,000+',
-    'Not Sure Yet',
-  ];
+  const [newRoomName, setNewRoomName] = useState('');
+  const [renamingRoomId, setRenamingRoomId] = useState(null);
+  const [renameDraft, setRenameDraft] = useState('');
 
-  const roomOptions = [
-    'Kitchen',
-    'Master Bathroom',
-    'Guest Bathroom',
-    'Living Room',
-    'Dining Room',
-    'Master Bedroom',
-    'Bedroom',
-    'Basement',
-    'Laundry Room',
-    'Pantry',
-    'Mudroom',
-    'Office',
-    'Whole Home',
-    'Outdoor/Patio',
-  ];
+  /**
+   * Narrow write: re-read the collection, patch ONLY this project, save.
+   * Rooms and products change from three different pages, so writing back a
+   * list we loaded on mount would clobber concurrent edits. Drafts that have
+   * never been saved (no projectId) stay local — persistProject picks them up.
+   */
+  const persistProjectFields = async (fields) => {
+    setProjectData((current) => ({ ...current, ...fields }));
+    if (!userId || !projectId) return;
+    try {
+      const stored = await loadUserData('projects', null);
+      const list = normalizeStored(stored);
+      const next = list.map((p) =>
+        p.id === projectId ? { ...p, ...fields, updatedAt: Date.now() } : p
+      );
+      await saveUserData('projects', { list: next });
+      setProjectList(next);
+    } catch (err) {
+      alert(`Could not save project: ${err.message}`);
+    }
+  };
+
+  const addRoom = (name) => {
+    const trimmed = String(name || '').trim();
+    if (!trimmed) return;
+    if (rooms.some((r) => r.name.toLowerCase() === trimmed.toLowerCase())) {
+      setNewRoomName('');
+      return;
+    }
+    persistProjectFields({ rooms: [...rooms, makeRoom(trimmed, rooms)] });
+    setNewRoomName('');
+  };
+
+  const removeRoom = (room) => {
+    const attached = countProductsInRoom(products, room.id);
+    if (attached > 0) {
+      const ok = window.confirm(
+        `Remove "${room.name}"?\n\n${attached} product${attached !== 1 ? 's' : ''} ` +
+        `will move to Unassigned — nothing is deleted.`
+      );
+      if (!ok) return;
+    }
+    persistProjectFields(removeRoomFromProject(projectData, room.id));
+  };
+
+  const commitRename = (roomId) => {
+    const name = renameDraft.trim();
+    setRenamingRoomId(null);
+    if (!name) return;
+    persistProjectFields(renameRoomInProject(projectData, roomId, name));
+  };
+
+  const changeProductQty = (index, delta) => {
+    const current = products[index];
+    if (!current) return;
+    persistProjectFields({ products: setProductQty(products, index, (current.qty || 1) + delta) });
+  };
+
+  const moveProduct = (index, roomId) => {
+    persistProjectFields({ products: moveProductToRoom(products, index, roomId || null) });
+  };
+
+  const removeProduct = (index) => {
+    persistProjectFields({ products: removeProductAt(products, index) });
+  };
 
   const tabs = [
     { id: 'overview', label: 'Overview', icon: FileText },
-    { id: 'products', label: 'Products', icon: ShoppingCart, count: 1 },
+    { id: 'products', label: 'Products', icon: ShoppingCart, count: products.length || null },
     { id: 'designs', label: 'Designs', icon: Palette },
     { id: 'photos', label: 'Photos', icon: Camera },
     { id: 'estimates', label: 'Estimates & Orders', icon: FileText },
@@ -876,15 +903,81 @@ export default function ProjectDetailPage() {
       fontWeight: 500,
       textAlign: 'right',
     },
-    roomTag: {
-      display: 'inline-block',
-      padding: '4px 10px',
+    // Rooms
+    roomRow: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: 12,
+      padding: '10px 14px',
       background: colors.gray100,
-      borderRadius: 4,
-      fontSize: 12,
+      border: `1px solid ${colors.gray200}`,
+      borderRadius: 8,
+    },
+    roomIconBtn: {
+      background: 'none',
+      border: 'none',
+      cursor: 'pointer',
+      color: colors.gray500,
+      display: 'flex',
+      alignItems: 'center',
+      padding: 4,
+    },
+    roomSuggestion: {
+      display: 'inline-flex',
+      alignItems: 'center',
+      gap: 4,
+      padding: '6px 12px',
+      background: '#fff',
       color: colors.gray700,
-      marginRight: 6,
-      marginBottom: 6,
+      border: `1px solid ${colors.gray300}`,
+      borderRadius: 999,
+      fontSize: 13,
+      cursor: 'pointer',
+      fontFamily: 'inherit',
+      transition: 'all 0.15s ease',
+    },
+    // Products
+    roomGroupHeader: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: 10,
+      margin: '0 0 12px',
+      paddingBottom: 8,
+      borderBottom: `1px solid ${colors.gray200}`,
+    },
+    roomGroupTitle: {
+      fontSize: 15,
+      fontWeight: 600,
+      color: colors.gray900,
+      margin: 0,
+    },
+    roomGroupCount: {
+      fontSize: 12,
+      color: colors.gray500,
+    },
+    productSelect: {
+      width: '100%',
+      padding: '6px 8px',
+      border: `1px solid ${colors.gray300}`,
+      borderRadius: 6,
+      fontSize: 12,
+      fontFamily: 'inherit',
+      background: '#fff',
+      cursor: 'pointer',
+      color: colors.gray700,
+    },
+    qtyBtn: {
+      width: 28,
+      height: 28,
+      border: `1px solid ${colors.gray300}`,
+      background: '#fff',
+      borderRadius: 6,
+      cursor: 'pointer',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      color: colors.gray700,
+      padding: 0,
     },
     // Inspiration grid
     inspirationGrid: {
@@ -904,6 +997,78 @@ export default function ProjectDetailPage() {
       transition: 'all 0.15s ease',
     },
   };
+
+  // One saved product line. `index` is its position in projectData.products —
+  // that's the handle every edit writes back through.
+  const renderProductCard = (product, index) => (
+    <div key={`${index}-${product.sku || product.id}`} style={{ ...styles.productCard, cursor: 'default' }}>
+      <div style={styles.productImage}>
+        {product.image ? (
+          <img
+            src={product.image}
+            alt=""
+            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+          />
+        ) : (
+          <Image size={48} color={colors.gray300} />
+        )}
+      </div>
+      <div style={styles.productInfo}>
+        <div style={styles.productName}>
+          {product.isSample && (
+            <span style={{
+              fontSize: 10, fontWeight: 700, color: colors.darkBlue, background: '#e3f2fd',
+              padding: '2px 6px', borderRadius: 3, marginRight: 6,
+            }}>SAMPLE</span>
+          )}
+          {product.name}
+        </div>
+        <div style={styles.productMeta}>
+          {[product.category, product.colorName].filter(Boolean).join(' • ') || '—'}
+        </div>
+        <div style={{ fontSize: 13, color: colors.gray700, marginTop: 6 }}>
+          {product.isSample
+            ? 'Product sample'
+            : product.price != null
+              ? `List: $${Number(product.price).toFixed(2)}${product.unit ? ` /${product.unit}` : ''}`
+              : 'To be quoted'}
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, margin: '12px 0 10px' }}>
+          <button
+            style={styles.qtyBtn}
+            title="Decrease quantity"
+            onClick={() => changeProductQty(index, -1)}
+          ><Minus size={13} /></button>
+          <span style={{ minWidth: 28, textAlign: 'center', fontSize: 13, fontWeight: 600, color: colors.gray900 }}>
+            {product.qty || 1}
+          </span>
+          <button
+            style={styles.qtyBtn}
+            title="Increase quantity"
+            onClick={() => changeProductQty(index, 1)}
+          ><Plus size={13} /></button>
+          <button
+            style={{ ...styles.qtyBtn, marginLeft: 'auto', borderColor: colors.red, color: colors.red }}
+            title={`Remove ${product.name} from this project`}
+            onClick={() => removeProduct(index)}
+          ><Trash2 size={13} /></button>
+        </div>
+
+        <select
+          style={styles.productSelect}
+          value={product.roomId || ''}
+          onChange={(e) => moveProduct(index, e.target.value)}
+          title="Move to a room"
+        >
+          <option value="">Unassigned</option>
+          {rooms.map((room) => (
+            <option key={room.id} value={room.id}>{room.name}</option>
+          ))}
+        </select>
+      </div>
+    </div>
+  );
 
   return (
     <div style={styles.wrapper}>
@@ -1065,7 +1230,15 @@ export default function ProjectDetailPage() {
                       <button
                         style={{ ...styles.btnOutline, ...styles.btnSmall }}
                         onClick={() => {
-                          if (snapshot) setProjectData(snapshot);
+                          // Rooms + products are edited outside this buffer and
+                          // persist on their own — don't roll them back here.
+                          if (snapshot) {
+                            setProjectData((current) => ({
+                              ...snapshot,
+                              rooms: current.rooms,
+                              products: current.products,
+                            }));
+                          }
                           setSnapshot(null);
                           setIsEditingDetails(false);
                         }}
@@ -1140,17 +1313,8 @@ export default function ProjectDetailPage() {
                         </div>
                       </div>
 
-                      {/* Rooms */}
-                      <div style={{ marginTop: 20, paddingTop: 16, borderTop: `1px solid ${colors.gray200}` }}>
-                        <div style={{ fontSize: 12, fontWeight: 600, color: colors.gray500, textTransform: 'uppercase', marginBottom: 10 }}>
-                          Rooms / Areas
-                        </div>
-                        <div>
-                          {projectData.rooms.map((room, i) => (
-                            <span key={i} style={styles.roomTag}>{room}</span>
-                          ))}
-                        </div>
-                      </div>
+                      {/* Rooms live in their own card below — they're real
+                          entities now, not a checkbox tag list. */}
 
                       {/* Notes */}
                       {projectData.notes && (
@@ -1185,7 +1349,7 @@ export default function ProjectDetailPage() {
                             value={projectData.type}
                             onChange={(e) => setProjectData({...projectData, type: e.target.value})}
                           >
-                            {projectTypes.map(type => (
+                            {PROJECT_TYPE_VALUES.map(type => (
                               <option key={type} value={type}>{type}</option>
                             ))}
                           </select>
@@ -1197,7 +1361,7 @@ export default function ProjectDetailPage() {
                             value={projectData.budgetRange}
                             onChange={(e) => setProjectData({...projectData, budgetRange: e.target.value})}
                           >
-                            {budgetRanges.map(range => (
+                            {BUDGET_RANGES.map(range => (
                               <option key={range} value={range}>{range}</option>
                             ))}
                           </select>
@@ -1249,43 +1413,6 @@ export default function ProjectDetailPage() {
                       </div>
 
                       <div style={styles.formGroup}>
-                        <label style={styles.formLabel}>Rooms / Areas Involved</label>
-                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                          {roomOptions.map(room => (
-                            <label 
-                              key={room}
-                              style={{
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: 6,
-                                padding: '6px 12px',
-                                background: projectData.rooms.includes(room) ? colors.darkBlue : colors.gray100,
-                                color: projectData.rooms.includes(room) ? '#fff' : colors.gray700,
-                                borderRadius: 4,
-                                fontSize: 13,
-                                cursor: 'pointer',
-                                transition: 'all 0.15s ease',
-                              }}
-                            >
-                              <input 
-                                type="checkbox" 
-                                checked={projectData.rooms.includes(room)}
-                                onChange={(e) => {
-                                  if (e.target.checked) {
-                                    setProjectData({...projectData, rooms: [...projectData.rooms, room]});
-                                  } else {
-                                    setProjectData({...projectData, rooms: projectData.rooms.filter(r => r !== room)});
-                                  }
-                                }}
-                                style={{ display: 'none' }}
-                              />
-                              {room}
-                            </label>
-                          ))}
-                        </div>
-                      </div>
-
-                      <div style={styles.formGroup}>
                         <label style={styles.formLabel}>Notes (access info, pets, scheduling preferences)</label>
                         <textarea 
                           style={{ ...styles.formTextarea, minHeight: 60 }}
@@ -1295,6 +1422,125 @@ export default function ProjectDetailPage() {
                         />
                       </div>
                     </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Rooms & Areas — real entities. Products hang off these. */}
+              <div style={{ ...styles.card, marginBottom: 24 }}>
+                <div style={styles.cardHeader}>
+                  <h3 style={styles.cardTitle}>Rooms &amp; Areas</h3>
+                  <span style={{ fontSize: 13, color: colors.gray500 }}>
+                    {rooms.length > 0
+                      ? `${rooms.length} room${rooms.length !== 1 ? 's' : ''}`
+                      : '—'}
+                  </span>
+                </div>
+                <div style={styles.cardBody}>
+                  {rooms.length === 0 ? (
+                    <p style={{ fontSize: 14, color: colors.gray500, fontStyle: 'italic', margin: '0 0 16px' }}>
+                      No rooms yet. Add the spaces you're working on to organize products by room.
+                    </p>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }}>
+                      {rooms.map((room) => {
+                        const attached = countProductsInRoom(products, room.id);
+                        const isRenaming = renamingRoomId === room.id;
+                        return (
+                          <div key={room.id} style={styles.roomRow}>
+                            <Home size={16} color={colors.darkBlue} />
+                            {isRenaming ? (
+                              <input
+                                autoFocus
+                                value={renameDraft}
+                                onChange={(e) => setRenameDraft(e.target.value)}
+                                onBlur={() => commitRename(room.id)}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') commitRename(room.id);
+                                  if (e.key === 'Escape') setRenamingRoomId(null);
+                                }}
+                                style={{
+                                  flex: 1, fontSize: 14, fontWeight: 600, color: colors.gray900,
+                                  padding: '4px 8px', border: `2px solid ${colors.darkBlue}`,
+                                  borderRadius: 6, outline: 'none', fontFamily: 'inherit',
+                                }}
+                              />
+                            ) : (
+                              <>
+                                <span style={{ flex: 1, fontSize: 14, fontWeight: 600, color: colors.gray900 }}>
+                                  {room.name}
+                                </span>
+                                <span style={{ fontSize: 12, color: colors.gray500 }}>
+                                  {attached > 0
+                                    ? `${attached} product${attached !== 1 ? 's' : ''}`
+                                    : 'No products'}
+                                </span>
+                                <button
+                                  title={`Rename ${room.name}`}
+                                  onClick={() => { setRenamingRoomId(room.id); setRenameDraft(room.name); }}
+                                  style={styles.roomIconBtn}
+                                >
+                                  <Pencil size={14} />
+                                </button>
+                                <button
+                                  title={`Remove ${room.name}`}
+                                  onClick={() => removeRoom(room)}
+                                  style={{ ...styles.roomIconBtn, color: colors.red }}
+                                >
+                                  <X size={15} />
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+                    <input
+                      type="text"
+                      value={newRoomName}
+                      onChange={(e) => setNewRoomName(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === 'Enter') addRoom(newRoomName); }}
+                      placeholder="Add a room — any name works"
+                      style={{ ...styles.formInput, flex: 1 }}
+                    />
+                    <button
+                      onClick={() => addRoom(newRoomName)}
+                      style={{
+                        ...styles.btnPrimary, ...styles.btnSmall,
+                        opacity: newRoomName.trim() ? 1 : 0.5,
+                        cursor: newRoomName.trim() ? 'pointer' : 'not-allowed',
+                        whiteSpace: 'nowrap',
+                      }}
+                      disabled={!newRoomName.trim()}
+                    >
+                      <Plus size={14} /> Add Room
+                    </button>
+                  </div>
+
+                  {ROOM_OPTIONS.some((o) => !rooms.some((r) => r.name.toLowerCase() === o.toLowerCase())) && (
+                    <>
+                      <div style={{ fontSize: 12, fontWeight: 600, color: colors.gray500, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 8 }}>
+                        Quick add
+                      </div>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                        {ROOM_OPTIONS
+                          .filter((option) => !rooms.some((r) => r.name.toLowerCase() === option.toLowerCase()))
+                          .map((option) => (
+                            <button
+                              key={option}
+                              onClick={() => addRoom(option)}
+                              style={styles.roomSuggestion}
+                              onMouseOver={(e) => { e.currentTarget.style.borderColor = colors.darkBlue; e.currentTarget.style.color = colors.darkBlue; }}
+                              onMouseOut={(e) => { e.currentTarget.style.borderColor = colors.gray300; e.currentTarget.style.color = colors.gray700; }}
+                            >
+                              <Plus size={12} /> {option}
+                            </button>
+                          ))}
+                      </div>
+                    </>
                   )}
                 </div>
               </div>
@@ -1778,54 +2024,51 @@ export default function ProjectDetailPage() {
                 </p>
               </div>
               <div className="flex flex-wrap gap-2 shrink-0">
-                <button className="whitespace-nowrap" style={styles.btnOutline}>+ Add Product</button>
+                <button
+                  className="whitespace-nowrap"
+                  style={styles.btnOutline}
+                  onClick={() => navigate('/shop')}
+                >
+                  <Plus size={14} /> Add Product
+                </button>
                 <button className="whitespace-nowrap" style={styles.btnPrimary}>Request Estimate</button>
               </div>
             </div>
 
-            <div style={styles.productsGrid}>
-              <div 
-                style={styles.productCard}
-                onMouseOver={(e) => {
-                  e.currentTarget.style.borderColor = colors.darkBlue;
-                  e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.08)';
-                }}
-                onMouseOut={(e) => {
-                  e.currentTarget.style.borderColor = colors.gray200;
-                  e.currentTarget.style.boxShadow = 'none';
-                }}
-              >
-                <div style={styles.productImage}>
-                  <Image size={48} color={colors.gray300} />
-                </div>
-                <div style={styles.productInfo}>
-                  <div style={styles.productName}>Top Knobs Garrison Knob 1 1/4" Polished Nickel</div>
-                  <div style={styles.productMeta}>Cabinet Hardware • Knobs</div>
-                  <a style={{ ...styles.editLink, fontSize: 13, marginTop: 8, display: 'inline-block' }}>
-                    View Product Detail →
-                  </a>
-                </div>
+            {products.length === 0 ? (
+              <div style={styles.emptyState}>
+                <div style={styles.emptyIcon}><ShoppingCart size={48} color={colors.gray300} /></div>
+                <h3 style={styles.emptyTitle}>No Products Yet</h3>
+                <p style={styles.emptyText}>
+                  Browse the catalog and save products to this project. They'll show up here
+                  grouped by room so you can see exactly what's going where.
+                </p>
+                <button style={styles.btnPrimary} onClick={() => navigate('/shop')}>
+                  Browse Products
+                </button>
               </div>
-
-              {/* Add Product Card */}
-              <div 
-                style={{ 
-                  ...styles.productCard, 
-                  border: `2px dashed ${colors.gray300}`,
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  padding: 32,
-                  cursor: 'pointer',
-                }}
-                onMouseOver={(e) => e.currentTarget.style.borderColor = colors.darkBlue}
-                onMouseOut={(e) => e.currentTarget.style.borderColor = colors.gray300}
-              >
-                <span style={{ fontSize: 32, marginBottom: 8 }}>+</span>
-                <span style={{ fontSize: 14, color: colors.gray500 }}>Add Product</span>
-              </div>
-            </div>
+            ) : (
+              groupProductsByRoom(projectData).map(({ room, items }) => (
+                <section key={room ? room.id : 'unassigned'} style={{ marginBottom: 32 }}>
+                  <div style={styles.roomGroupHeader}>
+                    <Home size={16} color={room ? colors.darkBlue : colors.gray500} />
+                    <h3 style={styles.roomGroupTitle}>{room ? room.name : 'Unassigned'}</h3>
+                    <span style={styles.roomGroupCount}>
+                      {items.length} item{items.length !== 1 ? 's' : ''}
+                    </span>
+                  </div>
+                  {items.length === 0 ? (
+                    <div style={{ fontSize: 13, color: colors.gray500, fontStyle: 'italic' }}>
+                      Nothing assigned to this room yet.
+                    </div>
+                  ) : (
+                    <div style={styles.productsGrid}>
+                      {items.map(({ product, index }) => renderProductCard(product, index))}
+                    </div>
+                  )}
+                </section>
+              ))
+            )}
           </div>
         )}
 

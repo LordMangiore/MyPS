@@ -12,6 +12,7 @@ import {
 } from './guest-cart';
 import { useAuth } from './auth-context';
 import QuoteWizard from './prosource-quote-wizard';
+import { normalizeStored, mergeCartItemsIntoProducts } from './project-model';
 
 const colors = {
   red: '#BA0C2F',
@@ -260,12 +261,16 @@ export default function ProSourceShop() {
   // Build a flat, self-contained cart item from a product so it renders on
   // /carts without re-fetching the product catalog.
   const productSku = (product) => product.sku || `sku-${product.id}`;
+  // Catalog products carry `listPrice`; admin/cart shapes use `price`. Reading
+  // only `price` here silently dropped the list price on every single item.
   const snapshotProduct = (product, qty) => ({
     id: product.id,
     sku: productSku(product),
     name: product.name,
+    brand: product.brand,
     category: product.category,
-    price: product.price,
+    price: product.listPrice ?? product.price ?? null,
+    unit: product.unit,
     qty,
     image: product.image,
     colorName: product.colorName,
@@ -340,6 +345,9 @@ export default function ProSourceShop() {
   const [projectsForSave, setProjectsForSave] = useState([]);
   const [projectsLoaded, setProjectsLoaded] = useState(false);
   const [saveProjectOpen, setSaveProjectOpen] = useState(false);
+  const [addToProjectOpen, setAddToProjectOpen] = useState(false);
+  // Save-to-project is two-stage: pick a project, then pick a room inside it.
+  const [pickerProject, setPickerProject] = useState(null);
   const [savingToProjectId, setSavingToProjectId] = useState(null);
   const [saveError, setSaveError] = useState('');
 
@@ -348,7 +356,9 @@ export default function ProSourceShop() {
     let cancelled = false;
     loadUserData('projects', null).then((stored) => {
       if (cancelled) return;
-      const list = Array.isArray(stored?.list) ? stored.list : [];
+      // normalizeStored migrates legacy string rooms so the room picker below
+      // always sees real room objects.
+      const list = normalizeStored(stored);
       // Only show non-archived working projects in the picker.
       setProjectsForSave(list.filter((p) => !p.archived));
       setProjectsLoaded(true);
@@ -357,47 +367,54 @@ export default function ProSourceShop() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId]);
 
-  const saveCartToProject = async (project) => {
-    if (!userId || !project) return;
+  const closePickers = () => {
+    setSaveProjectOpen(false);
+    setAddToProjectOpen(false);
+    setPickerProject(null);
+  };
+
+  /**
+   * Append items to a project, optionally pinned to one of its rooms.
+   * Re-reads the collection right before writing (three pages write this blob)
+   * and keeps the FULL item snapshot — image, colorName, sfPerBox and all.
+   */
+  const saveItemsToProject = async (project, roomId, items, { clearCart = false } = {}) => {
+    if (!userId || !project || !items || items.length === 0) return;
     setSavingToProjectId(project.id);
     setSaveError('');
     try {
       const stored = await loadUserData('projects', null);
-      const list = Array.isArray(stored?.list) ? stored.list : [];
-      const next = list.map((p) => {
-        if (p.id !== project.id) return p;
-        const existingProducts = Array.isArray(p.products) ? p.products : [];
-        const merged = [...existingProducts];
-        // Merge by SKU so adding the same item twice bumps qty instead of dupes.
-        quoteCart.forEach((item) => {
-          const key = item.sku || String(item.id);
-          const hit = merged.findIndex((x) => (x.sku || String(x.id)) === key);
-          if (hit >= 0) {
-            merged[hit] = { ...merged[hit], qty: (merged[hit].qty || 1) + (item.qty || 1) };
-          } else {
-            merged.push({
-              id: item.id,
-              name: item.name,
-              sku: item.sku,
-              category: item.category,
-              qty: item.qty || 1,
-              price: item.price || 0,
-            });
-          }
-        });
-        return { ...p, products: merged, updatedAt: Date.now() };
-      });
+      const list = normalizeStored(stored);
+      const next = list.map((p) =>
+        p.id !== project.id
+          ? p
+          : {
+              ...p,
+              products: mergeCartItemsIntoProducts(p.products, items, roomId),
+              updatedAt: Date.now(),
+            }
+      );
       await saveUserData('projects', { list: next });
-      clearGuestCart();
-      navigate(`/projects/${project.id}`);
+      if (clearCart) clearGuestCart();
+      navigate(`/projects/${project.id}?tab=products`);
     } catch (err) {
       console.warn('Save to project failed:', err.message);
       setSaveError('Could not save to project.');
       setTimeout(() => setSaveError(''), 2500);
     } finally {
       setSavingToProjectId(null);
-      setSaveProjectOpen(false);
+      closePickers();
     }
+  };
+
+  const saveCartToProject = (project, roomId) =>
+    saveItemsToProject(project, roomId, quoteCart, { clearCart: true });
+
+  // "Add To Project" on the product detail page — this one product, at the
+  // quantity currently in the stepper.
+  const addProductToProject = (project, roomId) => {
+    if (!selectedProduct) return;
+    return saveItemsToProject(project, roomId, [snapshotProduct(selectedProduct, boxQty)]);
   };
 
   const totalItems = quoteCart.reduce((sum, item) => sum + (item.qty || 1), 0);
@@ -474,6 +491,27 @@ export default function ProSourceShop() {
     },
     sizeLabel: { fontSize: 11, color: colors.gray500, fontWeight: 500, marginBottom: 2 },
     sizeValue: { fontSize: 14, color: colors.gray900, fontWeight: 500 },
+    // Project + room picker (shared by the cart page and the PDP)
+    pickerPanel: {
+      position: 'absolute', marginTop: 6, minWidth: 260, maxHeight: 280, overflow: 'auto',
+      background: '#fff', border: `1px solid ${colors.gray200}`, borderRadius: 8,
+      boxShadow: '0 8px 24px rgba(0,0,0,0.08)', zIndex: 50, textAlign: 'left',
+    },
+    pickerHeader: {
+      display: 'flex', alignItems: 'center', gap: 6, padding: '10px 14px',
+      fontSize: 11, fontWeight: 600, color: colors.gray500, textTransform: 'uppercase',
+      letterSpacing: 0.5, borderBottom: `1px solid ${colors.gray100}`,
+    },
+    pickerBack: {
+      background: 'none', border: 'none', cursor: 'pointer', padding: 0,
+      display: 'flex', alignItems: 'center', color: colors.darkBlue,
+    },
+    pickerItem: {
+      display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8,
+      width: '100%', textAlign: 'left', padding: '10px 14px', border: 'none',
+      background: 'transparent', cursor: 'pointer', fontSize: 14, color: colors.gray900,
+      fontFamily: 'inherit',
+    },
     // Add to project / quote
     addToProjectBtn: {
       width: '100%', padding: '14px', borderRadius: 6, border: `1.5px solid ${colors.gray200}`,
@@ -739,57 +777,29 @@ export default function ProSourceShop() {
                     >
                       Send to my account manager <ChevronRight size={18} />
                     </button>
-                    {/* Lightweight save-for-later. Pops a project picker so
-                        the user doesn't have to commit to a quote right now. */}
-                    {projectsForSave.length > 0 && (
-                      <div style={{ position: 'relative', textAlign: 'center', marginTop: 14 }}>
-                        <button
-                          onClick={() => setSaveProjectOpen((v) => !v)}
-                          style={{
-                            background: 'none', border: 'none', cursor: 'pointer',
-                            color: colors.darkBlue, fontSize: 13, fontWeight: 500,
-                            fontFamily: 'inherit',
-                          }}
-                        >
-                          Save to a project instead
-                        </button>
-                        {saveProjectOpen && (
-                          <div
-                            style={{
-                              position: 'absolute', top: '100%', left: '50%', transform: 'translateX(-50%)',
-                              marginTop: 6, minWidth: 260, maxHeight: 260, overflow: 'auto',
-                              background: '#fff', border: `1px solid ${colors.gray200}`,
-                              borderRadius: 8, boxShadow: '0 8px 24px rgba(0,0,0,0.08)',
-                              zIndex: 50, textAlign: 'left',
-                            }}
-                          >
-                            <div style={{ padding: '10px 14px', fontSize: 11, fontWeight: 600, color: colors.gray500, textTransform: 'uppercase', letterSpacing: 0.5, borderBottom: `1px solid ${colors.gray100}` }}>
-                              Pick a project
-                            </div>
-                            {projectsForSave.map((p) => (
-                              <button
-                                key={p.id}
-                                onClick={() => saveCartToProject(p)}
-                                disabled={savingToProjectId === p.id}
-                                style={{
-                                  display: 'block', width: '100%', textAlign: 'left',
-                                  padding: '10px 14px', border: 'none', background: 'transparent',
-                                  cursor: 'pointer', fontSize: 14, color: colors.gray900,
-                                  fontFamily: 'inherit',
-                                }}
-                                onMouseEnter={(e) => e.currentTarget.style.background = colors.gray100}
-                                onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
-                              >
-                                {savingToProjectId === p.id ? 'Saving…' : p.name}
-                              </button>
-                            ))}
-                          </div>
-                        )}
-                        {saveError && (
-                          <div style={{ fontSize: 12, color: colors.red, marginTop: 6 }}>{saveError}</div>
-                        )}
-                      </div>
-                    )}
+                    {/* Lightweight save-for-later. Pops a project → room picker
+                        so the user doesn't have to commit to a quote right now. */}
+                    <div style={{ position: 'relative', textAlign: 'center', marginTop: 14 }}>
+                      <button
+                        onClick={() => {
+                          setPickerProject(null);
+                          setSaveProjectOpen((v) => !v);
+                        }}
+                        style={{
+                          background: 'none', border: 'none', cursor: 'pointer',
+                          color: colors.darkBlue, fontSize: 13, fontWeight: 500,
+                          fontFamily: 'inherit',
+                        }}
+                      >
+                        Save to a project instead
+                      </button>
+                      {saveProjectOpen && renderProjectRoomPicker(saveCartToProject, {
+                        top: '100%', left: '50%', transform: 'translateX(-50%)',
+                      })}
+                      {saveError && (
+                        <div style={{ fontSize: 12, color: colors.red, marginTop: 6 }}>{saveError}</div>
+                      )}
+                    </div>
                   </>
                 ) : (
                   <>
@@ -1005,13 +1015,35 @@ export default function ProSourceShop() {
                 </button>
               </div>
 
-              {/* Add to Project */}
-              <button style={s.addToProjectBtn}>
-                <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <Heart size={16} color={colors.gray500} /> Add To Project
-                </span>
-                <ChevronDown size={16} color={colors.gray500} />
-              </button>
+              {/* Add to Project — members get a project → room picker; guests
+                  go through the wizard, which creates the project for them. */}
+              <div style={{ position: 'relative' }}>
+                <button
+                  style={s.addToProjectBtn}
+                  onClick={() => {
+                    if (!userId) {
+                      // No account yet — carry this product into the wizard,
+                      // which creates the account + project on submit.
+                      addToGuestCart(snapshotProduct(p, boxQty));
+                      guestSaveToProject();
+                      return;
+                    }
+                    setPickerProject(null);
+                    setAddToProjectOpen((v) => !v);
+                  }}
+                >
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <Heart size={16} color={colors.gray500} /> Add To Project
+                  </span>
+                  <ChevronDown size={16} color={colors.gray500} />
+                </button>
+                {addToProjectOpen && renderProjectRoomPicker(addProductToProject, {
+                  top: '100%', left: 0, right: 0,
+                })}
+                {saveError && (
+                  <div style={{ fontSize: 12, color: colors.red, marginBottom: 8 }}>{saveError}</div>
+                )}
+              </div>
 
               {/* Compare */}
               <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: colors.gray700, cursor: 'pointer' }}>
@@ -1080,6 +1112,101 @@ export default function ProSourceShop() {
 
         {/* Cart drawer */}
         {showCart && renderCartDrawer()}
+
+        {/* Guests reach this from "Add To Project" — the wizard is what turns
+            them into a member with a real project. */}
+        <QuoteWizard
+          isOpen={quoteWizardOpen}
+          onClose={() => setQuoteWizardOpen(false)}
+          cartItems={quoteCart}
+          intent={wizardIntent}
+        />
+      </div>
+    );
+  }
+
+  /**
+   * Two-stage dropdown: project → room. Rooms are optional, so "Unassigned" is
+   * always an offer — a product with no room still lands in the project and
+   * shows up in the Unassigned group on the Products tab.
+   */
+  function renderProjectRoomPicker(onPick, panelStyle) {
+    const rooms = pickerProject ? (pickerProject.rooms || []) : [];
+    return (
+      <div style={{ ...s.pickerPanel, ...panelStyle }}>
+        {!pickerProject ? (
+          <>
+            <div style={s.pickerHeader}>Pick a project</div>
+            {projectsForSave.length === 0 ? (
+              <button
+                style={s.pickerItem}
+                onClick={() => navigate('/projects/new')}
+                onMouseEnter={(e) => e.currentTarget.style.background = colors.gray100}
+                onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+              >
+                <span style={{ color: colors.darkBlue, fontWeight: 500 }}>+ Create a project</span>
+              </button>
+            ) : (
+              projectsForSave.map((p) => (
+                <button
+                  key={p.id}
+                  onClick={() => setPickerProject(p)}
+                  disabled={savingToProjectId === p.id}
+                  style={s.pickerItem}
+                  onMouseEnter={(e) => e.currentTarget.style.background = colors.gray100}
+                  onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                >
+                  <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {savingToProjectId === p.id ? 'Saving…' : p.name}
+                  </span>
+                  <ChevronRight size={14} color={colors.gray400} />
+                </button>
+              ))
+            )}
+          </>
+        ) : (
+          <>
+            <div style={s.pickerHeader}>
+              <button
+                style={s.pickerBack}
+                onClick={() => setPickerProject(null)}
+                title="Back to projects"
+              >
+                <ChevronLeft size={14} />
+              </button>
+              <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {pickerProject.name} · room
+              </span>
+            </div>
+            {rooms.map((room) => (
+              <button
+                key={room.id}
+                onClick={() => onPick(pickerProject, room.id)}
+                disabled={savingToProjectId === pickerProject.id}
+                style={s.pickerItem}
+                onMouseEnter={(e) => e.currentTarget.style.background = colors.gray100}
+                onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+              >
+                <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <Home size={14} color={colors.darkBlue} /> {room.name}
+                </span>
+              </button>
+            ))}
+            <button
+              onClick={() => onPick(pickerProject, null)}
+              disabled={savingToProjectId === pickerProject.id}
+              style={{
+                ...s.pickerItem,
+                color: colors.gray500,
+                borderTop: rooms.length ? `1px solid ${colors.gray100}` : 'none',
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.background = colors.gray100}
+              onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+            >
+              {rooms.length ? 'No specific room' : 'Add without a room'}
+            </button>
+          </>
+        )}
       </div>
     );
   }

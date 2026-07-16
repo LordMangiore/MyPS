@@ -8,8 +8,10 @@ import {
   ArrowLeft,
   Lightbulb,
   ChevronRight,
+  Home,
 } from 'lucide-react';
 import { useAuth } from './auth-context';
+import { normalizeStored } from './project-model';
 
 const colors = {
   red: '#BA0C2F',
@@ -29,22 +31,6 @@ const STATUS_META = {
   working: { label: 'Working', bg: '#e3f2fd', fg: colors.darkBlue },
   complete: { label: 'Complete', bg: '#fff3cd', fg: colors.amber },
   published: { label: 'Published', bg: '#e8f5e9', fg: colors.green },
-};
-
-const normalizeStored = (stored) => {
-  if (!stored) return [];
-  if (Array.isArray(stored.list)) return stored.list;
-  if (stored.project) {
-    return [{
-      id: 'legacy-' + Date.now(),
-      ...stored.project,
-      status: stored.status || 'working',
-      archived: !!stored.archived,
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-    }];
-  }
-  return [];
 };
 
 export default function ProSourceProjects() {
@@ -128,6 +114,11 @@ export default function ProSourceProjects() {
             )}
             {p.targetCompletion && (
               <span style={styles.metaItem}><Calendar size={13} /> Target: {formatDate(p.targetCompletion)}</span>
+            )}
+            {(p.rooms || []).length > 0 && (
+              <span style={styles.metaItem}>
+                <Home size={13} /> {p.rooms.map((r) => r.name).join(' · ')}
+              </span>
             )}
           </div>
         </div>
