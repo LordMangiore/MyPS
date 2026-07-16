@@ -1,10 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from './auth-context';
 import {
   Search,
   Plus,
-  Filter,
   MoreHorizontal,
   Mail,
   Phone,
@@ -16,10 +15,22 @@ import {
   Home,
   Trash2,
   MessageCircle,
-  ChevronDown,
   Clock,
   Send,
+  AlertCircle,
 } from 'lucide-react';
+
+/**
+ * Identity contract (shared across WP9/WP7 — do not diverge):
+ *   connection.demoIdentity → a seeded demo contact  → messageable
+ *   connection.userId       → a real signed-in user  → messageable
+ *   neither                 → invited, not yet joined → NOT messageable
+ *
+ * Messaging is deliberately decoupled: a messageable connection links to
+ * /messages?connection=<id> and the messaging surface resolves the conversation
+ * (creating it if needed). This file never talks to Twilio.
+ */
+const isMessageable = (c) => Boolean(c?.demoIdentity || c?.userId);
 
 const ProSourceConnections = () => {
   const { userId, userEmail, userName, loadUserData, saveUserData } = useAuth();
@@ -35,6 +46,50 @@ const ProSourceConnections = () => {
   const [resolvedUser, setResolvedUser] = useState(null);
   const [addError, setAddError] = useState('');
   const [inviteMessage, setInviteMessage] = useState('');
+  // What the invite endpoint actually did — drives an honest success screen.
+  const [inviteResult, setInviteResult] = useState(null);
+
+  const [connections, setConnections] = useState([]);
+  const [pendingRequests, setPendingRequests] = useState([]);
+  const [dataLoaded, setDataLoaded] = useState(false);
+  const [actionError, setActionError] = useState('');
+  const [requestBusyId, setRequestBusyId] = useState(null);
+  const [removingId, setRemovingId] = useState(null);
+
+  // Connections and incoming requests live in the same `connections` blob and
+  // load in one round trip. The endpoint seeds the demo's incoming requests on
+  // first read, so there is no hardcoded component-side fallback data.
+  useEffect(() => {
+    if (!userId) { setDataLoaded(true); return; }
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`/api/connection-requests?userId=${encodeURIComponent(userId)}`);
+        const data = await res.json().catch(() => ({}));
+        if (cancelled) return;
+        if (!res.ok) throw new Error(data.error || 'Failed to load connections');
+        setConnections(Array.isArray(data.list) ? data.list : []);
+        setPendingRequests(Array.isArray(data.requests) ? data.requests : []);
+      } catch (err) {
+        if (!cancelled) setActionError(err.message || 'Failed to load connections');
+      } finally {
+        if (!cancelled) setDataLoaded(true);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [userId]);
+
+  /** Read the whole connections blob so writes never drop sibling keys. */
+  const readConnectionsBlob = async () => {
+    const stored = await loadUserData('connections', null);
+    return stored && typeof stored === 'object' ? stored : {};
+  };
+
+  /** Write a new list, preserving `requests`/`requestsSeeded` in the same blob. */
+  const writeConnectionsList = async (base, next) => {
+    await saveUserData('connections', { ...base, list: next });
+    setConnections(next);
+  };
 
   const initialsFor = (name) =>
     (name || '').split(/\s+/).filter(Boolean).map((s) => s[0]?.toUpperCase()).slice(0, 2).join('') || '?';
@@ -46,6 +101,7 @@ const ProSourceConnections = () => {
     setResolvedUser(null);
     setAddError('');
     setInviteMessage('');
+    setInviteResult(null);
   };
 
   const lookupEmail = async () => {
@@ -74,17 +130,16 @@ const ProSourceConnections = () => {
   };
 
   const persistNewConnection = async (record) => {
-    const existing = await loadUserData('connections', null);
-    const list = Array.isArray(existing?.list) ? existing.list : [];
+    const base = await readConnectionsBlob();
+    const list = Array.isArray(base.list) ? base.list : [];
     // De-dupe by email to keep the list clean if the user repeats the flow.
     const filtered = record.email
       ? list.filter((c) => (c.email || '').toLowerCase() !== record.email.toLowerCase())
       : list;
-    const id = (filtered.reduce((m, c) => Math.max(m, c.id || 0), 0) || 0) + 1;
+    const id = `conn-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
     const newRecord = { id, addedAt: Date.now(), ...record };
     const next = [...filtered, newRecord];
-    await saveUserData('connections', { list: next });
-    setConnections(next);
+    await writeConnectionsList(base, next);
     return newRecord;
   };
 
@@ -92,6 +147,7 @@ const ProSourceConnections = () => {
     if (!resolvedUser) return;
     setAddModalBusy(true);
     try {
+      const note = inviteMessage.trim();
       await persistNewConnection({
         name: resolvedUser.name,
         initials: initialsFor(resolvedUser.name),
@@ -101,50 +157,17 @@ const ProSourceConnections = () => {
         phone: resolvedUser.phone,
         location: resolvedUser.address,
         businessName: resolvedUser.businessName,
+        // Real ProSource user → messageable per the identity contract.
         userId: resolvedUser.userId,
         status: 'connected',
-        projects: null,
+        // Real type/role drives the card label; a brand-new connection genuinely
+        // has zero shared projects, which is not the same as "ProSource staff".
+        projects: 0,
+        // The personal note is persisted WITH the connection rather than pushed
+        // through Twilio from here (messaging owns that transport). Messaging
+        // picks it up when it resolves /messages?connection=<id>.
+        ...(note ? { introMessage: note, introMessageFrom: 'me', introMessageAt: Date.now() } : {}),
       });
-
-      // If the user added a personal message, kick off a Twilio conversation
-      // between the two identities and post the message as the first turn.
-      const msg = inviteMessage.trim();
-      if (msg && userId && resolvedUser.userId) {
-        try {
-          await fetch('/api/twilio-conversations', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              action: 'create',
-              userId,
-              otherIdentity: resolvedUser.userId,
-              friendlyName: resolvedUser.name,
-              attributes: {
-                counterpartyName: resolvedUser.name,
-                counterpartyInitials: initialsFor(resolvedUser.name),
-                counterpartyRole: resolvedUser.role,
-                counterpartyType: resolvedUser.type,
-                origin: 'connection-invite',
-              },
-            }),
-          }).then((r) => r.json()).then(async (data) => {
-            if (data?.sid) {
-              await fetch('/api/twilio-conversations', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  action: 'post',
-                  conversationSid: data.sid,
-                  identity: userId,
-                  body: msg,
-                }),
-              });
-            }
-          });
-        } catch (err) {
-          console.warn('Failed to post invite message:', err.message);
-        }
-      }
 
       setAddModalStep('success');
     } catch (err) {
@@ -156,85 +179,133 @@ const ProSourceConnections = () => {
 
   const sendInvite = async () => {
     setAddModalBusy(true);
+    setAddError('');
     try {
-      // Save the pending connection so it shows up immediately in the list.
-      const placeholderName = addModalEmail.split('@')[0];
+      const email = addModalEmail.trim();
+      const note = inviteMessage.trim();
+
+      // Ask the server to record + (try to) send, then report what it actually did.
+      let result;
+      try {
+        const res = await fetch('/api/send-invite', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            toEmail: email,
+            fromName: userName || 'A trade pro',
+            fromUserId: userId || null,
+            message: note,
+          }),
+        });
+        const data = await res.json().catch(() => ({}));
+        result = res.ok
+          ? data
+          : { emailSent: false, reason: 'send-failed', error: data.error || `HTTP ${res.status}` };
+      } catch (err) {
+        result = { emailSent: false, reason: 'request-failed', error: err.message };
+      }
+
+      // Record the invite locally too, so the pending card survives a reload.
+      const placeholderName = email.split('@')[0];
       await persistNewConnection({
         name: placeholderName,
         initials: initialsFor(placeholderName),
-        role: 'Pending invitation',
+        role: 'Invitation pending',
         type: 'tradepro',
-        email: addModalEmail.trim(),
+        email,
         phone: '',
         location: '',
         status: 'invited',
         projects: null,
+        inviteToken: result.token || null,
+        inviteEmailSent: Boolean(result.emailSent),
+        invitedAt: Date.now(),
+        ...(note ? { introMessage: note, introMessageFrom: 'me', introMessageAt: Date.now() } : {}),
       });
 
-      // Fire the actual email with the personal message attached.
-      try {
-        await fetch('/api/send-invite', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            toEmail: addModalEmail.trim(),
-            fromName: userName || 'A trade pro',
-            message: inviteMessage.trim(),
-          }),
-        });
-      } catch (err) {
-        console.warn('Invitation email failed:', err.message);
-      }
+      setInviteResult(result);
       setAddModalStep('success');
     } catch (err) {
-      setAddError(err.message || 'Could not send invitation');
+      setAddError(err.message || 'Could not record invitation');
     } finally {
       setAddModalBusy(false);
     }
   };
+
   const [resendingId, setResendingId] = useState(null);
-  const [resentIds, setResentIds] = useState(() => new Set());
+  const [resendResults, setResendResults] = useState({});
   const resendInvite = async (connection) => {
     if (!connection?.email) return;
     setResendingId(connection.id);
+    setActionError('');
     try {
-      await fetch('/api/send-invite', {
+      const res = await fetch('/api/send-invite', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           toEmail: connection.email,
           fromName: userName || 'A trade pro',
-          message: '',
+          fromUserId: userId || null,
+          message: connection.introMessage || '',
         }),
       });
-      setResentIds((prev) => new Set([...prev, connection.id]));
+      const data = await res.json().catch(() => ({}));
+      const emailSent = Boolean(res.ok && data.emailSent);
+      setResendResults((prev) => ({ ...prev, [connection.id]: { emailSent, reason: data.reason } }));
+
+      // Persist the real outcome so the card still tells the truth after reload.
+      const base = await readConnectionsBlob();
+      const list = Array.isArray(base.list) ? base.list : connections;
+      const next = list.map((c) =>
+        String(c.id) === String(connection.id)
+          ? { ...c, inviteEmailSent: emailSent, inviteToken: data.token || c.inviteToken || null, invitedAt: Date.now() }
+          : c
+      );
+      await writeConnectionsList(base, next);
     } catch (err) {
-      console.warn('Resend invite failed:', err.message);
+      setResendResults((prev) => ({ ...prev, [connection.id]: { emailSent: false, error: err.message } }));
     } finally {
       setResendingId(null);
     }
   };
 
-  const [pendingRequests, setPendingRequests] = useState([
-    {
-      id: 101,
-      name: 'Mike Johnson',
-      initials: 'MJ',
-      role: 'General Contractor',
-      type: 'tradepro',
-      email: 'mike.johnson@builds.com',
-      message: 'Hi! I worked with Ryan O\'Toole on a project and he recommended connecting.',
-    },
-    {
-      id: 102,
-      name: 'Lisa Park',
-      initials: 'LP',
-      role: 'Homeowner',
-      type: 'client',
-      email: 'lisa.park@email.com',
-      message: 'Looking for a designer for my kitchen remodel project.',
-    },
-  ]);
+  /** Accept or decline an incoming request. The server owns the transition:
+   *  accepting removes the request AND appends a real connection. */
+  const respondToRequest = async (request, action) => {
+    setRequestBusyId(request.id);
+    setActionError('');
+    try {
+      const res = await fetch('/api/connection-requests', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, requestId: request.id, action }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || `Could not ${action} this request`);
+      setPendingRequests(Array.isArray(data.requests) ? data.requests : []);
+      setConnections(Array.isArray(data.list) ? data.list : []);
+    } catch (err) {
+      setActionError(err.message || `Could not ${action} this request`);
+    } finally {
+      setRequestBusyId(null);
+    }
+  };
+
+  const removeConnection = async (connection) => {
+    setRemovingId(connection.id);
+    setOpenDropdownId(null);
+    setActionError('');
+    try {
+      const base = await readConnectionsBlob();
+      const list = Array.isArray(base.list) ? base.list : connections;
+      const next = list.filter((c) => String(c.id) !== String(connection.id));
+      await writeConnectionsList(base, next);
+    } catch (err) {
+      setActionError(err.message || 'Could not remove connection');
+    } finally {
+      setRemovingId(null);
+    }
+  };
 
   const colors = {
     red: '#BA0C2F',
@@ -341,18 +412,6 @@ const ProSourceConnections = () => {
       top: '50%',
       transform: 'translateY(-50%)',
       color: colors.gray400,
-    },
-    filterBtn: {
-      display: 'flex',
-      alignItems: 'center',
-      gap: 6,
-      padding: '10px 16px',
-      border: `1px solid ${colors.gray300}`,
-      borderRadius: 6,
-      fontSize: 14,
-      color: colors.gray700,
-      background: '#fff',
-      cursor: 'pointer',
     },
     tabs: {
       display: 'flex',
@@ -588,121 +647,26 @@ const ProSourceConnections = () => {
     },
   };
 
-  const FALLBACK_CONNECTIONS = [
-    {
-      id: 1,
-      name: 'Bubba Beans',
-      initials: 'BB',
-      role: 'Homeowner',
-      type: 'client',
-      email: 'bubba.beans@email.com',
-      phone: '(314) 555-0123',
-      location: 'St. Louis, MO',
-      projects: 2,
-    },
-    {
-      id: 2,
-      name: 'Martha Wilson',
-      initials: 'MW',
-      role: 'Homeowner',
-      type: 'client',
-      email: 'martha.wilson@email.com',
-      phone: '(314) 555-0456',
-      location: 'Clayton, MO',
-      projects: 1,
-    },
-    {
-      id: 3,
-      name: 'Ryan O\'Toole',
-      initials: 'RO',
-      role: 'Flooring Installer',
-      type: 'tradepro',
-      email: 'ryan@otooleinstalls.com',
-      phone: '(314) 555-0789',
-      location: 'St. Charles, MO',
-      projects: 5,
-    },
-    {
-      id: 4,
-      name: 'Kim Marks',
-      initials: 'KM',
-      role: 'Account Manager',
-      type: 'prosource',
-      email: 'kim.marks@prosource.com',
-      phone: '(314) 282-4798',
-      location: 'ProSource of St. Louis',
-      projects: null,
-    },
-    {
-      id: 5,
-      name: 'James Anderson',
-      initials: 'JA',
-      role: 'General Contractor',
-      type: 'tradepro',
-      email: 'james@andersonbuilds.com',
-      phone: '(314) 555-1234',
-      location: 'Chesterfield, MO',
-      projects: 3,
-    },
-    {
-      id: 6,
-      name: 'Sarah Chen',
-      initials: 'SC',
-      role: 'Homeowner',
-      type: 'client',
-      email: 'sarah.chen@email.com',
-      phone: '(314) 555-5678',
-      location: 'Ladue, MO',
-      projects: 1,
-    },
-    {
-      id: 7,
-      name: 'Heather Yager',
-      initials: 'HY',
-      role: 'Designer',
-      type: 'prosource',
-      email: 'heather.yager@prosource.com',
-      phone: '(314) 282-4798',
-      location: 'ProSource of St. Louis',
-      projects: null,
-    },
-    {
-      id: 8,
-      name: 'Mike Torres',
-      initials: 'MT',
-      role: 'Tile Installer',
-      type: 'tradepro',
-      email: 'mike@torrestile.com',
-      phone: '(314) 555-9012',
-      location: 'Kirkwood, MO',
-      projects: 4,
-    },
-  ];
-
-  const [connections, setConnections] = useState(FALLBACK_CONNECTIONS);
-  useEffect(() => {
-    if (!userId) return;
-    let cancelled = false;
-    loadUserData('connections', null).then((stored) => {
-      if (cancelled) return;
-      if (Array.isArray(stored?.list) && stored.list.length > 0) {
-        setConnections(stored.list);
-      }
-    });
-    return () => { cancelled = true; };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userId]);
-
   // Sent invites — connections the user invited that haven't accepted yet.
   // Surfaced both on "All" (with a Pending badge) and on the Pending tab.
   const sentInvites = connections.filter(c => c.status === 'invited');
 
+  // Counts are derived from the real list — never hardcoded.
+  const counts = useMemo(() => ({
+    all: connections.length,
+    clients: connections.filter(c => c.type === 'client').length,
+    tradepros: connections.filter(c => c.type === 'tradepro').length,
+    prosource: connections.filter(c => c.type === 'prosource').length,
+  }), [connections]);
+
+  const pendingCount = pendingRequests.length + sentInvites.length;
+
   const tabs = [
-    { id: 'all', label: 'All Connections', icon: Users, count: 12 },
-    { id: 'clients', label: 'Clients', icon: Home, count: 6 },
-    { id: 'tradepros', label: 'Trade Pros', icon: Briefcase, count: 4 },
-    { id: 'prosource', label: 'ProSource', icon: MapPin, count: 2 },
-    { id: 'pending', label: 'Pending', icon: UserPlus, count: pendingRequests.length + sentInvites.length, highlight: (pendingRequests.length + sentInvites.length) > 0 },
+    { id: 'all', label: 'All Connections', icon: Users, count: counts.all },
+    { id: 'clients', label: 'Clients', icon: Home, count: counts.clients },
+    { id: 'tradepros', label: 'Trade Pros', icon: Briefcase, count: counts.tradepros },
+    { id: 'prosource', label: 'ProSource', icon: MapPin, count: counts.prosource },
+    { id: 'pending', label: 'Pending', icon: UserPlus, count: pendingCount, highlight: pendingCount > 0 },
   ];
 
   // For pending tab, surface sent invites in the connections grid. Received
@@ -718,19 +682,42 @@ const ProSourceConnections = () => {
           return true;
         });
 
+  const matches = (person, q) =>
+    (person.name || '').toLowerCase().includes(q) ||
+    (person.role || '').toLowerCase().includes(q) ||
+    (person.email || '').toLowerCase().includes(q);
+
   const searchedConnections = searchQuery
-    ? filteredConnections.filter(c =>
-        c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        c.role.toLowerCase().includes(searchQuery.toLowerCase())
-      )
+    ? filteredConnections.filter(c => matches(c, searchQuery.toLowerCase()))
     : filteredConnections;
 
   const searchedPending = activeTab === 'pending' && searchQuery
-    ? pendingRequests.filter(r =>
-        r.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        r.role.toLowerCase().includes(searchQuery.toLowerCase())
-      )
+    ? pendingRequests.filter(r => matches(r, searchQuery.toLowerCase()))
     : pendingRequests;
+
+  /** Real type/role drives this label — not a `projects === null` guess. */
+  const renderRelationship = (connection) => {
+    if (connection.status === 'invited') {
+      return (
+        <span style={styles.projectCount}>
+          {connection.inviteEmailSent ? 'Invitation emailed' : 'Invite recorded · no email sent'}
+        </span>
+      );
+    }
+    if (connection.type === 'prosource') {
+      return <span style={styles.projectCount}>ProSource Team Member</span>;
+    }
+    if (typeof connection.projects === 'number') {
+      return (
+        <span style={styles.projectCount}>
+          <span style={styles.projectCountNum}>{connection.projects}</span>
+          {' '}shared project{connection.projects !== 1 ? 's' : ''}
+        </span>
+      );
+    }
+    return <span style={styles.projectCount}>No shared projects</span>;
+  };
+
 
   return (
     <div style={styles.wrapper}>
@@ -751,7 +738,8 @@ const ProSourceConnections = () => {
         </div>
       </div>
 
-      {/* Search + Filter + Add */}
+      {/* Search + Add. (The old "Filter" button was a no-op and removed: the
+          tabs already filter by type and the search box covers name/role/email.) */}
       <div className="flex flex-wrap gap-2 mb-6 items-stretch">
         <div className="flex-1 min-w-[200px]" style={{ position: 'relative' }}>
           <Search size={18} style={styles.searchIcon} />
@@ -763,13 +751,21 @@ const ProSourceConnections = () => {
             onChange={(e) => setSearchQuery(e.target.value)}
           />
         </div>
-        <button className="whitespace-nowrap shrink-0" style={styles.filterBtn}>
-          <Filter size={16} /> Filter
-        </button>
         <button className="whitespace-nowrap shrink-0" style={styles.btnPrimary} onClick={() => setShowAddModal(true)}>
           <UserPlus size={16} /> Add
         </button>
       </div>
+
+      {actionError && (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 8,
+          padding: '10px 14px', marginBottom: 16,
+          background: '#fef2f2', border: `1px solid ${colors.red}`,
+          borderRadius: 6, fontSize: 13, color: colors.red,
+        }}>
+          <AlertCircle size={15} /> {actionError}
+        </div>
+      )}
 
       {/* Tabs */}
       <div className="scrollbar-hide" style={styles.tabs}>
@@ -849,7 +845,8 @@ const ProSourceConnections = () => {
 
                 <div style={{ display: 'flex', gap: 8 }}>
                   <button
-                    onClick={() => setPendingRequests(prev => prev.filter(r => r.id !== request.id))}
+                    onClick={() => respondToRequest(request, 'accept')}
+                    disabled={requestBusyId === request.id}
                     style={{
                       flex: 1,
                       padding: '10px 16px',
@@ -859,13 +856,15 @@ const ProSourceConnections = () => {
                       borderRadius: 6,
                       fontSize: 13,
                       fontWeight: 500,
-                      cursor: 'pointer',
+                      cursor: requestBusyId === request.id ? 'wait' : 'pointer',
+                      opacity: requestBusyId === request.id ? 0.7 : 1,
                     }}
                   >
-                    Accept
+                    {requestBusyId === request.id ? 'Working…' : 'Accept'}
                   </button>
                   <button
-                    onClick={() => setPendingRequests(prev => prev.filter(r => r.id !== request.id))}
+                    onClick={() => respondToRequest(request, 'decline')}
+                    disabled={requestBusyId === request.id}
                     style={{
                       flex: 1,
                       padding: '10px 16px',
@@ -875,7 +874,8 @@ const ProSourceConnections = () => {
                       borderRadius: 6,
                       fontSize: 13,
                       fontWeight: 500,
-                      cursor: 'pointer',
+                      cursor: requestBusyId === request.id ? 'wait' : 'pointer',
+                      opacity: requestBusyId === request.id ? 0.7 : 1,
                     }}
                   >
                     Decline
@@ -899,7 +899,11 @@ const ProSourceConnections = () => {
         </div>
       )}
       <div style={styles.connectionsGrid}>
-        {searchedConnections.length === 0 ? (
+        {!dataLoaded ? (
+          <div style={styles.emptyState}>
+            <div style={styles.emptyText}>Loading your connections…</div>
+          </div>
+        ) : searchedConnections.length === 0 ? (
           <div style={styles.emptyState}>
             <div style={styles.emptyIcon}>
               <Users size={48} color={colors.gray300} />
@@ -908,21 +912,30 @@ const ProSourceConnections = () => {
             <div style={styles.emptyText}>
               {searchQuery ? 'Try adjusting your search terms' : 'Add your first connection to get started'}
             </div>
-            <button style={styles.btnPrimary}>
-              <UserPlus size={16} /> Add Connection
-            </button>
+            {!searchQuery && (
+              <button style={styles.btnPrimary} onClick={() => setShowAddModal(true)}>
+                <UserPlus size={16} /> Add Connection
+              </button>
+            )}
           </div>
         ) : (
           searchedConnections.map(connection => {
+            // An invite I sent that nobody has accepted yet — drives the card
+            // chrome (dashed/amber) and the Resend action.
             const isInvited = connection.status === 'invited';
-            const wasResent = resentIds.has(connection.id);
+            // Per the identity contract: no demoIdentity and no userId means
+            // there is no one on the other end to message yet.
+            const canMessage = isMessageable(connection);
+            const resendResult = resendResults[connection.id];
             const isResending = resendingId === connection.id;
+            const isRemoving = removingId === connection.id;
             return (
             <div
               key={connection.id}
               style={{
                 ...styles.connectionCard,
                 ...(isInvited ? { background: '#fffbeb', borderStyle: 'dashed' } : {}),
+                ...(isRemoving ? { opacity: 0.5 } : {}),
               }}
               onMouseOver={(e) => e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.08)'}
               onMouseOut={(e) => e.currentTarget.style.boxShadow = 'none'}
@@ -932,7 +945,10 @@ const ProSourceConnections = () => {
                   {connection.initials}
                 </div>
                 <div style={styles.cardInfo}>
-                  <Link to="/profile" style={{ ...styles.connectionName, textDecoration: 'none', color: 'inherit' }}>{connection.name}</Link>
+                  {/* Not a link: /profile always renders the same demo pro
+                      regardless of who you click. Per-user profiles are WP11 —
+                      until that route exists, a link here would lie. */}
+                  <div style={styles.connectionName}>{connection.name}</div>
                   <div style={styles.connectionRole}>
                     {isInvited ? 'Awaiting their response' : connection.role}
                   </div>
@@ -984,9 +1000,10 @@ const ProSourceConnections = () => {
                           color: colors.red,
                           fontWeight: 500,
                         }}
-                        onClick={() => setOpenDropdownId(null)}
+                        onClick={() => removeConnection(connection)}
+                        disabled={isRemoving}
                       >
-                        <Trash2 size={14} /> Remove Connection
+                        <Trash2 size={14} /> {isInvited ? 'Cancel invitation' : 'Remove Connection'}
                       </button>
                     </div>
                   )}
@@ -1015,33 +1032,38 @@ const ProSourceConnections = () => {
               </div>
 
               <div style={styles.projectsInfo}>
-                {isInvited ? (
-                  <span style={styles.projectCount}>Invite sent</span>
-                ) : connection.projects !== null ? (
-                  <span style={styles.projectCount}>
-                    <span style={styles.projectCountNum}>{connection.projects}</span> shared project{connection.projects !== 1 ? 's' : ''}
-                  </span>
-                ) : (
-                  <span style={styles.projectCount}>ProSource Team Member</span>
-                )}
+                {renderRelationship(connection)}
                 <div style={styles.cardActions}>
                   {isInvited ? (
                     <button
                       onClick={() => resendInvite(connection)}
-                      disabled={isResending || wasResent}
+                      disabled={isResending}
                       style={{
                         ...styles.actionBtn,
-                        opacity: isResending || wasResent ? 0.6 : 1,
-                        cursor: isResending || wasResent ? 'default' : 'pointer',
+                        opacity: isResending ? 0.6 : 1,
+                        cursor: isResending ? 'default' : 'pointer',
                       }}
                     >
                       <Send size={12} />
-                      {wasResent ? 'Resent' : isResending ? 'Sending…' : 'Resend invite'}
+                      {isResending
+                        ? 'Sending…'
+                        : resendResult
+                          ? (resendResult.emailSent ? 'Email resent' : 'Re-recorded · no email')
+                          : 'Resend invite'}
                     </button>
-                  ) : (
-                    <Link to="/messages" style={{ ...styles.actionBtn, textDecoration: 'none' }}>
+                  ) : canMessage ? (
+                    // Hand-off: messaging resolves this connection id to the right
+                    // conversation (creating it if needed). We never touch Twilio.
+                    <Link
+                      to={`/messages?connection=${encodeURIComponent(connection.id)}`}
+                      style={{ ...styles.actionBtn, textDecoration: 'none' }}
+                    >
                       <MessageCircle size={12} /> Message
                     </Link>
+                  ) : (
+                    <span style={{ ...styles.actionBtn, cursor: 'default', color: colors.gray500 }}>
+                      <Clock size={12} /> Invitation pending
+                    </span>
                   )}
                 </div>
               </div>
@@ -1087,7 +1109,13 @@ const ProSourceConnections = () => {
               alignItems: 'center',
             }}>
               <h2 style={{ fontSize: 18, fontWeight: 600, color: colors.gray900, margin: 0 }}>
-                {addModalStep === 'success' ? 'Request Sent!' : 'Add Connection'}
+                {addModalStep !== 'success'
+                  ? 'Add Connection'
+                  : resolvedUser
+                    ? 'Connected'
+                    : inviteResult?.emailSent
+                      ? 'Invitation Sent'
+                      : 'Invitation Recorded'}
               </h2>
               <button
                 onClick={resetAddModal}
@@ -1191,7 +1219,7 @@ const ProSourceConnections = () => {
                     }}
                   />
                   <div style={{ fontSize: 11, color: colors.gray500, marginTop: 4 }}>
-                    Sent as the first message of your conversation with them.
+                    Saved as the opening message of your conversation with them.
                   </div>
                 </div>
                 {addError && <div style={{ fontSize: 12, color: colors.red, marginBottom: 12 }}>{addError}</div>}
@@ -1288,17 +1316,36 @@ const ProSourceConnections = () => {
               <div style={{ padding: 32, textAlign: 'center' }}>
                 <div style={{
                   width: 64, height: 64, borderRadius: '50%',
-                  background: '#dcfce7',
+                  background: resolvedUser || inviteResult?.emailSent ? '#dcfce7' : '#fef3c7',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   margin: '0 auto 16px',
                 }}>
-                  <UserPlus size={28} color={colors.green} />
+                  {resolvedUser || inviteResult?.emailSent
+                    ? <UserPlus size={28} color={colors.green} />
+                    : <AlertCircle size={28} color="#92400e" />}
                 </div>
                 <p style={{ fontSize: 14, color: colors.gray500, marginBottom: 24 }}>
                   {resolvedUser ? (
-                    <>You're now connected with <strong>{resolvedUser.name}</strong>. They appear in your connections, project team picker, and messaging.</>
+                    <>You're now connected with <strong>{resolvedUser.name}</strong>. They appear in your connections, project team picker, and messaging.
+                      {inviteMessage.trim() && ' Your note is saved as the opening message of your conversation.'}</>
+                  ) : inviteResult?.emailSent ? (
+                    <>Invitation emailed to <strong>{addModalEmail}</strong>. Once they sign up and accept, they'll show up as a connected member here.</>
                   ) : (
-                    <>Invitation sent to <strong>{addModalEmail}</strong>. They'll get an email with a signup link, and once they accept they'll show up as a connected member here.</>
+                    <>
+                      <strong>No email was sent.</strong>{' '}
+                      {inviteResult?.reason === 'email-not-configured'
+                        ? 'Email delivery is not configured in this environment (no RESEND_API_KEY), so nothing was delivered to '
+                        : 'The email failed to send, so nothing was delivered to '}
+                      <strong>{addModalEmail}</strong>.
+                      <br /><br />
+                      The invitation itself <strong>was recorded</strong>
+                      {inviteResult?.token ? ' with a real invite token' : ''} and{' '}
+                      <strong>{addModalEmail.split('@')[0]}</strong> now shows in your list as a pending
+                      invite{inviteMessage.trim() ? ', along with your note' : ''}. They stay pending until they join.
+                      {inviteResult?.error && (
+                        <><br /><span style={{ fontSize: 12, color: colors.red }}>{inviteResult.error}</span></>
+                      )}
+                    </>
                   )}
                 </p>
                 <button

@@ -1,4 +1,6 @@
 import { Resend } from "resend";
+import { getStore } from "@netlify/blobs";
+import { randomUUID } from "node:crypto";
 
 const FROM_ADDRESS = process.env.RESEND_FROM || "ProSource <onboarding@resend.dev>";
 
@@ -6,6 +8,52 @@ const DEV_BYPASS =
   process.env.OTP_DEV_BYPASS === "true" || !process.env.RESEND_API_KEY;
 
 const getResend = () => new Resend(process.env.RESEND_API_KEY);
+
+/**
+ * Persist a real invite record keyed by a real token, so an invite is an actual
+ * thing that exists rather than a fire-and-forget email. Stored in "ps-invites"
+ * under the token, plus an email→token pointer so a resend reuses the same
+ * invite instead of minting a new one.
+ */
+const recordInvite = async ({ toEmail, fromName, fromUserId, message, emailSent, emailError }) => {
+  try {
+    const store = getStore({ name: "ps-invites", consistency: "strong" });
+    const normalized = String(toEmail).toLowerCase().trim();
+    const pointerKey = `email::${normalized}`;
+
+    const existingToken = await store
+      .get(pointerKey, { type: "json" })
+      .catch(() => null);
+    const token = existingToken?.token || randomUUID();
+
+    const prior = existingToken?.token
+      ? await store.get(token, { type: "json" }).catch(() => null)
+      : null;
+
+    const record = {
+      token,
+      email: normalized,
+      fromName: fromName || null,
+      fromUserId: fromUserId || null,
+      // The personal note travels with the invite so it is not lost when no
+      // email goes out — messaging can pick it up when they join.
+      message: message || prior?.message || "",
+      status: prior?.status || "pending",
+      createdAt: prior?.createdAt || Date.now(),
+      updatedAt: Date.now(),
+      emailSent,
+      emailError: emailError || null,
+      sendCount: (prior?.sendCount || 0) + 1,
+    };
+
+    await store.setJSON(token, record);
+    await store.setJSON(pointerKey, { token });
+    return record;
+  } catch (err) {
+    console.error("recordInvite failed:", err);
+    return null;
+  }
+};
 
 const escapeHtml = (s) =>
   String(s || "").replace(/[&<>"']/g, (c) => ({
@@ -17,11 +65,17 @@ const escapeHtml = (s) =>
   }[c]));
 
 /**
- * Send a ProSource invitation email so the recipient can sign up and connect.
+ * Record a ProSource invitation and — if email is configured — send it.
  *
- * POST { toEmail, fromName, fromBusinessName?, signupUrl? }
+ * POST { toEmail, fromName, fromUserId?, fromBusinessName?, signupUrl?, message? }
  *
- * Returns { success: true, devBypass?: true } or { error }.
+ * Always returns what ACTUALLY happened so the UI can say so:
+ *   { success: true, emailSent: true,  token, inviteUrl }
+ *   { success: true, emailSent: false, reason: "email-not-configured", token, inviteUrl }
+ *   { success: true, emailSent: false, reason: "send-failed", error, token }
+ *
+ * The invite record is persisted either way, so the pending state is real and
+ * survives a reload even when nothing is emailed.
  */
 export default async function handler(req) {
   if (req.method !== "POST") {
@@ -29,7 +83,8 @@ export default async function handler(req) {
   }
 
   try {
-    const { toEmail, fromName, fromBusinessName, signupUrl, message } = await req.json();
+    const { toEmail, fromName, fromUserId, fromBusinessName, signupUrl, message } =
+      await req.json();
     if (!toEmail || !toEmail.includes("@")) {
       return Response.json({ error: "Valid toEmail required" }, { status: 400 });
     }
@@ -42,8 +97,24 @@ export default async function handler(req) {
       (process.env.URL ? process.env.URL : "https://myprosource.netlify.app") + "/";
 
     if (DEV_BYPASS) {
-      console.log(`[invite dev bypass] would have invited ${toEmail} on behalf of ${fromName}`);
-      return Response.json({ success: true, devBypass: true });
+      console.log(
+        `[send-invite] RESEND_API_KEY not configured — recording invite for ${toEmail} from ${fromName}, NO email sent.`
+      );
+      const record = await recordInvite({
+        toEmail,
+        fromName,
+        fromUserId,
+        message,
+        emailSent: false,
+      });
+      return Response.json({
+        success: true,
+        emailSent: false,
+        reason: "email-not-configured",
+        devBypass: true,
+        token: record?.token || null,
+        inviteUrl: record?.token ? `${linkUrl}?invite=${record.token}` : linkUrl,
+      });
     }
 
     const fromLine = safeFromBiz
@@ -82,9 +153,37 @@ export default async function handler(req) {
 
     if (error) {
       console.error("Resend invite error:", error);
-      return Response.json({ error: error.message || "Email send failed" }, { status: 502 });
+      // The invite still exists — only the email failed. Record it and say so.
+      const record = await recordInvite({
+        toEmail,
+        fromName,
+        fromUserId,
+        message,
+        emailSent: false,
+        emailError: error.message || "Email send failed",
+      });
+      return Response.json({
+        success: true,
+        emailSent: false,
+        reason: "send-failed",
+        error: error.message || "Email send failed",
+        token: record?.token || null,
+      });
     }
-    return Response.json({ success: true });
+
+    const record = await recordInvite({
+      toEmail,
+      fromName,
+      fromUserId,
+      message,
+      emailSent: true,
+    });
+    return Response.json({
+      success: true,
+      emailSent: true,
+      token: record?.token || null,
+      inviteUrl: record?.token ? `${linkUrl}?invite=${record.token}` : linkUrl,
+    });
   } catch (err) {
     console.error("send-invite error:", err);
     return Response.json({ error: err.message }, { status: 500 });
