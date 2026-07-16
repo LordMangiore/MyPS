@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useAuth } from './auth-context';
 import {
@@ -40,6 +40,7 @@ import {
   removeRoomFromProject,
   renameRoomInProject,
   groupProductsByRoom,
+  roomLabel,
   moveProductToRoom,
   setProductQty,
   removeProductAt,
@@ -62,6 +63,132 @@ const colors = {
 
 const TAB_IDS = ['overview', 'products', 'designs', 'photos', 'estimates', 'activity'];
 
+// -------- Demo persona replies in the discussion feed --------
+
+/**
+ * Demo personas the shared /api/ai-reply service knows about. Mirrors
+ * DEMO_IDENTITY_BY_NAME in netlify/functions/lib/seed.mjs.
+ *
+ * Seeded connections carry `demoIdentity`, but a project's `team` entries only
+ * store name/role/type — so we resolve by connection first and fall back to the
+ * name. Anyone who resolves to nothing (real invited users, James Anderson,
+ * Mike Torres) simply never replies: we only ever put words in a demo persona's
+ * mouth, never a real person's.
+ */
+const DEMO_IDENTITY_BY_NAME = {
+  'Kim Marks': 'demo-kim-marks',
+  'Bubba Beans': 'demo-bubba-beans',
+  "Ryan O'Toole": 'demo-ryan-otoole',
+  'Sarah Chen': 'demo-sarah-chen',
+  'Heather Yager': 'demo-heather-yager',
+};
+
+/**
+ * `/api/ai-reply` is the contract, but its [[redirects]] entry in netlify.toml
+ * is still landing. Netlify always serves functions at /.netlify/functions/<name>
+ * regardless of redirects, so fall back to that path on a 404 rather than
+ * silently dropping the reply. Once the redirect ships the first call succeeds
+ * and the fallback never fires.
+ */
+const AI_REPLY_PATHS = ['/api/ai-reply', '/.netlify/functions/ai-reply'];
+let aiReplyPath = null;
+
+const fetchAiReply = async ({ identity, message, history, context }) => {
+  const payload = JSON.stringify({
+    identity,
+    message,
+    history,
+    surface: 'project-discussion',
+    ...(context ? { context } : {}),
+  });
+  const paths = aiReplyPath ? [aiReplyPath] : AI_REPLY_PATHS;
+
+  for (const path of paths) {
+    try {
+      const res = await fetch(path, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: payload,
+      });
+      if (res.status === 404) continue; // redirect not live yet — try direct path
+      const data = await res.json();
+      // `source` is "ai" or "canned" (key missing / API blip). Both are valid
+      // replies and must be treated identically — never surfaced in the UI.
+      if (data?.reply) {
+        aiReplyPath = path; // remember the path that worked
+        return data.reply;
+      }
+      return null;
+    } catch {
+      // try the next candidate path
+    }
+  }
+  return null;
+};
+
+/**
+ * Who on the team should field this post? Each rule owns a topic; the rule with
+ * the most keyword hits that has someone on THIS project's team answers.
+ * Deliberately simple and explainable — it only has to look considered, not be
+ * a classifier.
+ */
+const RESPONDER_RULES = [
+  {
+    // Install logistics -> whoever swings the hammer.
+    keywords: [
+      'install', 'subfloor', 'underlayment', 'demo day', 'tear out', 'rip out',
+      'acclimat', 'grout', 'crew', 'schedule', 'scheduling', 'prep', 'waste factor',
+      'square foot', 'square feet', 'sq ft', 'moisture', 'level', 'transition strip',
+      'labor', 'measure',
+    ],
+    matches: (m) => m.type === 'tradepro',
+  },
+  {
+    // Look and feel -> the designer.
+    keywords: [
+      'color', 'colour', 'tone', 'shade', 'design', 'style', 'look', 'match',
+      'finish', 'pattern', 'layout', 'texture', 'transition', 'aesthetic',
+      'stain', 'grain', 'coordinate', 'palette', 'warm', 'cool', 'contrast',
+    ],
+    matches: (m) => /design/i.test(m.role || ''),
+  },
+  {
+    // Samples, pricing, orders, showroom logistics -> the account manager.
+    keywords: [
+      'sample', 'quote', 'estimate', 'price', 'pricing', 'cost', 'budget',
+      'order', 'pickup', 'pick up', 'delivery', 'deliver', 'lead time', 'stock',
+      'invoice', 'showroom', 'availability', 'ship', 'reorder', 'discontinued',
+    ],
+    matches: (m) => /account manager/i.test(m.role || ''),
+  },
+];
+
+const scoreRule = (text, keywords) =>
+  keywords.reduce((n, k) => (text.includes(k) ? n + 1 : n), 0);
+
+/**
+ * `candidates` are team members already resolved to a demo persona.
+ * Default is the account manager — the member's main point of contact, and who
+ * they'd expect to hear from when nothing more specific applies.
+ */
+const pickResponder = (message, candidates) => {
+  if (!candidates.length) return null;
+  const text = String(message || '').toLowerCase();
+  const ranked = RESPONDER_RULES
+    .map((rule) => ({ rule, score: scoreRule(text, rule.keywords) }))
+    .filter((r) => r.score > 0)
+    .sort((a, b) => b.score - a.score);
+  for (const { rule } of ranked) {
+    const hit = candidates.find((c) => rule.matches(c));
+    if (hit) return hit;
+  }
+  return (
+    candidates.find((c) => /account manager/i.test(c.role || '')) ||
+    candidates.find((c) => c.type === 'prosource') ||
+    candidates[0]
+  );
+};
+
 export default function ProjectDetailPage() {
   const { loadUserData, saveUserData, userId, userName, accountManager } = useAuth();
   // ?tab=products lets the shop's save-to-project flow land on the right tab.
@@ -79,7 +206,6 @@ export default function ProjectDetailPage() {
   const [addTeamOpen, setAddTeamOpen] = useState(false);
   const [newTeamEmail, setNewTeamEmail] = useState('');
   const [newTeamRole, setNewTeamRole] = useState('view');
-  const [unreadActivity, setUnreadActivity] = useState(3);
   const [saving, setSaving] = useState(false);
   const [snapshot, setSnapshot] = useState(null);
   const navigate = useNavigate();
@@ -94,14 +220,6 @@ export default function ProjectDetailPage() {
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [routeId]);
-
-  // Auto-mark activity items as read once the user views the tab.
-  useEffect(() => {
-    if (activeTab === 'activity' && unreadActivity > 0) {
-      const t = setTimeout(() => setUnreadActivity(0), 600);
-      return () => clearTimeout(t);
-    }
-  }, [activeTab, unreadActivity]);
 
   const [projectData, setProjectData] = useState(DEFAULT_PROJECT);
   const [projectList, setProjectList] = useState([]); // full collection
@@ -317,11 +435,22 @@ export default function ProjectDetailPage() {
     return { ...styles.avatar(44), background: `linear-gradient(135deg, ${colors.red} 0%, #dc2626 100%)` };
   };
 
+  /** Same colour language as the team sidebar, sized for the discussion feed. */
+  const commentAvatarStyle = (type) => {
+    if (type === 'prosource') return styles.avatar(40);
+    if (type === 'client') return { ...styles.avatar(40), background: `linear-gradient(135deg, ${colors.green} 0%, #059669 100%)` };
+    return { ...styles.avatar(40), background: `linear-gradient(135deg, ${colors.red} 0%, #dc2626 100%)` };
+  };
+
   // -------- Discussion comments --------
   const [comments, setComments] = useState([]);
   const [commentText, setCommentText] = useState('');
   const [commentIsPrivate, setCommentIsPrivate] = useState(false);
   const [postingComment, setPostingComment] = useState(false);
+  // The teammate currently "typing" a reply, or null.
+  const [typingResponder, setTypingResponder] = useState(null);
+  // Bumped to invalidate an in-flight reply (project switch / unmount).
+  const replyToken = useRef(0);
 
   useEffect(() => {
     if (!userId || !projectId) return;
@@ -335,33 +464,133 @@ export default function ProjectDetailPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId, projectId]);
 
+  // Switching projects (or leaving) invalidates any reply still in flight.
+  useEffect(() => () => {
+    replyToken.current += 1;
+  }, [projectId]);
+
+  /**
+   * Project team members who map to a demo persona the AI-reply service knows.
+   * Everyone else is filtered out — a real user on the team never gets words
+   * put in their mouth.
+   */
+  const teamPersonas = useMemo(
+    () =>
+      team
+        .map((m) => {
+          const conn = connections.find((c) => String(c.id) === String(m.connectionId));
+          const identity = conn?.demoIdentity || DEMO_IDENTITY_BY_NAME[m.name] || null;
+          return identity ? { ...m, identity } : null;
+        })
+        .filter(Boolean),
+    [team, connections]
+  );
+
+  /**
+   * Prior turns for the persona's context, oldest first. The persona's own past
+   * posts are "them"; everything else is "user". Another persona's post is
+   * attributed inline so the responder doesn't read it as the member speaking.
+   * Private notes are left out — they aren't visible to the team.
+   */
+  const buildReplyHistory = (thread, identity) =>
+    thread
+      .filter((c) => !c.private)
+      .slice(-12)
+      .map((c) =>
+        c.authorIdentity === identity
+          ? { from: 'them', body: c.body }
+          : { from: 'user', body: c.authorIdentity ? `${c.author}: ${c.body}` : c.body }
+      );
+
+  /**
+   * Ask a teammate to reply to the member's post.
+   *
+   * Only ever called from postComment — i.e. only a member's own post triggers a
+   * reply. The persona's post is written straight to the blob and never routed
+   * back through here, so replies cannot chain.
+   */
+  const requestPersonaReply = async (post, thread) => {
+    const responder = pickResponder(post.body, teamPersonas);
+    if (!responder) return;
+    const token = ++replyToken.current;
+    const targetId = projectId;
+    setTypingResponder(responder);
+    try {
+      const [reply] = await Promise.all([
+        fetchAiReply({
+          identity: responder.identity,
+          message: post.body,
+          // `post` is the message itself — the rest of the thread is the history.
+          history: buildReplyHistory(thread.slice(0, -1), responder.identity),
+          context: {
+            projectName: projectData.name,
+            rooms: rooms.map((r) => r.name).filter(Boolean),
+            products: products.map((p) => p.name).filter(Boolean),
+          },
+        }),
+        // Let the reply land like someone typed it, not like an API returned.
+        new Promise((resolve) => setTimeout(resolve, 900 + Math.random() * 900)),
+      ]);
+      if (token !== replyToken.current || !reply) return;
+
+      // Re-read: the member may have posted again while this was in flight.
+      const stored = (await loadUserData('discussions', null)) || {};
+      const list = Array.isArray(stored[targetId]) ? stored[targetId] : [];
+      const next = [
+        ...list,
+        {
+          id: `c-${Date.now()}-${responder.identity}`,
+          author: responder.name,
+          authorRole: responder.type,
+          authorTitle: responder.role,
+          authorInitials: responder.initials,
+          authorIdentity: responder.identity,
+          body: reply,
+          private: false,
+          createdAt: Date.now(),
+        },
+      ];
+      await saveUserData('discussions', { ...stored, [targetId]: next });
+      if (token !== replyToken.current) return;
+      setComments(next);
+    } catch (err) {
+      // A missing reply isn't worth interrupting the member with an alert.
+      console.warn('Persona reply failed:', err.message);
+    } finally {
+      if (token === replyToken.current) setTypingResponder(null);
+    }
+  };
+
   const postComment = async () => {
     const text = commentText.trim();
     if (!text || !projectId) return;
     setPostingComment(true);
+    const isPrivate = commentIsPrivate;
+    let posted = null;
     try {
       const stored = (await loadUserData('discussions', null)) || {};
       const list = Array.isArray(stored[projectId]) ? stored[projectId] : [];
-      const next = [
-        ...list,
-        {
-          id: `c-${Date.now()}`,
-          author: 'Me',
-          authorRole: 'tradepro',
-          body: text,
-          private: commentIsPrivate,
-          createdAt: Date.now(),
-        },
-      ];
+      const entry = {
+        id: `c-${Date.now()}`,
+        author: 'Me',
+        authorRole: 'tradepro',
+        body: text,
+        private: isPrivate,
+        createdAt: Date.now(),
+      };
+      const next = [...list, entry];
       await saveUserData('discussions', { ...stored, [projectId]: next });
       setComments(next);
       setCommentText('');
       setCommentIsPrivate(false);
+      posted = { entry, thread: next };
     } catch (err) {
       alert(`Could not post comment: ${err.message}`);
     } finally {
       setPostingComment(false);
     }
+    // A private note is visible only to the member, so nobody replies to it.
+    if (posted && !isPrivate) requestPersonaReply(posted.entry, posted.thread);
   };
 
   const formatCommentDate = (ts) => {
@@ -443,6 +672,104 @@ export default function ProjectDetailPage() {
   const removeProduct = (index) => {
     persistProjectFields({ products: removeProductAt(products, index) });
   };
+
+  // -------- Activity --------
+
+  /**
+   * Real project activity, newest first.
+   *
+   * This used to be two hand-written lists that credited Kim Marks with adding
+   * a "Top Knobs Garrison Knob" — a product no project has, which reads as
+   * broken next to a Products tab showing real data. Everything here is instead
+   * derived from timestamps the app already writes. An old record missing a
+   * timestamp just yields no event rather than an invented one.
+   */
+  const activity = useMemo(() => {
+    const record = projectId ? projectList.find((p) => p.id === projectId) : null;
+    const me = {
+      name: userName || 'You',
+      initials: (userName || 'You').slice(0, 2).toUpperCase(),
+      type: 'tradepro',
+    };
+    const events = [];
+
+    (projectData.rooms || []).forEach((room) => {
+      if (!room.createdAt) return;
+      events.push({
+        id: `act-room-${room.id}`, ...me, ts: room.createdAt,
+        text: <>Added <strong>{room.name}</strong> as a room</>,
+      });
+    });
+
+    (projectData.products || []).forEach((p, i) => {
+      if (!p.addedAt) return;
+      events.push({
+        id: `act-product-${p.sku || p.id || 'x'}-${i}`, ...me, ts: p.addedAt,
+        text: (
+          <>
+            Added <strong>{p.name}</strong> to{' '}
+            {p.roomId ? roomLabel(projectData.rooms, p.roomId) : 'products'}
+          </>
+        ),
+      });
+    });
+
+    team.forEach((m) => {
+      if (!m.addedAt) return;
+      events.push({
+        id: `act-team-${m.connectionId}`, ...me, ts: m.addedAt,
+        text: (
+          <>
+            Added <strong>{m.name}</strong>{' '}
+            {m.role ? `as ${String(m.role).toLowerCase()}` : 'to the team'}
+          </>
+        ),
+      });
+    });
+
+    comments.forEach((c) => {
+      const isPersona = !!c.authorIdentity;
+      events.push({
+        id: `act-post-${c.id}`,
+        name: isPersona ? c.author : me.name,
+        initials: isPersona
+          ? (c.authorInitials || String(c.author || '').slice(0, 2).toUpperCase())
+          : me.initials,
+        type: isPersona ? c.authorRole : 'tradepro',
+        ts: c.createdAt,
+        text: c.private ? <>Added a private note</> : <>Posted in the discussion</>,
+      });
+    });
+
+    if (record?.createdAt) {
+      events.push({ id: 'act-created', ...me, ts: record.createdAt, text: <>Created this project</> });
+    }
+
+    return events.filter((e) => e.ts).sort((a, b) => b.ts - a.ts);
+  }, [projectId, projectList, projectData, team, comments, userName]);
+
+  // Unread = activity since the last time this project's Activity tab was open.
+  // (Previously a hardcoded literal 3, which was true of no project.)
+  const activitySeenKey = projectId ? `ps-activity-seen-${projectId}` : null;
+  const [activitySeenAt, setActivitySeenAt] = useState(0);
+  useEffect(() => {
+    if (!activitySeenKey) return;
+    setActivitySeenAt(Number(localStorage.getItem(activitySeenKey) || 0));
+  }, [activitySeenKey]);
+
+  const unreadActivity = activity.filter((e) => e.ts > activitySeenAt).length;
+
+  // Mark as read once the user has actually sat on the tab for a moment.
+  useEffect(() => {
+    if (activeTab !== 'activity' || !activitySeenKey || !activity.length) return;
+    const newest = activity[0].ts;
+    if (newest <= activitySeenAt) return;
+    const t = setTimeout(() => {
+      localStorage.setItem(activitySeenKey, String(newest));
+      setActivitySeenAt(newest);
+    }, 600);
+    return () => clearTimeout(t);
+  }, [activeTab, activity, activitySeenAt, activitySeenKey]);
 
   const tabs = [
     { id: 'overview', label: 'Overview', icon: FileText },
@@ -1588,10 +1915,41 @@ export default function ProjectDetailPage() {
                     </div>
                   </div>
 
-                  {/* User-posted comments (live) */}
-                  {comments.length > 0 && (
+                  {/* Live thread: the member's posts and their team's replies. */}
+                  {(comments.length > 0 || typingResponder) && (
                     <div style={{ borderTop: `1px solid ${colors.gray200}`, paddingTop: 24, marginBottom: 24 }}>
-                      {comments.slice().reverse().map((c) => (
+                      {/* Newest first, so the reply being typed belongs at the top. */}
+                      {typingResponder && (
+                        <div style={{ display: 'flex', gap: 12, marginBottom: 24 }}>
+                          <div style={commentAvatarStyle(typingResponder.type)}>{typingResponder.initials}</div>
+                          <div style={{ flex: 1 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                              <span style={{ fontWeight: 600, fontSize: 14, color: colors.gray900 }}>{typingResponder.name}</span>
+                              <span style={{ fontSize: 12, color: colors.gray500 }}>is typing…</span>
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 4, height: 22 }}>
+                              {[0, 1, 2].map((i) => (
+                                <span
+                                  key={i}
+                                  className="animate-pulse"
+                                  style={{
+                                    width: 6, height: 6, borderRadius: '50%',
+                                    background: colors.gray500,
+                                    animationDelay: `${i * 0.2}s`,
+                                  }}
+                                />
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                      {comments.slice().reverse().map((c) => {
+                        // No authorIdentity => the member's own post. Stored
+                        // comments predate personas and land here too.
+                        const isPersona = !!c.authorIdentity;
+                        const name = isPersona ? c.author : (userName || 'You');
+                        const badge = memberBadgeStyle(isPersona ? c.authorRole : 'tradepro');
+                        return (
                         <div key={c.id} style={{
                           display: 'flex', gap: 12, marginBottom: 24,
                           ...(c.private ? {
@@ -1603,18 +1961,22 @@ export default function ProjectDetailPage() {
                             marginRight: -16,
                           } : {}),
                         }}>
-                          <div style={{
-                            ...styles.avatar(40),
-                            background: `linear-gradient(135deg, ${colors.red} 0%, #dc2626 100%)`
-                          }}>{(userName || 'You').slice(0, 2).toUpperCase()}</div>
+                          <div style={commentAvatarStyle(isPersona ? c.authorRole : 'tradepro')}>
+                            {isPersona
+                              ? (c.authorInitials || name.slice(0, 2).toUpperCase())
+                              : name.slice(0, 2).toUpperCase()}
+                          </div>
                           <div style={{ flex: 1 }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-                              <span style={{ fontWeight: 600, fontSize: 14, color: colors.gray900 }}>{userName || 'You'}</span>
+                              <span style={{ fontWeight: 600, fontSize: 14, color: colors.gray900 }}>{name}</span>
                               <span style={{
                                 fontSize: 10, fontWeight: 600,
-                                color: colors.red, background: '#fee2e2',
-                                padding: '2px 6px', borderRadius: 3,
-                              }}>TRADE PRO</span>
+                                color: badge.color, background: badge.background,
+                                padding: '2px 6px', borderRadius: 3, textTransform: 'uppercase',
+                              }}>{badge.label}</span>
+                              {isPersona && c.authorTitle && (
+                                <span style={{ fontSize: 12, color: colors.gray500 }}>{c.authorTitle}</span>
+                              )}
                               {c.private && (
                                 <span style={{
                                   fontSize: 11, fontWeight: 600,
@@ -1630,12 +1992,13 @@ export default function ProjectDetailPage() {
                             </p>
                           </div>
                         </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   )}
 
                   {/* Empty state when no comments exist yet. */}
-                  {comments.length === 0 && (
+                  {comments.length === 0 && !typingResponder && (
                     <div style={{
                       borderTop: `1px solid ${colors.gray200}`,
                       paddingTop: 32, paddingBottom: 16,
@@ -1945,48 +2308,54 @@ export default function ProjectDetailPage() {
                 </div>
               </div>
 
-              {/* Recent Activity */}
+              {/* Recent Activity — real events, newest 3. */}
               <div style={styles.card}>
                 <div style={styles.cardHeader}>
                   <h3 style={styles.cardTitle}>Recent Activity</h3>
-                  <a style={{ ...styles.editLink, fontSize: 13 }}>View All</a>
+                  {activity.length > 3 && (
+                    <button
+                      onClick={() => setActiveTab('activity')}
+                      style={{
+                        ...styles.editLink, fontSize: 13,
+                        background: 'none', border: 'none', padding: 0,
+                        cursor: 'pointer', fontFamily: 'inherit',
+                      }}
+                    >
+                      View All
+                    </button>
+                  )}
                 </div>
                 <div style={{ ...styles.cardBody, padding: '0 20px' }}>
-                  <div style={styles.activityList}>
-                    <div style={styles.activityItem}>
-                      <div style={styles.avatar(32)}>KM</div>
-                      <div style={styles.activityContent}>
-                        <div style={styles.activityText}>
-                          Added <strong>Top Knobs Garrison Knob</strong> to products
-                        </div>
-                        <div style={styles.activityTime}>Dec 18, 2025 at 8:53 AM</div>
-                      </div>
+                  {activity.length === 0 ? (
+                    <div style={{ fontSize: 13, color: colors.gray500, textAlign: 'center', padding: '16px 0' }}>
+                      No activity yet.
                     </div>
-                    <div style={styles.activityItem}>
-                      <div style={{ 
-                        ...styles.avatar(32), 
-                        background: `linear-gradient(135deg, ${colors.red} 0%, #dc2626 100%)` 
-                      }}>SQ</div>
-                      <div style={styles.activityContent}>
-                        <div style={styles.activityText}>
-                          Added <strong>Ryan O'Toole</strong> as installer
+                  ) : (
+                    <div style={styles.activityList}>
+                      {activity.slice(0, 3).map((item, i, arr) => (
+                        <div
+                          key={item.id}
+                          style={{
+                            ...styles.activityItem,
+                            ...(i === arr.length - 1 ? { borderBottom: 'none' } : {}),
+                          }}
+                        >
+                          <div style={{
+                            ...styles.avatar(32),
+                            ...(item.type === 'prosource' ? {} : {
+                              background: item.type === 'client'
+                                ? `linear-gradient(135deg, ${colors.green} 0%, #059669 100%)`
+                                : `linear-gradient(135deg, ${colors.red} 0%, #dc2626 100%)`,
+                            }),
+                          }}>{item.initials}</div>
+                          <div style={styles.activityContent}>
+                            <div style={styles.activityText}>{item.text}</div>
+                            <div style={styles.activityTime}>{formatCommentDate(item.ts)}</div>
+                          </div>
                         </div>
-                        <div style={styles.activityTime}>Dec 17, 2025 at 3:22 PM</div>
-                      </div>
+                      ))}
                     </div>
-                    <div style={{ ...styles.activityItem, borderBottom: 'none' }}>
-                      <div style={{ 
-                        ...styles.avatar(32), 
-                        background: `linear-gradient(135deg, ${colors.red} 0%, #dc2626 100%)` 
-                      }}>SQ</div>
-                      <div style={styles.activityContent}>
-                        <div style={styles.activityText}>
-                          Created this project
-                        </div>
-                        <div style={styles.activityTime}>Dec 15, 2025 at 10:30 AM</div>
-                      </div>
-                    </div>
-                  </div>
+                  )}
                 </div>
               </div>
 
@@ -2154,44 +2523,54 @@ export default function ProjectDetailPage() {
               </p>
             </div>
 
-            <div style={styles.card}>
-              <div style={{ padding: 0 }}>
-                {[
-                  { initials: 'KM', user: 'Kim Marks', action: 'Added Top Knobs Garrison Knob 1 1/4" Polished Nickel to products', time: 'Dec 18, 2025 at 8:53 AM', isProSource: true },
-                  { initials: 'SQ', user: 'Suzie Q Snowflake', action: 'Added Ryan O\'Toole as installer', time: 'Dec 17, 2025 at 3:22 PM', isTradePro: true },
-                  { initials: 'SQ', user: 'Suzie Q Snowflake', action: 'Added Bubba Beans as client', time: 'Dec 16, 2025 at 2:15 PM', isTradePro: true },
-                  { initials: 'HY', user: 'Heather Yager', action: 'Joined as designer', time: 'Dec 15, 2025 at 11:30 AM', isProSource: true },
-                  { initials: 'SQ', user: 'Suzie Q Snowflake', action: 'Created this project', time: 'Dec 15, 2025 at 10:30 AM', isTradePro: true },
-                ].map((item, i, arr) => (
-                  <div
-                    key={i}
-                    style={{
-                      display: 'flex',
-                      gap: 16,
-                      padding: 20,
-                      borderBottom: i < arr.length - 1 ? `1px solid ${colors.gray100}` : 'none',
-                      borderLeft: i < unreadActivity ? `3px solid ${colors.darkBlue}` : '3px solid transparent',
-                      background: i < unreadActivity ? '#fafbff' : '#fff',
-                      alignItems: 'flex-start',
-                      transition: 'background 0.3s ease, border-color 0.3s ease',
-                    }}
-                  >
-                    <div style={{
-                      ...styles.avatar(40),
-                      background: item.isTradePro
-                        ? `linear-gradient(135deg, ${colors.red} 0%, #dc2626 100%)`
-                        : `linear-gradient(135deg, ${colors.lightBlue} 0%, ${colors.darkBlue} 100%)`,
-                    }}>{item.initials}</div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 14, color: colors.gray700, marginBottom: 4 }}>
-                        <strong>{item.user}</strong> {item.action}
-                      </div>
-                      <div style={{ fontSize: 13, color: colors.gray500 }}>{item.time}</div>
-                    </div>
-                  </div>
-                ))}
+            {activity.length === 0 ? (
+              <div style={styles.emptyState}>
+                <div style={styles.emptyIcon}><Bell size={40} color={colors.gray300} /></div>
+                <h3 style={styles.emptyTitle}>No activity yet</h3>
+                <p style={styles.emptyText}>
+                  Rooms, products, team changes, and discussion posts all show up here.
+                </p>
               </div>
-            </div>
+            ) : (
+              <div style={styles.card}>
+                <div style={{ padding: 0 }}>
+                  {/* Newest first, so the unread ones are exactly the first N. */}
+                  {activity.map((item, i, arr) => {
+                    const unread = i < unreadActivity;
+                    return (
+                      <div
+                        key={item.id}
+                        style={{
+                          display: 'flex',
+                          gap: 16,
+                          padding: 20,
+                          borderBottom: i < arr.length - 1 ? `1px solid ${colors.gray100}` : 'none',
+                          borderLeft: unread ? `3px solid ${colors.darkBlue}` : '3px solid transparent',
+                          background: unread ? '#fafbff' : '#fff',
+                          alignItems: 'flex-start',
+                          transition: 'background 0.3s ease, border-color 0.3s ease',
+                        }}
+                      >
+                        <div style={{
+                          ...styles.avatar(40),
+                          ...(item.type === 'prosource' ? {} : {
+                            background: item.type === 'client'
+                              ? `linear-gradient(135deg, ${colors.green} 0%, #059669 100%)`
+                              : `linear-gradient(135deg, ${colors.red} 0%, #dc2626 100%)`,
+                          }),
+                        }}>{item.initials}</div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: 14, color: colors.gray700, marginBottom: 4 }}>
+                            <strong>{item.name}</strong> {item.text}
+                          </div>
+                          <div style={{ fontSize: 13, color: colors.gray500 }}>{formatCommentDate(item.ts)}</div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>

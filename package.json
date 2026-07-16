@@ -14,6 +14,7 @@
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.112.0",
     "@netlify/blobs": "^10.7.5",
     "@twilio/conversations": "^3.0.0",
     "@vitejs/plugin-react": "^5.1.2",
