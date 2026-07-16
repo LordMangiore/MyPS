@@ -7,8 +7,8 @@ import AddressAutocomplete from './components/AddressAutocomplete';
 /**
  * `initialPage` / `initialMode` let the router mount this straight onto the
  * email form (/sign-in, /create-account) instead of the marketing landing (/).
- * Both entry points run the identical email→OTP flow — the OTP verify response
- * tells us whether this is a new or returning user — so `authMode` only steers
+ * Both entry points run the identical email→OTP flow. The OTP verify response
+ * tells us whether this is a new or returning user, so `authMode` only steers
  * copy, never behavior.
  */
 const ProSourceLogin = ({ initialPage = 'email', initialMode = 'signin' }) => {
@@ -23,7 +23,7 @@ const ProSourceLogin = ({ initialPage = 'email', initialMode = 'signin' }) => {
   const [codeError, setCodeError] = useState('');
   const [sending, setSending] = useState(false);
   const [verifying, setVerifying] = useState(false);
-  // CRM lookup state — kicked off when zip is entered in Step 1, used to
+  // CRM lookup state, kicked off when zip is entered in Step 1, used to
   // render the assigned showroom + account manager on the final step.
   const [crmLookup, setCrmLookup] = useState(null);
   const [crmLookupZip, setCrmLookupZip] = useState(null);
@@ -50,11 +50,11 @@ const ProSourceLogin = ({ initialPage = 'email', initialMode = 'signin' }) => {
   const [hoOptInTerms, setHoOptInTerms] = useState(false);
   const toggleHoRoom = (k) => setHoRooms(prev => ({ ...prev, [k]: !prev[k] }));
   const toggleHoWith = (k) => setHoWorkingWith(prev => ({ ...prev, [k]: !prev[k] }));
-  // Step 1 — About You
+  // Step 1: About You
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [phone, setPhone] = useState('');
-  // Step 2 — Your Business
+  // Step 2: Your Business
   const [businessName, setBusinessName] = useState('');
   const [businessStreet, setBusinessStreet] = useState('');
   const [businessCity, setBusinessCity] = useState('');
@@ -66,10 +66,10 @@ const ProSourceLogin = ({ initialPage = 'email', initialMode = 'signin' }) => {
   const [businessType, setBusinessType] = useState('');
   const [licenseNumber, setLicenseNumber] = useState('');
   const [website, setWebsite] = useState('');
-  const [employees, setEmployees] = useState('6 – 10');
-  const [projects, setProjects] = useState('5 – 10');
-  const [spend, setSpend] = useState('$20,000 – $50,000');
-  // Step 3 — How You'll Work With Us
+  const [employees, setEmployees] = useState('6-10');
+  const [projects, setProjects] = useState('5-10');
+  const [spend, setSpend] = useState('$20,000-$50,000');
+  // Step 3: How You'll Work With Us
   const [showroomUsage, setShowroomUsage] = useState('accompany');
   const [interests, setInterests] = useState({ hardwood: false, lvp: false, tile: false, carpet: false, cabinets: false, countertops: false, install: false });
   const [currentSuppliers, setCurrentSuppliers] = useState('');
@@ -144,7 +144,7 @@ const ProSourceLogin = ({ initialPage = 'email', initialMode = 'signin' }) => {
         setPendingSession(session);
         setPage('typeChoice');
       } else {
-        // Returning user — log in immediately.
+        // Returning user. Log in immediately.
         finalizeSession(session);
       }
     } catch (err) {
@@ -226,7 +226,7 @@ const ProSourceLogin = ({ initialPage = 'email', initialMode = 'signin' }) => {
     if (pendingSession) {
       const payload = buildProfilePayload();
       // Save the profile first so it's persisted before the dashboard renders.
-      // Don't block login if save fails — the user can re-save from settings.
+      // Don't block login if save fails. The user can re-save from settings.
       try {
         await saveProfile(payload, {
           userId: pendingSession.userId,
@@ -244,7 +244,7 @@ const ProSourceLogin = ({ initialPage = 'email', initialMode = 'signin' }) => {
       });
     } else {
       // No verified session behind this wizard (only reachable if someone lands
-      // on the onboarding steps without verifying a code — handleVerify always
+      // on the onboarding steps without verifying a code, since handleVerify always
       // sets pendingSession). We can't mint a real account without OTP verify,
       // so fall back to the demo account rather than a session that can't save.
       await login({ name: firstName.trim() || undefined });
@@ -766,8 +766,8 @@ const ProSourceLogin = ({ initialPage = 'email', initialMode = 'signin' }) => {
       setDemoError(err.message || 'Could not start the demo session. Try again.');
       setDemoLoading(false);
     }
-    // On success this component unmounts as the router swaps to the dashboard —
-    // leave `demoLoading` on so the button can't be double-fired mid-navigation.
+    // On success this component unmounts as the router swaps to the dashboard.
+    // Leave `demoLoading` on so the button can't be double-fired mid-navigation.
   };
 
   const renderDemoSkip = () => (
@@ -1086,7 +1086,7 @@ const ProSourceLogin = ({ initialPage = 'email', initialMode = 'signin' }) => {
         'Quotes, projects, and client collaboration in one place',
       ],
       title: 'Create your account',
-      subtitle: "Start with your email — we'll send a one-time code, then ask a few quick questions.",
+      subtitle: "Start with your email. We'll send a one-time code, then ask a few quick questions.",
       cta: 'Get started',
       switchNote: 'Already a member?',
       switchLabel: 'Sign in',
@@ -1165,7 +1165,7 @@ const ProSourceLogin = ({ initialPage = 'email', initialMode = 'signin' }) => {
   };
 
   // ==================== PAGE: EMAIL SENT (OTP code entry) ====================
-  // One verify path for both intents — otp-verify tells us which it actually
+  // One verify path for both intents: otp-verify tells us which it actually
   // was, so `authMode` here only picks the wording.
   const renderEmailSentPage = () => (
     <div style={s.authLayout} className="grid grid-cols-1 md:grid-cols-2">
@@ -1355,7 +1355,7 @@ const ProSourceLogin = ({ initialPage = 'email', initialMode = 'signin' }) => {
     </div>
   );
 
-  // ==================== HOMEOWNER STEP 1 — About you ====================
+  // ==================== HOMEOWNER STEP 1: About you ====================
   const renderHomeownerStep1 = () => {
     const ready = firstName.trim() && lastName.trim() && businessStreet.trim() && businessCity.trim() && businessZip.trim();
     return (
@@ -1435,11 +1435,11 @@ const ProSourceLogin = ({ initialPage = 'email', initialMode = 'signin' }) => {
     );
   };
 
-  // ==================== HOMEOWNER STEP 2 — Your project ====================
+  // ==================== HOMEOWNER STEP 2: Your project ====================
   const renderHomeownerStep2 = () => {
     const projects = ['Kitchen remodel', 'Bathroom remodel', 'Whole-home renovation', 'Flooring only', 'Outdoor / patio', 'Other'];
-    const budgets = ['Under $10k', '$10k – $25k', '$25k – $50k', '$50k – $100k', 'Over $100k', 'Not sure yet'];
-    const timelines = ['Now (within 1 month)', '1–3 months', '3–6 months', '6+ months', 'Just browsing'];
+    const budgets = ['Under $10k', '$10k-$25k', '$25k-$50k', '$50k-$100k', 'Over $100k', 'Not sure yet'];
+    const timelines = ['Now (within 1 month)', '1-3 months', '3-6 months', '6+ months', 'Just browsing'];
     const rooms = [
       { value: 'kitchen', label: 'Kitchen' },
       { value: 'bath', label: 'Bathroom' },
@@ -1490,7 +1490,7 @@ const ProSourceLogin = ({ initialPage = 'email', initialMode = 'signin' }) => {
     );
   };
 
-  // ==================== HOMEOWNER STEP 3 — How we can help ====================
+  // ==================== HOMEOWNER STEP 3: How we can help ====================
   const renderHomeownerStep3 = () => {
     const withOptions = [
       { value: 'designer', label: 'An interior designer' },
@@ -1557,7 +1557,7 @@ const ProSourceLogin = ({ initialPage = 'email', initialMode = 'signin' }) => {
   };
 
   const renderStep1 = () => {
-    // Mirrors the "*" markers below — State is a select with a default, so it
+    // Mirrors the "*" markers below. State is a select with a default, so it
     // can't be empty.
     const ready = firstName.trim() && lastName.trim() && phone.trim()
       && businessStreet.trim() && businessCity.trim() && businessZip.trim();
@@ -1645,7 +1645,7 @@ const ProSourceLogin = ({ initialPage = 'email', initialMode = 'signin' }) => {
     );
   };
 
-  // ==================== PAGE: STEP 2 — Your Business ====================
+  // ==================== PAGE: STEP 2 (Your Business) ====================
   const renderStep2 = () => {
     const ready = businessName.trim() && tradeType && businessType;
     return (
@@ -1725,18 +1725,18 @@ const ProSourceLogin = ({ initialPage = 'email', initialMode = 'signin' }) => {
             <label style={s.fieldLabel}>Number of employees</label>
             <select style={s.select} value={employees} onChange={(e) => setEmployees(e.target.value)}>
               <option>Just me</option>
-              <option>2 – 5</option>
-              <option>6 – 10</option>
-              <option>11 – 50</option>
+              <option>2-5</option>
+              <option>6-10</option>
+              <option>11-50</option>
               <option>50+</option>
             </select>
           </div>
           <div style={s.field}>
             <label style={s.fieldLabel}>Projects per year</label>
             <select style={s.select} value={projects} onChange={(e) => setProjects(e.target.value)}>
-              <option>1 – 5</option>
-              <option>5 – 10</option>
-              <option>10 – 25</option>
+              <option>1-5</option>
+              <option>5-10</option>
+              <option>10-25</option>
               <option>25+</option>
             </select>
           </div>
@@ -1746,11 +1746,11 @@ const ProSourceLogin = ({ initialPage = 'email', initialMode = 'signin' }) => {
           <label style={s.fieldLabel}>Average annual spend on flooring / surfaces</label>
           <select style={s.select} value={spend} onChange={(e) => setSpend(e.target.value)}>
             <option>Less than $20,000</option>
-            <option>$20,000 – $50,000</option>
-            <option>$50,000 – $100,000</option>
-            <option>$100,000 – $250,000</option>
-            <option>$250,000 – $500,000</option>
-            <option>$500,000 – $1M</option>
+            <option>$20,000-$50,000</option>
+            <option>$50,000-$100,000</option>
+            <option>$100,000-$250,000</option>
+            <option>$250,000-$500,000</option>
+            <option>$500,000-$1M</option>
             <option>$1M+</option>
           </select>
         </div>
@@ -1773,7 +1773,7 @@ const ProSourceLogin = ({ initialPage = 'email', initialMode = 'signin' }) => {
     );
   };
 
-  // ==================== PAGE: STEP 3 — How You'll Work With Us ====================
+  // ==================== PAGE: STEP 3 (How You'll Work With Us) ====================
   const renderStep3 = () => (
     <div style={s.onboardingLayout}>
       <div style={{ width: '100%', maxWidth: 600, marginBottom: 32, textAlign: 'center' }}>
@@ -1881,7 +1881,7 @@ const ProSourceLogin = ({ initialPage = 'email', initialMode = 'signin' }) => {
     </div>
   );
 
-  // ==================== PAGE: STEP 4 — Review & Agree ====================
+  // ==================== PAGE: STEP 4 (Review & Agree) ====================
   const renderStep4 = () => (
     <div style={s.onboardingLayout}>
       <div style={{ width: '100%', maxWidth: 600, marginBottom: 32, textAlign: 'center' }}>

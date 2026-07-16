@@ -142,7 +142,7 @@ const AppointmentModal = ({ isOpen, onClose, isLoggedIn = true }) => {
       goNext();
     } catch (err) {
       console.warn('Appointment save failed:', err.message);
-      // Still show confirmation — booking flow shouldn't dead-end on a save hiccup.
+      // Still show confirmation. The booking flow shouldn't dead-end on a save hiccup.
       setConfirmed(true);
       goNext();
     } finally {
@@ -327,7 +327,7 @@ const AppointmentModal = ({ isOpen, onClose, isLoggedIn = true }) => {
                 <div style={styles.confirmRow}>
                   <span style={styles.confirmLabel}>Topic</span>
                   <span style={styles.confirmValue}>
-                    {(HELP_OPTIONS.find((h) => h.value === help) || {}).label || '—'}
+                    {(HELP_OPTIONS.find((h) => h.value === help) || {}).label || 'Not set'}
                   </span>
                 </div>
                 {notes && (

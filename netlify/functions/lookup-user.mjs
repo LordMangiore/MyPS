@@ -9,7 +9,7 @@ import { getStore } from "@netlify/blobs";
  *   { found: true, user: { userId, email, firstName, lastName, name, role, type, businessName } }
  *   { found: false, email }
  *
- * Demo only — no auth gate.
+ * Demo only. No auth gate.
  */
 export default async function handler(req) {
   try {

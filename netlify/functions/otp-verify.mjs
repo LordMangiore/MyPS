@@ -5,7 +5,7 @@ const FIREBASE_API_KEY = process.env.FIREBASE_API_KEY;
 const IDENTITY_URL = "https://identitytoolkit.googleapis.com/v1";
 
 // Demo bypass: when set (or when Resend isn't configured), accept any 6-digit
-// code. Must match the otp-send.mjs flag — they share the same env signal.
+// code. Must match the otp-send.mjs flag, since they share the same env signal.
 const DEV_BYPASS =
   process.env.OTP_DEV_BYPASS === "true" || !process.env.RESEND_API_KEY;
 
@@ -48,7 +48,7 @@ async function ensureFirebaseUser(email) {
     return { idToken: data.idToken, refreshToken: data.refreshToken, uid: data.localId };
   }
 
-  // Doesn't exist — create
+  // Doesn't exist yet, so create it
   res = await fetch(`${IDENTITY_URL}/accounts:signUp?key=${FIREBASE_API_KEY}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -78,7 +78,7 @@ export default async function handler(req) {
 
     const normalizedEmail = email.toLowerCase().trim();
 
-    // Dev bypass — accept any 6-digit code and skip the blob check.
+    // Dev bypass: accept any 6-digit code and skip the blob check.
     if (DEV_BYPASS) {
       if (!/^\d{6}$/.test(String(code).trim())) {
         return Response.json({ error: "Enter the 6-digit code" }, { status: 400 });
@@ -118,7 +118,7 @@ export default async function handler(req) {
         return Response.json({ error: "Incorrect code. Try again." }, { status: 400 });
       }
 
-      // Success — burn the code
+      // Success. Burn the code.
       await store.delete(normalizedEmail);
     }
 

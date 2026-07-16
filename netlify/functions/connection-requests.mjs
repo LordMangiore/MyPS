@@ -1,13 +1,13 @@
 import { getStore } from "@netlify/blobs";
 
 /**
- * Incoming connection requests — real, persistent, blob-backed.
+ * Incoming connection requests: real, persistent, blob-backed.
  *
  * GET  /api/connection-requests?userId=X
  *      → { requests: [...], list: [...] }
  *      Seeds a demo set of incoming requests the first time a user asks, so the
  *      demo has something to accept. The seed marker means declining them all
- *      sticks — they do not come back on reload.
+ *      sticks; they do not come back on reload.
  *
  * POST /api/connection-requests { userId, requestId, action: 'accept'|'decline' }
  *      → { requests: [...], list: [...], connection? }
@@ -19,13 +19,13 @@ import { getStore } from "@netlify/blobs";
  * so the frontend gets connections + requests from one loadUserData call and
  * the user-data key whitelist doesn't need a new entry.
  *
- * Demo only — no auth check (consistent with user-data.mjs).
+ * Demo only: no auth check (consistent with user-data.mjs).
  */
 
 const blobKey = (userId) => `${userId}::connections`;
 
 // Seeded incoming requests. `demoIdentity` is what makes an accepted request
-// messageable — see the identity contract:
+// messageable. See the identity contract:
 //   demoIdentity → seeded demo contact · userId → real user · neither → pending.
 const buildSeedRequests = (now) => [
   {
@@ -140,7 +140,7 @@ export default async function handler(req) {
           email: request.email || "",
           phone: request.phone || "",
           location: request.location || "",
-          // Carry the identity through — this is what makes them messageable.
+          // Carry the identity through. This is what makes them messageable.
           ...(request.demoIdentity ? { demoIdentity: request.demoIdentity } : {}),
           ...(request.userId ? { userId: request.userId } : {}),
           status: "connected",

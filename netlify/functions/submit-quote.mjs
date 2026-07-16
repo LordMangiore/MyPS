@@ -243,8 +243,8 @@ export default async function handler(req) {
           from: FROM_ADDRESS,
           to: accountManager.email,
           subject: isSave
-            ? `New project (no quote yet): ${[firstName, lastName].filter(Boolean).join(" ") || normalizedEmail} — ${projectType}`
-            : `New lead: ${[firstName, lastName].filter(Boolean).join(" ") || normalizedEmail} — ${projectType}`,
+            ? `New project from ${[firstName, lastName].filter(Boolean).join(" ") || normalizedEmail}: ${projectType} (no quote yet)`
+            : `New lead from ${[firstName, lastName].filter(Boolean).join(" ") || normalizedEmail}: ${projectType}`,
           html: `
             <div style="font-family: 'Open Sans', -apple-system, sans-serif; max-width: 560px; padding: 32px 24px; color: #171717;">
               <div style="margin-bottom: 22px;">
@@ -253,7 +253,7 @@ export default async function handler(req) {
               <h2 style="margin: 0 0 6px; font-size: 19px;">${isSave ? 'New project saved (warm lead)' : 'New lead from your profile'}</h2>
               <p style="margin: 0 0 18px; color: #525252;">
                 ${isSave
-                  ? 'A homeowner built a project on ProSource and added products to it, but hasn\'t requested a quote yet. They picked you as their account manager. No immediate action needed — say hi when you have a moment.'
+                  ? 'A homeowner built a project on ProSource and added products to it, but hasn\'t requested a quote yet. They picked you as their account manager. No immediate action needed, but say hi when you have a moment.'
                   : 'A homeowner submitted a quote request via ProSource. Project + cart already saved on their account.'}
               </p>
               <div style="background:#f8f9fa;border-radius:8px;padding:14px 18px;margin-bottom:18px;">
@@ -277,8 +277,8 @@ export default async function handler(req) {
           from: FROM_ADDRESS,
           to: normalizedEmail,
           subject: isSave
-            ? `Your project is saved — ${projectType}`
-            : `Quote submitted — ${projectType}`,
+            ? `Your project is saved: ${projectType}`
+            : `Quote submitted: ${projectType}`,
           html: `
             <div style="font-family: 'Open Sans', -apple-system, sans-serif; max-width: 480px; padding: 32px 24px; color: #171717;">
               <div style="margin-bottom: 22px;">

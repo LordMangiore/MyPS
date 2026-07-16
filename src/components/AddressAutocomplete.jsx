@@ -8,13 +8,13 @@ import React, { useEffect, useRef, useState } from 'react';
  * addresses, which is what this demo needs.
  *
  * Props:
- *   value     — controlled street-address string
- *   onChange  — fires on every keystroke with the new string
- *   onSelect  — fires when a user picks a suggestion. Receives
+ *   value:      controlled street-address string
+ *   onChange:   fires on every keystroke with the new string
+ *   onSelect:   fires when a user picks a suggestion. Receives
  *               { street, city, state, zip } so the parent can populate
  *               its other address fields in one shot.
- *   style     — passed through to the input
- *   placeholder, disabled — pass-through input props.
+ *   style:      passed through to the input
+ *   placeholder, disabled: pass-through input props.
  *
  * Behavior: 300ms debounce, max 5 suggestions, filters to US results,
  * suggestions render in an absolute-positioned dropdown.
@@ -102,7 +102,7 @@ export default function AddressAutocomplete({
         setOpen(features.length > 0);
       } catch (err) {
         if (err.name !== 'AbortError') {
-          // Network or API hiccup — fall back silently to a regular text input.
+          // Network or API hiccup. Fall back silently to a regular text input.
           setSuggestions([]);
         }
       }

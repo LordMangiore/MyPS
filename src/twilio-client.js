@@ -46,13 +46,13 @@ const DEMO_IDENTITY_BY_NAME = Object.fromEntries(
 );
 
 /**
- * THE identity resolver — the single source of truth for "who is this
+ * THE identity resolver: the single source of truth for "who is this
  * connection, in Twilio terms?". Every conversation lookup and creation goes
  * through this, so the same person always maps to exactly one conversation.
  *
  *   seeded demo contact     -> connection.demoIdentity  ("demo-kim-marks")
  *   real signed-in user     -> connection.userId        ("ps-jane@acme.com")
- *   invited, not yet joined -> null (NOT messageable — "Invitation pending")
+ *   invited, not yet joined -> null (NOT messageable, "Invitation pending")
  *
  * Previously this was `conn-${connection.id}` here but `resolvedUser.userId` in
  * the connections invite flow, so the same person produced two conversations.
@@ -129,10 +129,10 @@ const fetchAiReply = async ({ identity, message, history, context }) => {
         headers: { 'Content-Type': 'application/json' },
         body: payload,
       });
-      if (res.status === 404) continue; // redirect not live yet — try direct path
+      if (res.status === 404) continue; // redirect not live yet, try direct path
       const data = await res.json();
       // `source` is "ai" or "canned" (key missing / API blip). Both are valid
-      // replies and must be treated identically — never surfaced in the UI.
+      // replies and must be treated identically. Neither is surfaced in the UI.
       if (data?.reply) {
         aiReplyPath = path; // remember the path that worked
         return data.reply;
@@ -275,7 +275,7 @@ export async function initTwilioClient({
     const ok = finish(resolve);
     const fail = finish((msg) => reject(new Error(msg)));
 
-    // Listen on multiple signals — the SDK emits both granular state changes
+    // Listen on multiple signals. The SDK emits both granular state changes
     // and convenience events. Whichever fires first wins.
     client.on('initialized', () => ok());
     client.on('initFailed', (info) => fail(info?.error?.message || 'initFailed'));
@@ -321,7 +321,7 @@ export async function initTwilioClient({
   client.on('messageAdded', refresh);
   client.on('conversationAdded', refresh);
   client.on('conversationUpdated', refresh);
-  // Fires for each conversation as the initial sync completes — without this a
+  // Fires for each conversation as the initial sync completes. Without this a
   // late sync leaves the UI stuck on whatever the first (possibly empty) load saw.
   client.on('conversationJoined', refresh);
   client.on('conversationLeft', refresh);
@@ -352,11 +352,11 @@ export async function initTwilioClient({
    * never reply on their own. When the member posts into one of their threads we
    * ask /api/ai-reply for an in-character line and post it back authored as that
    * demo identity. It then arrives over the same websocket as any other message,
-   * so the member watches it land in real time — nothing is faked client-side.
+   * so the member watches it land in real time. Nothing is faked client-side.
    *
    * Anti-loop / safety, in order:
    *   1. only ever called from sendMessage (a user-authored send), never from an
-   *      inbound message event — so a reply can't trigger another reply;
+   *      inbound message event, so a reply can't trigger another reply;
    *   2. isDemoIdentity() gates on the five seeded contacts, so real user-to-user
    *      conversations never auto-reply;
    *   3. the reply is authored as `identity` (the demo contact), never as userId.
@@ -397,11 +397,11 @@ export async function initTwilioClient({
         body: JSON.stringify({
           action: 'post',
           conversationSid: thread.sid,
-          identity, // authored as the demo contact — never as the member
+          identity, // authored as the demo contact, never as the member
           body: reply,
         }),
       });
-      // fetch doesn't throw on a 4xx/5xx, so check explicitly — otherwise a
+      // fetch doesn't throw on a 4xx/5xx, so check explicitly. Otherwise a
       // rejected post is indistinguishable from a delivered one.
       if (!res.ok) {
         const detail = await res.json().catch(() => ({}));
@@ -422,7 +422,7 @@ export async function initTwilioClient({
     await refresh();
 
     // Fire-and-forget so the member's own message renders immediately. Errors
-    // are swallowed inside maybeDemoReply — a missing reply must never make the
+    // are swallowed inside maybeDemoReply, because a missing reply must never make the
     // member's send look like it failed.
     const thread = threads.find((t) => t.sid === threadSid);
     if (thread) maybeDemoReply(thread, body);
@@ -431,7 +431,7 @@ export async function initTwilioClient({
   /**
    * Open (or create) a 1:1 conversation between the current user and a
    * connection record. Returns the thread sid you can pass to sendMessage.
-   * Idempotent — calling with the same connection returns the existing convo,
+   * Idempotent: calling with the same connection returns the existing convo,
    * because the identity resolver and the server's uniqueName are both derived
    * from the counterparty's real identity rather than the local connection row.
    */
@@ -439,7 +439,7 @@ export async function initTwilioClient({
     const otherIdentity = identityForConnection(connection);
     if (!otherIdentity) {
       throw new Error(
-        `${connection?.name || 'This person'} hasn't joined yet — their invitation is still pending.`
+        `${connection?.name || 'This person'} hasn't joined yet. Their invitation is still pending.`
       );
     }
 

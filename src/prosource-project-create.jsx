@@ -91,7 +91,7 @@ export default function ProSourceProjectCreate() {
 
   /**
    * Add someone who isn't a connection yet, straight from the wizard.
-   * Written as status 'invited' with inviteEmailSent: false — they have been
+   * Written as status 'invited' with inviteEmailSent: false, so they have been
    * added to the project, but no email has gone out. The Connections page has
    * the real invite flow; sending mail from here would surprise the user.
    */
@@ -200,7 +200,14 @@ export default function ProSourceProjectCreate() {
   };
 
   const createProject = async () => {
-    if (!userId) return;
+    // Never fail silently here. This used to be a bare `if (!userId) return`,
+    // which made the Create button do visibly nothing for anyone holding a
+    // session without a userId (e.g. one minted by the old demo-skip flow).
+    // No navigation, no error -- indistinguishable from a broken button.
+    if (!userId) {
+      setError('Your session has expired. Sign out and sign in again to create a project.');
+      return;
+    }
     setSaving(true);
     setError('');
     try {
@@ -441,7 +448,7 @@ export default function ProSourceProjectCreate() {
                   value={newRoomName}
                   onChange={(e) => setNewRoomName(e.target.value)}
                   onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addRoom(newRoomName); } }}
-                  placeholder="Add a room — e.g. Butler's Pantry"
+                  placeholder="Add a room, e.g. Butler's Pantry"
                   style={{ ...styles.input, flex: 1 }}
                 />
                 <button
@@ -500,7 +507,7 @@ export default function ProSourceProjectCreate() {
                 </div>
               ) : connections.length === 0 ? (
                 <div style={{ fontSize: 14, color: colors.gray500, padding: '8px 0 16px' }}>
-                  No connections yet — add the people working on this project below.
+                  No connections yet. Add the people working on this project below.
                 </div>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -605,7 +612,7 @@ export default function ProSourceProjectCreate() {
                         value={newPersonName}
                         onChange={(e) => setNewPersonName(e.target.value)}
                         onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addPerson(); } }}
-                        placeholder="Name — e.g. Dana Whitfield"
+                        placeholder="Name, e.g. Dana Whitfield"
                         style={styles.input}
                       />
                       <input
@@ -617,8 +624,8 @@ export default function ProSourceProjectCreate() {
                         style={styles.input}
                       />
                       <div style={{ fontSize: 12, color: colors.gray500 }}>
-                        They'll be added to this project and your connections. No email is sent —
-                        you can invite them to ProSource from Connections when you're ready.
+                        They'll be added to this project and your connections. No email is sent.
+                        You can invite them to ProSource from Connections when you're ready.
                       </div>
                       {addPersonError && (
                         <div style={{ fontSize: 13, color: colors.red }} role="alert">{addPersonError}</div>
@@ -657,8 +664,8 @@ export default function ProSourceProjectCreate() {
               sub="Quick review before we create the project."
             >
               <div style={styles.reviewCard}>
-                <ReviewRow label="Project name" value={name || '—'} />
-                <ReviewRow label="Type" value={type || '—'} />
+                <ReviewRow label="Project name" value={name || 'Not set'} />
+                <ReviewRow label="Type" value={type || 'Not set'} />
                 <ReviewRow label="Address" value={(address.street || address.city || address.zip) ? [address.street, address.city, address.state, address.zip].filter(Boolean).join(', ') : 'Not set'} />
                 <ReviewRow label="Budget" value={budgetRange} />
                 <ReviewRow label="Target completion" value={targetCompletion || 'Not set'} />

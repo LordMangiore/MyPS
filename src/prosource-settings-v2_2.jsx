@@ -80,7 +80,7 @@ export default function ProSourceSettingsRedesign() {
     loadUserData,
   } = useAuth();
 
-  // Personal info editor state — seeded from the saved profile, edits flushed
+  // Personal info editor state: seeded from the saved profile, edits flushed
   // back via saveProfile.
   const [personalInfo, setPersonalInfo] = useState({
     firstName: profile?.firstName || '',
@@ -152,7 +152,7 @@ export default function ProSourceSettingsRedesign() {
         : (p?.project ? [{ ...p.project, status: p.status || 'working', archived: !!p.archived, id: 'legacy' }] : []);
       setProjectsList(list);
       setMessageThreads(Array.isArray(m?.threads) ? m.threads : []);
-      // Only keep appointments booked recently — drop the obviously stale ones.
+      // Only keep appointments booked recently, dropping the obviously stale ones.
       const appts = Array.isArray(a?.list) ? a.list : [];
       const cutoff = Date.now() - 30 * 86400000;
       setUpcomingAppointments(
@@ -730,7 +730,7 @@ export default function ProSourceSettingsRedesign() {
                   </div>
                 </div>
 
-                {/* Account Manager Message — pulled from CRM lookup at signup */}
+                {/* Account Manager Message (pulled from CRM lookup at signup) */}
                 <div style={{ padding: '20px 24px' }}>
                   <div style={{ display: 'flex', gap: 14, alignItems: 'center', marginBottom: 14 }}>
                     {accountManager?.photoUrl ? (

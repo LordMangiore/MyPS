@@ -25,12 +25,12 @@ import {
  * them, so they never answer on their own. src/twilio-client.js watches for a
  * user send into a `demo-*` conversation, asks /api/ai-reply for an in-character
  * line, then posts it back through the `post` action above authored as that demo
- * identity — so it fans out over the same websocket as any other message and the
+ * identity, so it fans out over the same websocket as any other message and the
  * sender sees it arrive live.
  */
 
 // Demo participants we seed conversations with. In production these would be
-// real Twilio identities (user IDs) — for the demo they're fixed strings.
+// real Twilio identities (user IDs). For the demo they're fixed strings.
 const DEMO_PARTICIPANTS = {
   kim: "demo-kim-marks",
   bubba: "demo-bubba-beans",
@@ -68,12 +68,12 @@ const DEMO_DETAILS = {
   [DEMO_PARTICIPANTS.bubba]: {
     name: "Bubba Beans",
     initials: "BB",
-    role: "Homeowner — Beans Kitchen Remodel",
+    role: "Homeowner: Beans Kitchen Remodel",
     type: "client",
     history: [
       {
         from: "user",
-        body: "Hey Bubba — Kim has a couple of LVP samples set aside for the kitchen. Want to come look this weekend?",
+        body: "Hey Bubba, Kim has a couple of LVP samples set aside for the kitchen. Want to come look this weekend?",
       },
       {
         from: "bubba",
@@ -89,7 +89,7 @@ const DEMO_DETAILS = {
     history: [
       {
         from: "user",
-        body: "Thanks again for hustling on the Wilson bath install — clients are thrilled.",
+        body: "Thanks again for hustling on the Wilson bath install. Clients are thrilled.",
       },
       {
         from: "ryan",
@@ -100,16 +100,16 @@ const DEMO_DETAILS = {
   [DEMO_PARTICIPANTS.sarah]: {
     name: "Sarah Chen",
     initials: "SC",
-    role: "Homeowner — Chen Outdoor Patio",
+    role: "Homeowner: Chen Outdoor Patio",
     type: "client",
     history: [
       {
         from: "user",
-        body: "Hi Sarah — wanted to check in. Anything we should adjust before we put the patio in our portfolio?",
+        body: "Hi Sarah, wanted to check in. Anything we should adjust before we put the patio in our portfolio?",
       },
       {
         from: "sarah",
-        body: "We finally got the family photos done on the patio — it looks incredible. Thanks again!",
+        body: "We finally got the family photos done on the patio and it looks incredible. Thanks again!",
       },
     ],
   },
@@ -121,7 +121,7 @@ const DEMO_DETAILS = {
     history: [
       {
         from: "heather",
-        body: "Uploaded the Chen patio render variants — let me know which lighting layout you want me to spec out.",
+        body: "Uploaded the Chen patio render variants. Let me know which lighting layout you want me to spec out.",
       },
     ],
   },

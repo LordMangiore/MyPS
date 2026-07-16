@@ -9,7 +9,7 @@ const FROM_ADDRESS = process.env.RESEND_FROM || "ProSource <onboarding@resend.de
 const DEV_BYPASS =
   process.env.OTP_DEV_BYPASS === "true" || !process.env.RESEND_API_KEY;
 
-// Lazy — Resend's constructor throws if RESEND_API_KEY is missing, so we can't
+// Lazy: Resend's constructor throws if RESEND_API_KEY is missing, so we can't
 // instantiate it at module load.
 const getResend = () => new Resend(process.env.RESEND_API_KEY);
 
@@ -26,7 +26,7 @@ export default async function handler(req) {
 
     const normalizedEmail = email.toLowerCase().trim();
 
-    // Dev bypass — accept any 6-digit code on verify, no email sent.
+    // Dev bypass. Accept any 6-digit code on verify, no email sent.
     if (DEV_BYPASS) {
       console.log(`[OTP dev bypass] would have sent code to ${normalizedEmail}`);
       return Response.json({ success: true, devBypass: true });
@@ -64,7 +64,7 @@ export default async function handler(req) {
     const code = String(100000 + (codeArray[0] % 900000));
     const expiresAt = Date.now() + 10 * 60 * 1000;
 
-    // Compute rate-limit metadata — but don't persist until Resend confirms
+    // Compute rate-limit metadata, but don't persist until Resend confirms
     // the send. Failed sends (bad From, unverified domain, etc.) shouldn't
     // count against the user.
     let sentCount = 1;
@@ -80,7 +80,7 @@ export default async function handler(req) {
     const { error } = await getResend().emails.send({
       from: FROM_ADDRESS,
       to: email,
-      subject: `${code} — Your ProSource login code`,
+      subject: `${code} is your ProSource login code`,
       html: `
         <div style="font-family: 'Open Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 440px; margin: 0 auto; padding: 40px 20px; color: #171717;">
           <div style="text-align: center; margin-bottom: 30px;">
@@ -96,7 +96,7 @@ export default async function handler(req) {
           </p>
           <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 24px 0;" />
           <p style="color: #9ca3af; font-size: 12px; text-align: center;">
-            ProSource Wholesale — trade pricing on flooring, cabinets, and countertops
+            ProSource Wholesale: trade pricing on flooring, cabinets, and countertops
           </p>
         </div>
       `,

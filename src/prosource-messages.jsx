@@ -26,8 +26,8 @@ const ProSourceMessages = () => {
   // 'twilio' once Twilio Conversations is up; 'blob' is the fallback that
   // persists threads to ps-user-data. Probed on mount.
   const [transport, setTransport] = useState('blob');
-  // 'loading' until we know which transport we're on and have real threads —
-  // otherwise mock threads flash and then hard-swap under the user.
+  // 'loading' until we know which transport we're on and have real threads.
+  // Otherwise mock threads flash and then hard-swap under the user.
   const [status, setStatus] = useState('loading');
   const [sendError, setSendError] = useState('');
   const [notice, setNotice] = useState('');
@@ -372,7 +372,7 @@ const ProSourceMessages = () => {
    * Mirror Twilio threads into the `messages` blob.
    *
    * Twilio stays the source of truth for the chat UI, but the Notifications
-   * page and the dashboard activity feed read ONLY this blob — so with Twilio
+   * page and the dashboard activity feed read ONLY this blob, so with Twilio
    * on they'd otherwise show stale seed data or nothing at all. Write a
    * blob-shaped copy (exactly the shape seed.mjs writes) so those surfaces keep
    * working, without either of them needing to know Twilio exists.
@@ -382,7 +382,7 @@ const ProSourceMessages = () => {
     if (transport !== 'twilio' || !userId || status !== 'ready') return;
     if (!threads.length) return;
 
-    // Strip `_conv` — it's a live SDK object and would blow up JSON.stringify.
+    // Strip `_conv`. It's a live SDK object and would blow up JSON.stringify.
     const mirror = threads.map((t) => ({
       id: t.id,
       sid: t.sid,
@@ -443,7 +443,7 @@ const ProSourceMessages = () => {
         await twilioRef.current.sendMessage(selectedThread, text);
       } catch (err) {
         // Put the text back so the user doesn't lose what they typed, and
-        // actually tell them — this used to be console.error only.
+        // actually tell them. This used to be console.error only.
         setMessageInput(pending);
         setSendError(`Message not sent: ${err.message}. Check your connection and try again.`);
       }
@@ -513,7 +513,7 @@ const ProSourceMessages = () => {
     }
 
     // Blob fallback: append a new local thread if one doesn't already exist
-    // for this connection. Match on name too — the seeded blob threads predate
+    // for this connection. Match on name too, because the seeded blob threads predate
     // connectionId, and without this the demo contacts get a second, empty
     // thread the first time you message them from the connections page.
     const existing = threads.find(
@@ -545,14 +545,14 @@ const ProSourceMessages = () => {
   /**
    * Deep links. Two shapes, both land on the right conversation:
    *
-   *   ?connection=<id>  — from the connections page. Resolved through the
+   *   ?connection=<id>  : from the connections page. Resolved through the
    *                       identity contract, creating the thread if needed.
-   *   ?thread=<slug>    — legacy dashboard chat bubbles ("kim"/"heather"/...).
+   *   ?thread=<slug>    : legacy dashboard chat bubbles ("kim"/"heather"/...).
    *                       Ids are sids/numbers so the slug could never match a
    *                       thread id; map the slug to the demo contact instead.
    *
-   * Runs once per param value, and only after threads have actually loaded —
-   * otherwise we'd resolve against an empty list and create a duplicate.
+   * Runs once per param value, and only after threads have actually loaded.
+   * Otherwise we'd resolve against an empty list and create a duplicate.
    */
   const deepLinkRef = useRef('');
   useEffect(() => {
@@ -640,7 +640,7 @@ const ProSourceMessages = () => {
 
   return (
     <div style={styles.wrapper}>
-    {/* Keyframes for the init spinner — inline styles can't express these. */}
+    {/* Keyframes for the init spinner. Inline styles can't express these. */}
     <style>{'@keyframes ps-spin { to { transform: rotate(360deg); } }'}</style>
     <div style={styles.container}>
       <Link to="/settings" style={styles.backLink}>
@@ -687,7 +687,7 @@ const ProSourceMessages = () => {
           </div>
         </div>
       ) : threads.length === 0 ? (
-        /* True empty state — this account genuinely has no conversations. */
+        /* True empty state: this account genuinely has no conversations. */
         <div style={{ ...styles.chatContainer, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, color: colors.gray500, textAlign: 'center', padding: 24 }}>
             <MessageCircle size={48} style={{ color: colors.gray300 }} />
@@ -769,7 +769,7 @@ const ProSourceMessages = () => {
               <div style={styles.messagesArea}>
                 {(activeThread.messages || []).length === 0 && (
                   <div style={{ margin: 'auto', textAlign: 'center', color: colors.gray400, fontSize: 13 }}>
-                    No messages yet — say hello.
+                    No messages yet. Say hello.
                   </div>
                 )}
                 {(activeThread.messages || []).map((msg, i) => {
@@ -873,7 +873,7 @@ const ProSourceMessages = () => {
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                 {connections.map((c) => {
                   // Identity contract: no demoIdentity and no userId means this
-                  // person was invited but never joined — there is nobody to
+                  // person was invited but never joined, so there is nobody to
                   // deliver to, so don't offer a thread that can't exist.
                   const messageable = !!identityForConnection(c);
                   return (

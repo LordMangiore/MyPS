@@ -98,7 +98,7 @@ export default async function handler(req) {
         const client = getRestClient();
         const convo = await ensureConversation({
           uniqueName: `consult-${fromUserId}__${toProUserId}`,
-          friendlyName: `${fromName} — ${projectType}`,
+          friendlyName: `${fromName} (${projectType})`,
           attributes: {
             counterpartyName: fromName,
             counterpartyInitials: (fromName || "?").split(/\s+/).map((s) => s[0]).join("").slice(0, 2),

@@ -2,7 +2,7 @@ import { getStore } from "@netlify/blobs";
 import { seedNewUser } from "./lib/seed.mjs";
 
 /**
- * Sign in to the shared, pre-seeded demo account — the "Demo: Skip Signup"
+ * Sign in to the shared, pre-seeded demo account. This is the "Demo: Skip Signup"
  * button's backend.
  *
  * POST /api/demo-session           → ensure the account exists, return a real session
@@ -17,7 +17,7 @@ import { seedNewUser } from "./lib/seed.mjs";
  * still empty (seedNewUser's contract), so a scenario set up on one click is
  * still there on the next. Only ?reset=1 throws data away.
  *
- * Demo only — no auth check.
+ * Demo only. No auth check.
  */
 
 const DEMO_EMAIL = "demo@prosource.com";
@@ -28,7 +28,7 @@ const DEMO_FIRST_NAME = "Justin";
 // demo@prosource.com resolves to this exact userId and the exact same data.
 const DEMO_USER_ID = "ps-" + DEMO_EMAIL.replace(/[^a-z0-9]/g, "-");
 
-// Every per-user key ?reset=1 clears. Mirrors ALLOWED_KEYS in user-data.mjs —
+// Every per-user key ?reset=1 clears. Mirrors ALLOWED_KEYS in user-data.mjs:
 // seeded keys plus the ones the app writes as you click around.
 const DEMO_DATA_KEYS = [
   "projects",
@@ -80,9 +80,9 @@ const DEMO_PROFILE = {
     businessType: "LLC",
     licenseNumber: "MO-GC-114872",
     website: "reyesdesignbuild.com",
-    employees: "6 – 10",
-    projects: "5 – 10",
-    spend: "$20,000 – $50,000",
+    employees: "6-10",
+    projects: "5-10",
+    spend: "$20,000-$50,000",
   },
   preferences: {
     showroomUsage: "accompany",
@@ -110,7 +110,7 @@ const wipeDemoAccount = async (userId) => {
   await users.delete(userId).catch(() => {});
 };
 
-/** Write the demo profile only if there isn't one — edits made in the demo stay. */
+/** Write the demo profile only if there isn't one, so edits made in the demo stay. */
 const ensureDemoProfile = async (userId) => {
   const users = getStore({ name: "ps-users", consistency: "strong" });
   const existing = await users.get(userId, { type: "json" }).catch(() => null);
@@ -159,7 +159,7 @@ export default async function handler(req) {
     await seedNewUser(userId);
     await ensureDemoProfile(userId);
 
-    // No Firebase for the demo account — mint the same style of opaque session
+    // No Firebase for the demo account, so mint the same style of opaque session
     // token otp-verify.mjs falls back to.
     const token = btoa(
       `${userId}:${Date.now()}:${Math.random().toString(36).slice(2)}`
@@ -169,7 +169,7 @@ export default async function handler(req) {
       success: true,
       demo: true,
       reset,
-      // The demo account is never "new" — it's pre-seeded, so no onboarding.
+      // The demo account is never "new": it's pre-seeded, so no onboarding.
       isNewUser: false,
       user: {
         id: userId,

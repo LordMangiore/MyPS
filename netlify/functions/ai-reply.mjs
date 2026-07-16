@@ -1,5 +1,5 @@
 /**
- * ai-reply — generates a short, in-character reply from a demo persona.
+ * ai-reply: generates a short, in-character reply from a demo persona.
  *
  * Shared by two surfaces so the personas sound like the same people in both:
  *   - Messaging (Twilio demo contacts: demo-kim-marks, demo-ryan-otoole, ...)
@@ -17,7 +17,7 @@
  *
  * Response: { reply, source: "ai" | "canned", persona: { name, identity } }
  *
- * Demo only — no auth check, consistent with the other functions here.
+ * Demo only. No auth check, consistent with the other functions here.
  *
  * FALLBACK: if ANTHROPIC_API_KEY is unset or the API call fails, this returns a
  * canned line with source:"canned" and HTTP 200. The demo must never hard-fail
@@ -39,22 +39,22 @@ const PERSONAS = {
       "You handle samples, quotes, pickups, and coordinating with the member's clients. " +
       "Warm and efficient; you tend to confirm the next concrete step.",
     canned: [
-      "Sure thing — let me check on that and get right back to you.",
+      "Sure thing, let me check on that and get right back to you.",
       "I can have those set aside at the showroom for you. When are you thinking of coming by?",
       "Good question. Let me pull the details and follow up shortly.",
     ],
   },
   "demo-bubba-beans": {
     name: "Bubba Beans",
-    role: "Homeowner — Beans Kitchen Remodel",
+    role: "Homeowner: Beans Kitchen Remodel",
     type: "client",
     blurb:
       "You're a homeowner remodeling your kitchen, working through a ProSource member. " +
-      "You're enthusiastic but not an expert — you ask practical questions about looks, " +
+      "You're enthusiastic but not an expert, so you ask practical questions about looks, " +
       "timing, and cost rather than using trade terminology.",
     canned: [
       "Sounds good to me! Just let me know what you need from my end.",
-      "Works for me — what's the timing looking like?",
+      "Works for me. What's the timing looking like?",
       "Okay, that makes sense. Whatever you think is best.",
     ],
   },
@@ -69,12 +69,12 @@ const PERSONAS = {
     canned: [
       "Yep, can do. I'll need to see the subfloor before we schedule.",
       "That should work. Give me the square footage and I'll get you a number.",
-      "Sounds good — just make sure the material acclimates before install day.",
+      "Sounds good. Just make sure the material acclimates before install day.",
     ],
   },
   "demo-sarah-chen": {
     name: "Sarah Chen",
-    role: "Homeowner — Chen Outdoor Patio",
+    role: "Homeowner: Chen Outdoor Patio",
     type: "client",
     blurb:
       "You're a homeowner doing an outdoor patio project through a ProSource member. " +
@@ -82,7 +82,7 @@ const PERSONAS = {
     canned: [
       "Thanks for the update! How does that hold up outdoors long term?",
       "That works for me. Anything you need me to decide on?",
-      "Got it — appreciate you keeping me posted.",
+      "Got it, appreciate you keeping me posted.",
     ],
   },
   "demo-heather-yager": {
@@ -91,10 +91,10 @@ const PERSONAS = {
     type: "prosource",
     blurb:
       "You're a designer at the ProSource showroom. You think about how materials work " +
-      "together — color, texture, transitions between rooms — and you offer specific, " +
+      "together (color, texture, transitions between rooms) and you offer specific, " +
       "confident design opinions rather than vague ones.",
     canned: [
-      "I'd lean toward the warmer tone there — it'll tie the rooms together better.",
+      "I'd lean toward the warmer tone there. It'll tie the rooms together better.",
       "Let me put a couple of options together and walk you through them.",
       "Good instinct. I'd just be careful about the transition between those two spaces.",
     ],
@@ -102,7 +102,7 @@ const PERSONAS = {
 };
 
 const GENERIC_CANNED = [
-  "Got it — let me look into that and circle back.",
+  "Got it, let me look into that and circle back.",
   "Sounds good, I'll follow up shortly.",
   "Thanks for the heads up!",
 ];
@@ -112,6 +112,20 @@ const json = (status, body) =>
     status,
     headers: { "content-type": "application/json" },
   });
+
+/**
+ * Belt and braces. The system prompt forbids em/en dashes, but a prompt is a
+ * request, not a guarantee. This makes it a guarantee: a dash reads as
+ * machine-written, and one slipping into a demo chat is exactly the tell we're
+ * trying to avoid. A comma is the substitution that works across the widest
+ * range of chat phrasings without needing to re-case the next word.
+ */
+const stripDashes = (text) =>
+  String(text)
+    .replace(/\s*[—–]\s*/g, ", ")
+    .replace(/,\s*,/g, ", ")
+    .replace(/\s{2,}/g, " ")
+    .trim();
 
 /** Deterministic-ish pick so repeated identical asks don't always echo the same line. */
 const pickCanned = (lines, seed) =>
@@ -148,6 +162,10 @@ const buildSystemPrompt = (persona, surface, context) => {
     "Rules:",
     "- Reply as a real person would in a chat app: 1-3 short sentences, usually one.",
     "- Plain conversational text only. No markdown, no bullet points, no headings, no sign-off.",
+    "- NEVER use an em dash or an en dash. Not one, anywhere. People typing in a",
+    "  chat app do not reach for them, and they read as machine-written. Use a",
+    "  comma, a full stop, a colon, or brackets instead, or just split the",
+    "  sentence in two.",
     "- Stay in character. Never mention being an AI, a model, or a demo.",
     "- Never invent hard commitments you couldn't know: no specific prices, invoice",
     "  numbers, dates, or delivery promises. Speak in terms of next steps instead.",
@@ -228,11 +246,12 @@ export default async function handler(req) {
       return cannedReply();
     }
 
-    const text = response.content
-      .filter((b) => b.type === "text")
-      .map((b) => b.text)
-      .join("")
-      .trim();
+    const text = stripDashes(
+      response.content
+        .filter((b) => b.type === "text")
+        .map((b) => b.text)
+        .join("")
+    );
 
     if (!text) return cannedReply();
 

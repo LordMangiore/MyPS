@@ -36,7 +36,7 @@ const recordInvite = async ({ toEmail, fromName, fromUserId, message, emailSent,
       fromName: fromName || null,
       fromUserId: fromUserId || null,
       // The personal note travels with the invite so it is not lost when no
-      // email goes out — messaging can pick it up when they join.
+      // email goes out. Messaging can pick it up when they join.
       message: message || prior?.message || "",
       status: prior?.status || "pending",
       createdAt: prior?.createdAt || Date.now(),
@@ -65,7 +65,7 @@ const escapeHtml = (s) =>
   }[c]));
 
 /**
- * Record a ProSource invitation and — if email is configured — send it.
+ * Record a ProSource invitation and, if email is configured, send it.
  *
  * POST { toEmail, fromName, fromUserId?, fromBusinessName?, signupUrl?, message? }
  *
@@ -98,7 +98,7 @@ export default async function handler(req) {
 
     if (DEV_BYPASS) {
       console.log(
-        `[send-invite] RESEND_API_KEY not configured — recording invite for ${toEmail} from ${fromName}, NO email sent.`
+        `[send-invite] RESEND_API_KEY not configured. Recording invite for ${toEmail} from ${fromName}, NO email sent.`
       );
       const record = await recordInvite({
         toEmail,
@@ -153,7 +153,7 @@ export default async function handler(req) {
 
     if (error) {
       console.error("Resend invite error:", error);
-      // The invite still exists — only the email failed. Record it and say so.
+      // The invite still exists; only the email failed. Record it and say so.
       const record = await recordInvite({
         toEmail,
         fromName,

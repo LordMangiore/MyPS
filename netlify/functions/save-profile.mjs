@@ -8,7 +8,7 @@ import { getStore } from "@netlify/blobs";
  *   - email: optional, used to refresh the email→userId mapping with display name
  *   - profile: arbitrary JSON, merged shallowly with any existing record
  *
- * Demo only — no auth check. In production, gate this on a verified session token.
+ * Demo only, no auth check. In production, gate this on a verified session token.
  */
 export default async function handler(req) {
   if (req.method !== "POST") {

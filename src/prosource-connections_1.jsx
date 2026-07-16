@@ -21,7 +21,7 @@ import {
 } from 'lucide-react';
 
 /**
- * Identity contract (shared across WP9/WP7 — do not diverge):
+ * Identity contract (shared across WP9/WP7, do not diverge):
  *   connection.demoIdentity → a seeded demo contact  → messageable
  *   connection.userId       → a real signed-in user  → messageable
  *   neither                 → invited, not yet joined → NOT messageable
@@ -46,7 +46,7 @@ const ProSourceConnections = () => {
   const [resolvedUser, setResolvedUser] = useState(null);
   const [addError, setAddError] = useState('');
   const [inviteMessage, setInviteMessage] = useState('');
-  // What the invite endpoint actually did — drives an honest success screen.
+  // What the invite endpoint actually did. Drives an honest success screen.
   const [inviteResult, setInviteResult] = useState(null);
 
   const [connections, setConnections] = useState([]);
@@ -647,11 +647,11 @@ const ProSourceConnections = () => {
     },
   };
 
-  // Sent invites — connections the user invited that haven't accepted yet.
+  // Sent invites: connections the user invited that haven't accepted yet.
   // Surfaced both on "All" (with a Pending badge) and on the Pending tab.
   const sentInvites = connections.filter(c => c.status === 'invited');
 
-  // Counts are derived from the real list — never hardcoded.
+  // Counts are derived from the real list, never hardcoded.
   const counts = useMemo(() => ({
     all: connections.length,
     clients: connections.filter(c => c.type === 'client').length,
@@ -695,7 +695,7 @@ const ProSourceConnections = () => {
     ? pendingRequests.filter(r => matches(r, searchQuery.toLowerCase()))
     : pendingRequests;
 
-  /** Real type/role drives this label — not a `projects === null` guess. */
+  /** Real type/role drives this label, not a `projects === null` guess. */
   const renderRelationship = (connection) => {
     if (connection.status === 'invited') {
       return (
@@ -920,7 +920,7 @@ const ProSourceConnections = () => {
           </div>
         ) : (
           searchedConnections.map(connection => {
-            // An invite I sent that nobody has accepted yet — drives the card
+            // An invite I sent that nobody has accepted yet. Drives the card
             // chrome (dashed/amber) and the Resend action.
             const isInvited = connection.status === 'invited';
             // Per the identity contract: no demoIdentity and no userId means
@@ -946,8 +946,8 @@ const ProSourceConnections = () => {
                 </div>
                 <div style={styles.cardInfo}>
                   {/* Not a link: /profile always renders the same demo pro
-                      regardless of who you click. Per-user profiles are WP11 —
-                      until that route exists, a link here would lie. */}
+                      regardless of who you click. Per-user profiles are WP11.
+                      Until that route exists, a link here would lie. */}
                   <div style={styles.connectionName}>{connection.name}</div>
                   <div style={styles.connectionRole}>
                     {isInvited ? 'Awaiting their response' : connection.role}
@@ -1182,7 +1182,7 @@ const ProSourceConnections = () => {
               </div>
             )}
 
-            {/* Found User Step — resolved a real ProSource member */}
+            {/* Found User Step: resolved a real ProSource member */}
             {addModalStep === 'found' && resolvedUser && (
               <div style={{ padding: 24 }}>
                 <div style={{ fontSize: 13, color: colors.green, fontWeight: 500, marginBottom: 12 }}>
@@ -1250,7 +1250,7 @@ const ProSourceConnections = () => {
               </div>
             )}
 
-            {/* Invite Step — email isn't a ProSource user yet */}
+            {/* Invite Step: email isn't a ProSource user yet */}
             {addModalStep === 'invite' && (
               <div style={{ padding: 24 }}>
                 <div style={{

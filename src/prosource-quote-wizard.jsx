@@ -26,9 +26,9 @@ const AUDIENCE_OPTIONS = [
 
 const BUDGET_OPTIONS = [
   'Under $5,000',
-  '$5,000 – $15,000',
-  '$15,000 – $50,000',
-  '$50,000 – $100,000',
+  '$5,000-$15,000',
+  '$15,000-$50,000',
+  '$50,000-$100,000',
   '$100,000+',
   'Not sure yet',
 ];
@@ -47,15 +47,15 @@ const PROJECT_TYPES = [
 
 const TIMING_OPTIONS = [
   { value: 'asap', label: 'ASAP', body: 'Ready to start now.' },
-  { value: '1-3', label: 'Within 1–3 months', body: 'Planning the project.' },
-  { value: '3-6', label: '3–6 months out', body: 'Early planning stage.' },
+  { value: '1-3', label: 'Within 1-3 months', body: 'Planning the project.' },
+  { value: '3-6', label: '3-6 months out', body: 'Early planning stage.' },
   { value: 'exploring', label: 'Just exploring', body: 'Gathering ideas.' },
 ];
 
 // Order: qualifying questions first (audience, project, where, budget, timing),
 // then optional context (notes), then identity (contact, verify), then success.
 const stepIds = ['audience', 'project', 'where', 'budget', 'timing', 'notes', 'contact', 'verify', 'success'];
-// Substantive step count for the "Step X of N" eyebrow — excludes verify + success.
+// Substantive step count for the "Step X of N" eyebrow. Excludes verify + success.
 const NUM_FORM_STEPS = 7;
 
 const QuoteWizard = ({ isOpen, onClose, cartItems = [], intent = 'quote' }) => {
@@ -121,7 +121,7 @@ const QuoteWizard = ({ isOpen, onClose, cartItems = [], intent = 'quote' }) => {
   const [foundAccount, setFoundAccount] = useState(null);
 
   // Step 5 (contact) → Send code. OTP works for both new sign-ups and returning
-  // accounts, so we don't gate the flow when an existing email is found — we
+  // accounts, so we don't gate the flow when an existing email is found. We
   // just surface that they have an account so they aren't surprised when the
   // app drops them straight into their existing profile after verification.
   const sendCode = async () => {
@@ -229,7 +229,7 @@ const QuoteWizard = ({ isOpen, onClose, cartItems = [], intent = 'quote' }) => {
               eyebrow={`Step 1 of ${NUM_FORM_STEPS}`}
               title="Who's the project for?"
               sub={isSave
-                ? `We'll set up your project and assign you an account manager. No pricing request — your AM will be there when you're ready. ${cartItems.length} item${cartItems.length !== 1 ? 's' : ''} go into the project.`
+                ? `We'll set up your project and assign you an account manager. No pricing request. Your AM will be there when you're ready. ${cartItems.length} item${cartItems.length !== 1 ? 's' : ''} go into the project.`
                 : `Helps us match you to the right account manager. ${cartItems.length} item${cartItems.length !== 1 ? 's' : ''} in your cart will come with the request.`}
             >
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -441,9 +441,9 @@ const QuoteWizard = ({ isOpen, onClose, cartItems = [], intent = 'quote' }) => {
             >
               <div style={styles.summaryCard}>
                 <SummaryRow label="Showroom" value={result.showroom?.name || 'Nearest ProSource'} />
-                <SummaryRow label="Account Manager" value={result.accountManager?.name || '—'} />
+                <SummaryRow label="Account Manager" value={result.accountManager?.name || 'To be assigned'} />
                 <SummaryRow label="Project" value={projectType} />
-                <SummaryRow label="Budget" value={budget || '—'} />
+                <SummaryRow label="Budget" value={budget || 'Not set'} />
                 <SummaryRow label="Items" value={`${cartItems.length} (subtotal $${cartSubtotal.toFixed(2)})`} />
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 16, color: colors.green, fontSize: 13 }}>
@@ -532,7 +532,7 @@ function SummaryRow({ label, value }) {
   return (
     <div style={styles.summaryRow}>
       <span style={styles.summaryLabel}>{label}</span>
-      <span style={styles.summaryValue}>{value || '—'}</span>
+      <span style={styles.summaryValue}>{value || 'Not set'}</span>
     </div>
   );
 }

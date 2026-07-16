@@ -30,17 +30,17 @@ const PROJECT_TYPES = [
 
 const SIZE_OPTIONS = [
   'Under $5,000',
-  '$5,000 – $15,000',
-  '$15,000 – $50,000',
-  '$50,000 – $100,000',
+  '$5,000-$15,000',
+  '$15,000-$50,000',
+  '$50,000-$100,000',
   '$100,000+',
   'Not sure yet',
 ];
 
 const TIMING_OPTIONS = [
   { value: 'asap', label: 'ASAP', body: 'Ready to start now.' },
-  { value: '1-3', label: 'Within 1–3 months', body: 'Planning the project now.' },
-  { value: '3-6', label: '3–6 months out', body: 'Early planning stage.' },
+  { value: '1-3', label: 'Within 1-3 months', body: 'Planning the project now.' },
+  { value: '3-6', label: '3-6 months out', body: 'Early planning stage.' },
   { value: 'exploring', label: 'Just exploring', body: 'Gathering ideas.' },
 ];
 
@@ -140,7 +140,7 @@ const ConsultationWizard = ({ isOpen, onClose, pro = null }) => {
         createdAt: Date.now(),
       };
 
-      // Persist a copy for the requester (if they're logged in) — useful to
+      // Persist a copy for the requester (if they're logged in). Useful to
       // show "Consultations requested" in a future history view.
       if (userId) {
         try {
@@ -425,7 +425,7 @@ function SummaryRow({ label, value }) {
   return (
     <div style={styles.summaryRow}>
       <span style={styles.summaryLabel}>{label}</span>
-      <span style={styles.summaryValue}>{value || '—'}</span>
+      <span style={styles.summaryValue}>{value || 'Not set'}</span>
     </div>
   );
 }

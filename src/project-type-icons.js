@@ -7,7 +7,7 @@
  *
  * Keyed by `label` rather than `value` because the three pickers that use it
  * (project create wizard, quote wizard, consultation wizard) share labels but
- * NOT values — e.g. the create wizard stores 'Countertops Only' where the quote
+ * NOT values: the create wizard stores 'Countertops Only' where the quote
  * wizard stores 'Countertops'.
  */
 

@@ -3,13 +3,13 @@
  *
  * Production: this should call into the CRM (Salesforce, NetSuite, whichever)
  *   to get the real territory mapping. For the prototype we ship a stubbed
- *   lookup table so the integration shape — POST zip → get { showroom, manager }
- *   — matches what the real implementation will be.
+ *   lookup table so the integration shape (POST zip → get { showroom, manager })
+ *   matches what the real implementation will be.
  *
  * Replace the body of `lookupCrm()` when wiring up the real CRM API.
  */
 
-// Stubbed showrooms keyed by zip prefix. Order matters — first match wins.
+// Stubbed showrooms keyed by zip prefix. Order matters: first match wins.
 const SHOWROOMS = [
   {
     prefixes: ['630', '631', '633'], // St. Louis metro
@@ -29,7 +29,7 @@ const SHOWROOMS = [
     },
   },
   {
-    prefixes: ['630'], // Fenton area (also overlaps STL — kept as fallback)
+    prefixes: ['630'], // Fenton area (also overlaps STL, kept as fallback)
     showroom: {
       id: 'fenton',
       name: 'ProSource of Fenton',

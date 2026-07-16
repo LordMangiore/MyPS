@@ -4,8 +4,8 @@ import twilio from "twilio";
  * Shared Twilio Conversations helpers.
  *
  * Auth model:
- *   • Server-side REST calls — use Account SID + Auth Token (twilio() client).
- *   • Client-side SDK access — needs an API Key + Secret; we mint JWT access
+ *   • Server-side REST calls: use Account SID + Auth Token (twilio() client).
+ *   • Client-side SDK access needs an API Key + Secret; we mint JWT access
  *     tokens here. If API Key envs are missing, mintAccessToken returns null
  *     and the frontend should fall back to its blob-backed messaging.
  */
@@ -20,7 +20,7 @@ export const TWILIO_TOKEN_MINT_ENABLED = !!(
   process.env.TWILIO_API_KEY_SECRET
 );
 
-/** Lazy REST client — instantiating without creds throws. */
+/** Lazy REST client. Instantiating without creds throws. */
 let _client = null;
 export const getRestClient = () => {
   if (!TWILIO_ENABLED) return null;
@@ -67,7 +67,7 @@ export const mintAccessToken = (identity, ttlSeconds = 3600) => {
 };
 
 /**
- * Ensure a Conversation exists between two participants. Idempotent — finds an
+ * Ensure a Conversation exists between two participants. Idempotent: finds an
  * existing one matching the participants if possible, otherwise creates a new
  * one tagged with the optional `friendlyName` and `attributes`.
  *

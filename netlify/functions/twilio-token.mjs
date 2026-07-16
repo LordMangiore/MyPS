@@ -6,7 +6,7 @@ import { mintAccessToken, TWILIO_TOKEN_MINT_ENABLED } from "./lib/twilio.mjs";
  * GET  /api/twilio-token?userId=ps-...
  * POST { userId }
  *
- * Demo only — no session validation. Production should verify the userId
+ * Demo only, with no session validation. Production should verify the userId
  * against the request's session token before issuing a token.
  *
  * Returns:

@@ -1617,8 +1617,8 @@ const ProSourcePublicProfile = () => {
                   onClick={() => setConsultOpen(true)}
                   style={{ ...styles.btnPrimary, marginTop: 4 }}
                 >Request a Consultation</button>
-                {/* "Send a message" is a member-only DM flow — distinct from
-                    the consultation request, which is the public/guest path.
+                {/* "Send a message" is a member-only DM flow (distinct from
+                    the consultation request, which is the public/guest path).
                     Hidden for logged-out viewers so we don't promise a DM
                     they can't actually use. */}
                 {userId && (
@@ -1696,7 +1696,7 @@ const ProSourcePublicProfile = () => {
         pro={{
           name: `${firstName} ${lastName}`.trim(),
           initials: `${(firstName[0] || '').toUpperCase()}${(lastName[0] || '').toUpperCase()}`,
-          userId: null, // placeholder — pro routing is single-profile in the demo
+          userId: null, // placeholder: pro routing is single-profile in the demo
         }}
       />
     </div>

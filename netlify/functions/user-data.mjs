@@ -10,7 +10,7 @@ import { getStore } from "@netlify/blobs";
  * persist arbitrary feature state (projects, messages, carts, etc.) without
  * spinning up a new endpoint per feature.
  *
- * Demo only — no auth check.
+ * Demo only: no auth check.
  */
 
 const ALLOWED_KEYS = new Set([

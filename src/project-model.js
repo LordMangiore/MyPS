@@ -24,7 +24,7 @@
  * as the same project migrated on another page (even before anyone re-saves).
  */
 
-// Icons live in project-type-icons.js, keyed by `label` — this module stays
+// Icons live in project-type-icons.js, keyed by `label`. This module stays
 // plain data so it's safe to import anywhere.
 export const PROJECT_TYPES = [
   { value: 'Kitchen Remodel', label: 'Kitchen' },
@@ -52,7 +52,7 @@ export const BUDGET_RANGES = [
   'Not Sure Yet',
 ];
 
-/** Quick-add suggestions. Rooms are free text — this list is a shortcut only. */
+/** Quick-add suggestions. Rooms are free text, so this list is a shortcut only. */
 export const ROOM_OPTIONS = [
   'Kitchen',
   'Bathroom',
@@ -73,12 +73,12 @@ export const ROOM_OPTIONS = [
 
 /**
  * Rooms we suggest in the create wizard based on the chosen project type.
- * They are only ever a starting point — the wizard lets you remove any of them
+ * They are only ever a starting point. The wizard lets you remove any of them
  * and add your own.
  *
  * Rule of thumb: only suggest a room we're actually confident about. A whole-home
  * job really does span several rooms, so suggest the usual ones rather than a
- * single pseudo-room called "Whole Home" — that would defeat the point of rooms,
+ * single pseudo-room called "Whole Home". That would defeat the point of rooms,
  * which is organising products by space. Where the type says nothing useful about
  * which rooms are involved (Flooring, Commercial, Other), suggest nothing and let
  * the Common-rooms chips do the work.
@@ -175,7 +175,7 @@ export const roomLabel = (rooms, roomId) => {
 };
 
 /**
- * Remove a room. Its products are reassigned to Unassigned — never deleted.
+ * Remove a room. Its products are reassigned to Unassigned, never deleted.
  * Returns the patch to merge into the project record.
  */
 export const removeRoomFromProject = (project, roomId) => {
@@ -319,9 +319,9 @@ export const normalizeProject = (project) => {
  * The one true reader for the `projects` blob.
  *
  * Handles three stored shapes:
- *   - `{ list: [...] }`            — current
- *   - `{ project: {...}, status }` — the original single-project blob
- *   - null / junk                  — empty collection
+ *   - `{ list: [...] }`            : current
+ *   - `{ project: {...}, status }` : the original single-project blob
+ *   - null / junk                  : empty collection
  *
  * and migrates every record through `normalizeProject`.
  */
