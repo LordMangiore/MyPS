@@ -136,6 +136,14 @@ but shop products use `listPrice`, so every cart item price is `undefined`
 - `storage` listener leaks (orders.jsx:605-612; order-status-overrides.js:43-51).
 
 ### WP6. Project detail: finish the page
+> ✅ **Dead buttons RESOLVED — session 2 (commit beaad17).** All seven inert
+> buttons wired to a real destination, pointed at the conversation that does the
+> job (Messages), or removed. Sweep confirms every `<button>` in the file now
+> carries an onClick. Photos and Designs tabs say the feature is not in the app
+> rather than offering uploads with nowhere to go. Still open from this WP: the
+> hardcoded "Last updated Dec 18, 2025" header (see Still open below — a separate
+> session is on it), archive toggle bug, fake activity feeds, project-linked
+> saved carts, shared-module extraction.
 - Dead buttons (all no onClick, src/prosource-project-detail.jsx): "+ Add
   Product" / "Request Estimate" (:1781-1782), dashed Add Product card
   (:1811-1827), Discussion "Attach File" (:1328-1330), Inspiration Board buttons
@@ -213,6 +221,19 @@ but shop products use `listPrice`, so every cart item price is `undefined`
 
 ### WP11. Public profile: multi-user + real data
 (src/prosource-public-profile_1.jsx)
+> ✅ **RESOLVED — session 2 (commit 255a289), but reframed.** The doc's premise
+> (`/profile/:userId` so connection cards can link) was wrong: no account's
+> connections carry a real `userId` except Tessa's (whose are members she opens
+> in /projects), so a per-*user* route would serve nobody. What shipped instead:
+> a client-side pro directory (`src/pro-directory.js`, 5 pros), a list page at
+> `/pros`, and `/profile/:proId` for each. "Your profile" (`/profile`) and "a
+> pro's profile" (`/profile/:proId`) are now two routes off two sources, so the
+> old identity-mixing (your name over Mae Reedy's bio, the literal "MR" avatar
+> for everyone) is gone. Reviews stay as deliberate filler, but rating / count /
+> star-breakdown / chip-counts are DERIVED from the review list, so chips filter
+> truthfully. Share, reviews anchor, view-all-photos, credential details all
+> wired; showroom card reads the real showroom; photo upload and cover-photo
+> were removed as fakes with no backend. See session-2 handoff.
 - Single-profile architecture: own-vs-public is `?own=1` (:42); no
   /profile/:userId route; ConsultationWizard gets `userId: null` (:1699) so
   requests can't route to a pro.
@@ -226,6 +247,15 @@ but shop products use `listPrice`, so every cart item price is `undefined`
   (:1523-1527), credential details (:1671-1673).
 
 ### WP12. Quote / consultation / appointment flows
+> ✅ **RESOLVED — session 2 (commit beaad17), except one stale item.** Quote
+> wizard resend, submit-quote email gate, consultation success-on-reject, the
+> `userName !== 'Justin'` prefill, and the fully-mocked appointment modal all
+> fixed and driven end to end. The consultation "one-tap link" over-promise and
+> the false "X will reach out" naming were fixed in commit 255a289 (the pro
+> directory made the honest routing possible). **Stale in the list below:**
+> "Consultation records get status:'new' with no viewing UI" — the AM work queue
+> (added in session 1) surfaces consultations with an open→handled lifecycle, so
+> a human does see them.
 - Quote wizard: "Resend code" on the verify step calls sendCode → goNext(),
   advancing to a blank success screen (prosource-quote-wizard.jsx:125-145,
   :411-419, :424).
@@ -340,13 +370,18 @@ Original data-layer items:
 
 ## Suggested dispatch order
 
+> **Status (2026-07-17): everything below is done except WP13.** WP1–WP12 and
+> WP14 have shipped across sessions 1 and 2; WP13 is deferred by decision. The
+> ordering is kept as the record of how the work was sequenced. Current open
+> items are in the session-2 handoff at the bottom.
+
 Framing: internal control demo. The bar is **"the click-through works and nothing
 silently no-ops"** — not production hardening. Prioritize dead buttons, false
 success messages, and mock data that contradicts real data, since those are what
 break a live walkthrough.
 
 1. **WP1 (sign-in/create-account) + WP2 (rooms)** — the reported issues.
-   *(IN PROGRESS — dispatched 2026-07-16.)* WP2's data model lands first since
+   *(SHIPPED, session 1.)* WP2's data model lands first since
    WP4/WP6 build on it.
 2. **WP14 reliability bugs** — small, high-leverage for a demo. Especially the
    Skip-Signup dead session: today that path makes the whole app silently
@@ -410,7 +445,43 @@ account with a deterministic userId (`"ps-" + email.replace(/[^a-z0-9]/g,'-')`):
    three separate bugs.
 7. **RESEND_API_KEY is live** and `netlify dev` injects it from the Netlify site
    settings even though `.env` comments it out. Any "test" invite or OTP emails a
-   real person. The OTP dev bypass is NOT active.
+   real person. The OTP dev bypass is NOT active. **Corollary for testing
+   email-sending flows:** stub `fetch` in the browser so the request never leaves
+   the page (both the quote and consultation confirms were verified this way),
+   never by submitting a real address.
+
+The following were added in session 2 (2026-07-17):
+
+8. **`amTeamMember` carries `userId`, not a `connectionId`, and never a
+   `demoIdentity`.** When an account manager is a name on a project team, the
+   `userId` is what marks the entry as a real account (so the discussion can ask
+   "is the reader on this team, as themselves?") and what the repair pass matches
+   her by. She must stay OUT of `DEMO_IDENTITY_BY_NAME`: a team entry that
+   resolves to a demo identity gets AI words put in its mouth, and Tessa is an
+   account you sign in as. This is rule 1 wearing a different hat.
+9. **Authored discussion posts: `authorUserId` (a real account) and
+   `authorIdentity` (a demo persona) are opposites and must never be confused.**
+   An unsigned post belongs to the project owner; the reader, the activity feed
+   and the AI-reply history all branch on this. Signing a post keys on "is this
+   thread mine" (guest), never on role. A guest's post is written to the OWNER's
+   blob via `writeUserBlob`, and no AI reply fires for a guest.
+10. **`ensureAmOnProjectTeams` is surgical, not a blob rewrite, on purpose.**
+    Project ids are minted from the seed clock and the discussions blob is keyed
+    by project id, so regenerating ids would orphan every comment. The repair
+    keeps ids, touches only the team, and is idempotent by `userId`. Same family
+    as `ensureAmMemberConnections`, but it runs against the MEMBER's projects key
+    (a different account's blob), so its hook placement differs.
+11. **A directory pro (`src/pro-directory.js`) is content, not an account.** No
+    userId, no blobs, no threads. Names are load-bearing exactly as rule 1 says:
+    none may collide with a persona or a sign-in account. A consultation request
+    about a pro carries `toProId` for the record but `toProUserId: null`, because
+    there is nowhere to deliver it; the copy must not imply a named pro will call
+    (it routes to the showroom queue by zip).
+12. **A pro's profile and your own are two routes off two sources.**
+    `/profile/:proId` reads the directory (read only); `/profile` reads your
+    account (editable). They must never share state: one page for both is what
+    printed your name over Mae Reedy's history. On your own profile, unfilled
+    fields start EMPTY, never borrowed from a pro.
 
 ## Known seams, accepted deliberately
 
@@ -430,60 +501,84 @@ projects she can open), and a homeowner-appropriate cast for Alicia (her AM,
 designer, installer, rather than the other homeowners she has today). Justin's
 six threads must be unchanged: that is the regression that matters.
 
-## Still open
+## Still open (as of session-1 handoff — see session-2 handoff below for current)
 
-WP11 (per-user public profiles; connection cards have no per-user profile to link
-to), WP12 (consultation wizard reports success even when the server rejects; the
-appointment modal is fully mocked and notifies nobody), WP6 leftovers
-(Inspiration Board, Attach File, Quick Actions are inert placeholders), WP13
-(security, deferred by decision).
+_Superseded. Session 2 shipped the Tessa job, WP11, WP12, and the WP6 dead
+buttons. The current open list lives in the session-2 handoff at the bottom of
+this document._
 
-## Next up: Tessa belongs on her own members' project teams
+---
 
-**The ask (project owner):** "Tessa's members' projects should have her as a
-project team member, not Kim Marks, because Tessa should be able to comment on
-her own members' projects. She is working on them with them."
+# Handoff, 2026-07-17 (end of session 2)
 
-**Why it is wrong today.** The AI member cast (Gwen Halloran, Owen Pruitt,
-Camille Ostrowski) are TESSA's members: they message her, and their projects show
-in her projects view. But their seeded project teams carry Kim Marks as the
-account manager, because that is what every project seed has always done. So the
-account manager on the project is not the account manager who is actually working
-it. On Justin's and Alicia's projects Kim is defensible (Kim is their assigned AM
-persona, and their conversations need AI replies). On Gwen's, Owen's and
-Camille's it is simply wrong: Tessa is their AM, and she is the one signed in.
+## What shipped this session
 
-**Two pieces of work, and the second is the real one.**
+Three commits on `main`, none pushed yet (the owner decides when, since `main`
+auto-deploys to the live demo). Each was verified by driving the real app, not
+just by building.
 
-1. Seed Tessa onto her own members' project teams instead of Kim
-   (`buildGwen*/buildOwen*/buildCamille*` project builders in
-   `netlify/functions/lib/seed.mjs`; `AM_SELF` already describes her). Needs a
-   `SEED_VERSION` bump, and note the write-only-if-empty rule: already-seeded
-   member accounts will need an additive repair pass, exactly like
-   `ensureAmMemberConnections`. Leave Justin's and Alicia's teams alone.
+1. **`1889ecf` — Tessa on her own members' project teams + authored posts.**
+   The "Next up" job from session 1, both halves. Seed side: `castProjectTeam`
+   now puts Tessa (not Kim) on Gwen's, Owen's and Camille's project teams, via
+   `amTeamMember`; already-seeded accounts are repaired by `ensureAmOnProjectTeams`
+   (`SEED_VERSION` 2→3). Client side: an authored-post shape (`authorUserId`)
+   lets a guest teammate post into the OWNER's discussions blob under her own
+   name, rendering correctly to the member as Tessa. Justin's and Alicia's teams
+   keep Kim (load-bearing, rule 1). See load-bearing rules 8–10.
 
-2. Let her comment. The project discussion is currently read-only for a guest,
-   and NOT for a reason that goes away by putting her on the team. The composer
-   stamps `author: 'Me'` with no identity, and the reader renders that as whoever
-   is looking. So her comment would either land in her own blob, where the member
-   never sees it, or land in theirs and render TO THEM as words they said
-   themselves. This was verified empirically, not assumed: a test post stored as
-   `author: 'Me', identity: null`.
+2. **`beaad17` — WP12 false-success flows + WP6 dead buttons.** Fanned out to
+   five agents, each fix adversarially reviewed before landing; the review pass
+   caught two agents introducing NEW lies (see "Corrections" below for the
+   submit-quote one). Quote-wizard resend, submit-quote email gate, consultation
+   success-on-reject + `!== 'Justin'` prefill, the appointment modal (de-mocked,
+   routed to the AM work queue, no email), and all seven WP6 dead buttons.
 
-   So the real task is an authored-post shape: a post carries who wrote it
-   (identity plus display name), the member's own feed renders an authored post
-   as that person rather than as itself, and legacy un-authored posts keep
-   rendering as the owner (do not migrate them to Tessa). Only then does
-   "she is on the team, so she can post" become safe. Files:
-   `src/prosource-project-detail.jsx` (composer, reader, and the `isGuest`
-   guards), and the discussions blob shape.
+3. **`255a289` — WP11, reframed as a pro directory.** See the WP11 marker above.
+   The consultation wizard's false "X will reach out" promise was fixed here too,
+   because a per-pro route was what made honest routing expressible.
 
-**Guard rails that still hold.** Her posting must be HER, never a demo persona,
-and it must not trigger an AI reply on a project she is a guest on. Everything
-else on that page stays read-only for a guest: the write functions each save a
-whole `{list}` blob keyed on the signed-in account, so a guard removed by mistake
-does not error, it silently overwrites a member's projects.
+## Corrections to this document's own claims
 
-**Do not "fix" Kim on Justin's and Alicia's projects.** Kim being their AM is
-load-bearing: she is an AI persona, so their conversations get replies. Tessa is
-a human account you sign in as. Both facts have to stay true.
+- **WP14 blast radius was backwards.** Session 1 warned that a wrongly-removed
+  guard on the project page "silently overwrites a member's projects." It does
+  not: `saveUserData` is bound to the SIGNED-IN account, so the damage is to the
+  guest's OWN blob (clobbered with the member's list), not the member's. Still
+  silent, still bad, but the account at risk is hers.
+- **WP12 "no viewing UI" for consultations is stale.** The AM work queue surfaces
+  them with an open→handled lifecycle. (The `ps-consultation-requests` bucket
+  itself still has no reader, but a human does see the lead.)
+- **The submit-quote fix nearly shipped a new lie.** `lookup-showroom` resolves
+  every unseeded zip to a fallback manager with a real-looking NAME and an EMPTY
+  email. Gating the requester's confirmation on the name (as the first attempt
+  did) would have emailed a callback promise to the most common zip path, where
+  nobody is coming. It gates on the email now (`amIsReachable`).
+
+## Still open (current)
+
+- **WP13** — security. Deferred by decision, not scheduled. Unchanged.
+- **"Last updated Dec 18, 2025"** — hardcoded header on the project detail page
+  (still at `src/prosource-project-detail.jsx`, search the literal). A separate
+  local session was dispatched to fix it (render the real `updatedAt`); not yet
+  committed to this branch as of this handoff.
+- **WP6 remainders** — the "more" menu's archive item still calls
+  `setArchived(true)` unconditionally, so its "Unarchive Project" label
+  re-archives (a separate working unarchive control exists elsewhere on the page,
+  so fix the menu item, not that one). Plus fake activity feeds, project-linked
+  saved carts, and the shared-module extraction. Only the dead buttons were done
+  this session.
+- **WP11 depth** — the directory is client-side demo content by design; there is
+  no review submission, no real photo storage, and profileVisibility is still not
+  enforced (it is saved but nothing reads it). These are intentional non-goals
+  for a demo, recorded so nobody re-files them as bugs.
+- **Housekeeping:** a stray empty file named `directory` is tracked at the repo
+  root (`git ls-files directory`). Looks like junk; left in place because this
+  session did not create it. Safe to `git rm` if the owner confirms.
+
+## Rules added this session
+
+See load-bearing rules 8–12 in the session-1 handoff list above (kept in one
+place so the reference stays complete). In short: an account manager on a team
+carries a `userId` and never a demo identity; authored posts distinguish real
+accounts from personas and must not blur them; the team repair is surgical to
+protect discussion ids; a directory pro is content with a name that must not
+collide; and a pro's profile and your own are two routes off two sources.
