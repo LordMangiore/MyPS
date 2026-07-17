@@ -1,5 +1,5 @@
 /**
- * Reading a member's data from an account manager's session.
+ * Reaching a member's data from an account manager's session.
  *
  * An account manager owns no projects of her own. What she needs to look at is
  * her members' work, and that lives in their per-user blobs (`${userId}::projects`).
@@ -8,9 +8,13 @@
  * same request against an explicit userId instead.
  *
  * `/api/user-data` has no auth gate (deliberate in this demo: nothing here has
- * one), so reaching another account's blob is a plain GET. It is the same door
- * the AM console already opens to work across members, rather than a new
- * endpoint invented for one screen.
+ * one), so reaching another account's blob is a plain GET or POST. It is the
+ * same door the AM console already opens to work across members, rather than a
+ * new endpoint invented for one screen.
+ *
+ * Mostly reads. The one write is writeUserBlob, which carries a longer warning
+ * than anything else here, for the obvious reason: reading the wrong account's
+ * blob shows the wrong screen, writing it destroys their work.
  */
 
 import { normalizeStored } from './project-model';
@@ -39,6 +43,41 @@ export const readUserBlob = async (userId, key) => {
     return data.value.value ?? null;
   }
   return data.value ?? null;
+};
+
+/**
+ * Write one blob for an explicit account.
+ *
+ * The counterpart to readUserBlob, and it exists for exactly one caller: an
+ * account manager posting to a member's project discussion. The thread belongs
+ * to the project, so it lives in the project owner's blob, and `saveUserData` is
+ * bound to the signed-in account and therefore cannot reach it.
+ *
+ * This is a loaded gun, and the safety is at the call site rather than here. The
+ * endpoint takes any userId and any allowed key, so this will happily replace a
+ * member's whole projects list with somebody else's if you hand it one: every
+ * key here is written whole. Before calling it, be sure of two things that no
+ * check in this file can establish for you: that the payload is the OWNER's data
+ * with an addition, read back from the owner's own blob rather than from React
+ * state that may describe a different account, and that the caller has business
+ * writing it at all. `discussions` is the only key with a call site today, and
+ * adding a second is a decision, not a convenience.
+ *
+ * Note the write is not a merge and cannot be: the endpoint has no compare-and-
+ * set, so a read-modify-write here races anyone else writing the same key, and
+ * last write wins. That is the same race every whole-blob write in this app
+ * already runs (see the WP14 note in GAP-ANALYSIS.md); it is not made better or
+ * worse by the account doing the writing.
+ */
+export const writeUserBlob = async (userId, key, value) => {
+  const res = await fetch('/api/user-data', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ userId, key, value }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || `Could not save ${key} (${res.status})`);
+  return true;
 };
 
 /**

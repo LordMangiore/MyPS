@@ -49,7 +49,7 @@ import {
   removeProductAt,
   countProductsInRoom,
 } from './project-model';
-import { readUserBlob, loadMemberProjects } from './member-access';
+import { readUserBlob, writeUserBlob, loadMemberProjects } from './member-access';
 import { customerStatusLabel, statusTone, statusIcon } from './order-status';
 import {
   useOrders,
@@ -451,6 +451,41 @@ export default function ProjectDetailPage() {
   const [connections, setConnections] = useState([]);
   const [teamPickerOpen, setTeamPickerOpen] = useState(false);
 
+  /**
+   * Something stable to key a team entry on.
+   *
+   * `connectionId` was that until the account manager joined a team, and hers is
+   * null on purpose: nobody's connections list has her on it, so there is no id
+   * to carry (see amTeamMember in netlify/functions/lib/seed.mjs). She brings a
+   * `userId` instead. Members added through the picker have the id and no
+   * userId, so between them one is always there.
+   */
+  const teamKey = (m) => m.connectionId ?? m.userId ?? m.name;
+
+  /**
+   * The account manager this header names.
+   *
+   * The team is asked first and the showroom is the fallback, because they can
+   * disagree and when they do the team is the one that is right. A showroom has
+   * one account manager on its record; a project has the one who is actually
+   * working it, and for an account manager's own members those are now different
+   * people (see castProjectTeam in netlify/functions/lib/seed.mjs). Reading the
+   * showroom alone put "Kim Marks, Account Manager" at the top of a project whose
+   * team panel, four inches to the right, said Tessa.
+   *
+   * The fallback still matters: a project whose team has no account manager on it
+   * is a real state (anyone can remove one), and the showroom's is a better
+   * answer than none.
+   */
+  const projectAccountManager = useMemo(() => {
+    const onTeam = team.find((m) => m.role === 'Account Manager');
+    if (onTeam) return { name: onTeam.name, title: onTeam.role };
+    const fromShowroom = projectShowroom?.accountManager;
+    return fromShowroom?.name
+      ? { name: fromShowroom.name, title: fromShowroom.title }
+      : null;
+  }, [team, projectShowroom]);
+
   // Hydrate team from the currently-loaded project record. For brand-new
   // projects, default to the ProSource showroom contacts already in the user's
   // connections list (Account Manager + Designer) so the team isn't blank.
@@ -590,6 +625,37 @@ export default function ProjectDetailPage() {
   // Bumped to invalidate an in-flight reply (project switch / unmount).
   const replyToken = useRef(0);
 
+  /**
+   * The signed-in account's own entry on this project's team, or null.
+   *
+   * A team entry carrying a `userId` is a real account rather than a name (see
+   * amTeamMember in netlify/functions/lib/seed.mjs). Matching the signed-in one
+   * against it answers "is the person reading this on this team, as themselves?"
+   *
+   * Asked of the data, deliberately, and not of the role. `userType ===
+   * 'accountmanager'` would have been shorter and would have meant something
+   * else: that any account manager may post on any project she can get the URL
+   * for. Being on the team is the thing that is actually true about Tessa and
+   * her own members, it is what the seed now says, and it is what stops this
+   * from quietly becoming a role-wide permission the next time someone reads it.
+   */
+  const teamSelf = useMemo(
+    () => team.find((m) => m.userId && m.userId === userId) || null,
+    [team, userId]
+  );
+
+  /**
+   * Who may write in this discussion: the owner, or a teammate who is a real
+   * account. Everything else on this page stays owner-only.
+   *
+   * A guest who can post is a genuinely different thing from the owner posting,
+   * and the difference is the whole reason this took a data-model change rather
+   * than deleting a guard: her post has to go into the OWNER's blob (it is their
+   * thread) and it has to carry her name (it is her sentence). Neither was true
+   * of the composer before. See postComment.
+   */
+  const canPost = canEdit || !!teamSelf;
+
   useEffect(() => {
     if (!userId || !projectId) return;
     let cancelled = false;
@@ -633,9 +699,11 @@ export default function ProjectDetailPage() {
 
   /**
    * Prior turns for the persona's context, oldest first. The persona's own past
-   * posts are "them"; everything else is "user". Another persona's post is
-   * attributed inline so the responder doesn't read it as the member speaking.
-   * Private notes are left out, since they aren't visible to the team.
+   * posts are "them"; everything else is "user". Anyone else's post is
+   * attributed inline so the responder doesn't read it as the member speaking:
+   * another persona's, and equally a real teammate's, since a post signed by the
+   * account manager is no more the member's words than Kim's are. Private notes
+   * are left out, since they aren't visible to the team.
    */
   const buildReplyHistory = (thread, identity) =>
     thread
@@ -644,7 +712,10 @@ export default function ProjectDetailPage() {
       .map((c) =>
         c.authorIdentity === identity
           ? { from: 'them', body: c.body }
-          : { from: 'user', body: c.authorIdentity ? `${c.author}: ${c.body}` : c.body }
+          : {
+              from: 'user',
+              body: (c.authorIdentity || c.authorUserId) ? `${c.author}: ${c.body}` : c.body,
+            }
       );
 
   /**
@@ -713,23 +784,57 @@ export default function ProjectDetailPage() {
 
   const postComment = async () => {
     const text = commentText.trim();
-    if (!text || !projectId || !canEdit) return;
+    if (!text || !projectId || !canPost) return;
     setPostingComment(true);
-    const isPrivate = commentIsPrivate;
+    // A guest has no private notes: the checkbox is hers to see only when the
+    // thread is hers. "Visible only to select users" in someone else's blob
+    // would be a promise this has no way to keep.
+    const isPrivate = canEdit && commentIsPrivate;
     let posted = null;
     try {
-      const stored = (await loadUserData('discussions', null)) || {};
+      // Both ends of the read-modify-write address the project OWNER, guest or
+      // not. The thread belongs to the project, so a guest's post has to land
+      // where the rest of the thread already is; writing her own blob would file
+      // her reply somewhere the member will never look.
+      const stored = (isGuest
+        ? await readUserBlob(ownerId, 'discussions')
+        : await loadUserData('discussions', null)) || {};
       const list = Array.isArray(stored[projectId]) ? stored[projectId] : [];
+      // Sign it when the thread is not yours, and only then. This mirrors the
+      // reader exactly, which is the point: it treats an unsigned post as the
+      // owner's, so "unsigned" has to keep meaning "the owner wrote this".
+      const signAs = isGuest ? teamSelf : null;
       const entry = {
         id: `c-${Date.now()}`,
-        author: 'Me',
-        authorRole: 'tradepro',
+        ...(signAs
+          // An authored post: it says who wrote it, because in someone else's
+          // thread "Me" is not a name, it is a bug waiting to be rendered. An
+          // unsigned post here would show up to the member as their own words.
+          //
+          // `authorUserId` and not `authorIdentity`: the two look alike and mean
+          // opposite things. authorIdentity marks a demo persona and is what
+          // makes the model speak as someone; a real account must never carry
+          // it, or the app starts generating Tessa's opinions for her.
+          ? {
+              author: signAs.name,
+              authorRole: signAs.type,
+              authorTitle: signAs.role,
+              authorInitials: signAs.initials,
+              authorUserId: userId,
+            }
+          // The owner's own post stays exactly as it always was, unsigned. The
+          // reader renders it as them, every stored post already looks like
+          // this, and signing them now would be a migration of everyone's
+          // history to gain nothing.
+          : { author: 'Me', authorRole: 'tradepro' }),
         body: text,
         private: isPrivate,
         createdAt: Date.now(),
       };
       const next = [...list, entry];
-      await saveUserData('discussions', { ...stored, [projectId]: next });
+      const value = { ...stored, [projectId]: next };
+      if (isGuest) await writeUserBlob(ownerId, 'discussions', value);
+      else await saveUserData('discussions', value);
       setComments(next);
       setCommentText('');
       setCommentIsPrivate(false);
@@ -740,7 +845,16 @@ export default function ProjectDetailPage() {
       setPostingComment(false);
     }
     // A private note is visible only to the member, so nobody replies to it.
-    if (posted && !isPrivate) requestPersonaReply(posted.entry, posted.thread);
+    //
+    // And nobody replies to a guest either, which is a rule and not a shortcut.
+    // A reply is written with saveUserData, into the SIGNED-IN account's blob,
+    // so fired from here it would put a persona's words in Tessa's discussions
+    // under a project id that is not hers. Beyond the plumbing: pickResponder
+    // chooses from this project's personas, so Tessa asking her own member a
+    // question would be answered by Kim, in the member's thread, on Tessa's
+    // screen. The member is who should answer, they answer in Messages, and
+    // that is where she already talks to them.
+    if (posted && !isPrivate && canEdit) requestPersonaReply(posted.entry, posted.thread);
   };
 
   const formatCommentDate = (ts) => {
@@ -870,7 +984,7 @@ export default function ProjectDetailPage() {
     team.forEach((m) => {
       if (!m.addedAt) return;
       events.push({
-        id: `act-team-${m.connectionId}`, ...me, ts: m.addedAt,
+        id: `act-team-${teamKey(m)}`, ...me, ts: m.addedAt,
         text: (
           <>
             Added <strong>{m.name}</strong>{' '}
@@ -880,15 +994,17 @@ export default function ProjectDetailPage() {
       });
     });
 
+    // Same rule as the thread itself: a post that says who wrote it is credited
+    // to them, and an unsigned one to the owner. See the reader for why.
     comments.forEach((c) => {
-      const isPersona = !!c.authorIdentity;
+      const isAuthored = !!c.authorIdentity || !!c.authorUserId;
       events.push({
         id: `act-post-${c.id}`,
-        name: isPersona ? c.author : me.name,
-        initials: isPersona
+        name: isAuthored ? c.author : me.name,
+        initials: isAuthored
           ? (c.authorInitials || String(c.author || '').slice(0, 2).toUpperCase())
           : me.initials,
-        type: isPersona ? c.authorRole : 'tradepro',
+        type: isAuthored ? c.authorRole : 'tradepro',
         ts: c.createdAt,
         text: c.private ? <>Added a private note</> : <>Posted in the discussion</>,
       });
@@ -1661,8 +1777,13 @@ export default function ProjectDetailPage() {
               <Eye size={16} style={{ flexShrink: 0, marginTop: 2 }} />
               <div>
                 <strong>{ownerName}'s project.</strong> You have it open as their account
-                manager, so it is read only: nothing here can be renamed, archived, deleted, or
-                changed. To make a change, ask {ownerName.split(' ')[0]}.
+                manager: nothing here can be renamed, archived, deleted, or changed. To make a
+                change, ask {ownerName.split(' ')[0]}.
+                {/* The one exception, and it is worth a sentence rather than
+                    letting her find the composer and wonder whether it works.
+                    Named as the exception it is, so the sentence above keeps
+                    meaning what it says about everything else. */}
+                {canPost && ' You can post in the discussion, since you are on this project team.'}
               </div>
             </div>
           )}
@@ -1726,12 +1847,10 @@ export default function ProjectDetailPage() {
                     <span style={{ color: colors.gray500 }}>No showroom assigned</span>
                   )}
                 </div>
-                {projectShowroom?.accountManager?.name && (
+                {projectAccountManager && (
                   <div style={styles.metaItem}>
-                    <User size={14} /> {projectShowroom.accountManager.name}
-                    {projectShowroom.accountManager.title
-                      ? `, ${projectShowroom.accountManager.title}`
-                      : ''}
+                    <User size={14} /> {projectAccountManager.name}
+                    {projectAccountManager.title ? `, ${projectAccountManager.title}` : ''}
                   </div>
                 )}
                 <div style={styles.metaItem}>
@@ -2172,23 +2291,21 @@ export default function ProjectDetailPage() {
                   </span>
                 </div>
                 <div style={styles.cardBody}>
-                  {/* The discussion is READ ONLY for a guest, and that is a
-                      decision, not an oversight.
+                  {/* The discussion is the one thing on this page a guest can
+                      write to, and only a guest who is on the team. Everything
+                      else here stays owner-only.
 
-                      Posting here as herself is arguably her job, and she can
-                      read every word of it above. But the composer writes to the
-                      SIGNED-IN account's `discussions` blob, and stamps the post
-                      `author: 'Me'` with no identity on it, which the reader
-                      then renders as whoever is looking. Pointed at a member's
-                      project, that is two bugs at once: her reply lands in her
-                      own blob where the member will never see it, and if it did
-                      land in theirs it would render to them as words they said
-                      themselves. Fixing it properly means an authored-post shape
-                      plus a matching branch in the member's feed, which is a
-                      change to how members read their own discussions, and this
-                      task is not allowed to touch that. Messages is the door
-                      that already works for her. */}
-                  {isGuest ? (
+                      The rest of the page is read-only for a guest because the
+                      records are the owner's: their rooms, their products,
+                      their team. The discussion is the one place where a
+                      teammate has something of their own to add, and an account
+                      manager who cannot answer a question on her own member's
+                      project is a demo of a tool nobody would use.
+
+                      A guest who is NOT on the team still sees the note. That is
+                      the honest state and not a fallback: it is someone reading
+                      a project they have no part in. */}
+                  {!canPost ? (
                     <div style={styles.readOnlyNote}>
                       <MessageCircle size={15} style={{ flexShrink: 0, marginTop: 2 }} />
                       <div>
@@ -2199,22 +2316,41 @@ export default function ProjectDetailPage() {
                     </div>
                   ) : (
                   <>
+                  {/* Posting into someone else's thread: say so, and say as
+                      whom. She is about to write on a member's project under her
+                      own name, and that should not be something she discovers
+                      after pressing the button. */}
+                  {isGuest && teamSelf && (
+                    <div style={{ ...styles.readOnlyNote, marginBottom: 12 }}>
+                      <MessageCircle size={15} style={{ flexShrink: 0, marginTop: 2 }} />
+                      <div>
+                        Posting as <strong>{teamSelf.name}</strong> on {ownerName}'s project.
+                        {' '}{ownerName.split(' ')[0]} will see this in their discussion.
+                      </div>
+                    </div>
+                  )}
                   {/* New comment input */}
                   <textarea
                     style={{ ...styles.commentBox, width: '100%', marginBottom: 12 }}
-                    placeholder="Add a comment or update..."
+                    placeholder={isGuest ? `Reply to ${ownerName.split(' ')[0]}…` : 'Add a comment or update...'}
                     value={commentText}
                     onChange={(e) => setCommentText(e.target.value)}
                   />
                   <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-8">
-                    <label style={styles.privateCheck}>
-                      <input
-                        type="checkbox"
-                        checked={commentIsPrivate}
-                        onChange={(e) => setCommentIsPrivate(e.target.checked)}
-                      />
-                      <span>Make this message private (visible only to select users)</span>
-                    </label>
+                    {/* A private note is the owner's own margin note on their own
+                        project. There is no version of it that means anything in
+                        a thread you are a guest in: the blob it would be private
+                        in belongs to the person you would be hiding it from. */}
+                    {canEdit ? (
+                      <label style={styles.privateCheck}>
+                        <input
+                          type="checkbox"
+                          checked={commentIsPrivate}
+                          onChange={(e) => setCommentIsPrivate(e.target.checked)}
+                        />
+                        <span>Make this message private (visible only to select users)</span>
+                      </label>
+                    ) : <span />}
                     <div className="flex gap-3 shrink-0">
                       <button className="whitespace-nowrap" style={{ ...styles.btnOutline, ...styles.btnSmall }}>
                         <Paperclip size={14} /> Attach File
@@ -2264,11 +2400,19 @@ export default function ProjectDetailPage() {
                         </div>
                       )}
                       {comments.slice().reverse().map((c) => {
-                        // No authorIdentity => the project owner's own post.
-                        // Stored comments predate personas and land here too.
-                        const isPersona = !!c.authorIdentity;
-                        const name = isPersona ? c.author : ownerName;
-                        const badge = memberBadgeStyle(isPersona ? c.authorRole : 'tradepro');
+                        // An authored post says who wrote it, and there are two
+                        // kinds: a demo persona (authorIdentity, words the model
+                        // generated) and a real teammate (authorUserId, words a
+                        // person typed). They render the same and must never be
+                        // confused anywhere else: see postComment.
+                        //
+                        // Unsigned means the project owner. That is the owner's
+                        // own composer, and it is also every comment stored
+                        // before any of this existed, which is why the fallback
+                        // is the owner rather than a migration.
+                        const isAuthored = !!c.authorIdentity || !!c.authorUserId;
+                        const name = isAuthored ? c.author : ownerName;
+                        const badge = memberBadgeStyle(isAuthored ? c.authorRole : 'tradepro');
                         return (
                         <div key={c.id} style={{
                           display: 'flex', gap: 12, marginBottom: 24,
@@ -2281,10 +2425,8 @@ export default function ProjectDetailPage() {
                             marginRight: -16,
                           } : {}),
                         }}>
-                          <div style={commentAvatarStyle(isPersona ? c.authorRole : 'tradepro')}>
-                            {isPersona
-                              ? (c.authorInitials || name.slice(0, 2).toUpperCase())
-                              : name.slice(0, 2).toUpperCase()}
+                          <div style={commentAvatarStyle(isAuthored ? c.authorRole : 'tradepro')}>
+                            {(isAuthored && c.authorInitials) || name.slice(0, 2).toUpperCase()}
                           </div>
                           <div style={{ flex: 1 }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
@@ -2294,7 +2436,7 @@ export default function ProjectDetailPage() {
                                 color: badge.color, background: badge.background,
                                 padding: '2px 6px', borderRadius: 3, textTransform: 'uppercase',
                               }}>{badge.label}</span>
-                              {isPersona && c.authorTitle && (
+                              {isAuthored && c.authorTitle && (
                                 <span style={{ fontSize: 12, color: colors.gray500 }}>{c.authorTitle}</span>
                               )}
                               {c.private && (
@@ -2599,7 +2741,7 @@ export default function ProjectDetailPage() {
                         const badge = memberBadgeStyle(m.type);
                         return (
                           <div
-                            key={m.connectionId}
+                            key={teamKey(m)}
                             className="group"
                             style={{ display: 'flex', alignItems: 'center', gap: 12 }}
                           >

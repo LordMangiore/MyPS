@@ -1605,12 +1605,59 @@ const buildHomeownerAppointments = (now) => {
 // agrees with.
 const userIdForEmail = (email) => 'ps-' + email.replace(/[^a-z0-9]/g, '-');
 
+/**
+ * The account manager as a name on a project team.
+ *
+ * `connectionId` is null and that is the honest value, not a gap. Every other
+ * team entry's id points into the project OWNER's connections list, which is
+ * how the page resolves a teammate back to a person. Nobody's connections list
+ * has Tessa on it: she is not someone her members added, she is the account
+ * manager their account came with. So the pointer has nothing to point at.
+ *
+ * `userId` is what replaces it, and it is the field this whole change turns on.
+ * It says this teammate is a real account rather than a name, which is what
+ * lets the discussion answer "is the person reading this on this team, as
+ * themselves?" without asking anyone's role. It is also the field the repair
+ * pass below recognises her by, chosen for the same reason
+ * ensureAmMemberConnections keys on `demoIdentity`: no UI writes it, so a team
+ * someone has edited still reports her presence truthfully.
+ *
+ * Note what she deliberately still is NOT: an entry in DEMO_IDENTITY_BY_NAME.
+ * A team entry that resolves to a demo identity gets AI-generated words put in
+ * its mouth (see teamPersonas in src/prosource-project-detail.jsx), and Tessa is
+ * an account you sign in as. Putting her on a team must not make the model
+ * answer as her while she is sitting in the thread typing.
+ *
+ * Reads AM_SELF, which is defined further down with the rest of her world. That
+ * holds only because nothing calls this until seed time: keep it that way, and
+ * do not hoist a call to it up to module scope.
+ */
+const amTeamMember = (addedAt) => ({
+  connectionId: null,
+  userId: AM_SELF.identity,
+  name: AM_SELF.name,
+  initials: AM_SELF.initials,
+  role: AM_SELF.role,
+  type: AM_SELF.type,
+  addedAt,
+});
+
 const castProjectTeam = (now) => [
-  // The same showroom team the other seeded worlds carry. Deliberately not
-  // Tessa: she is a default owner on the ACCOUNT, not a name on the team, which
-  // is exactly why her Projects screen reads her members' lists whole instead of
-  // filtering by team. See membersFromConnections.
-  { connectionId: 1, name: 'Kim Marks', initials: 'KM', role: 'Account Manager', type: 'prosource', addedAt: now - days(30) },
+  // Tessa rather than Kim, and this is the only seeded world where that is
+  // true. These three are TESSA's members: they message her, her Projects
+  // screen lists their work, and she is the one who answers when they ask for a
+  // number. Kim here was never a decision, it was every project seed doing what
+  // project seeds have always done, and it left the account manager on the
+  // project as someone other than the account manager working it.
+  //
+  // Justin's and Alicia's teams keep Kim on purpose. Kim is their assigned AM
+  // and she is an AI persona, so their project discussions get replies. Tessa is
+  // a human account you sign in as. Both of those have to stay true, so the two
+  // worlds are deliberately not reconciled. See buildSeedProjects.
+  //
+  // Heather stays: a designer on the job is a designer on the job, and she is a
+  // colleague of Tessa's rather than a stand-in for her.
+  amTeamMember(now - days(30)),
   { connectionId: 2, name: 'Heather Yager', initials: 'HY', role: 'Designer', type: 'prosource', addedAt: now - days(30) },
 ];
 
@@ -2237,6 +2284,72 @@ const ensureAmMemberConnections = async (store, connectionsKey, blob, now) => {
   });
 };
 
+/**
+ * Put the account manager on her members' project teams when the teams are
+ * already seeded.
+ *
+ * Same problem as ensureAmMemberConnections and the same shape of answer. These
+ * three accounts were seeded at SEED_VERSION 2 with Kim on every team, the live
+ * demo has been handing them out since that shipped, and "write a key only when
+ * it is empty" means a version bump reads a full `projects` key and leaves. The
+ * fresh-seed fix in castProjectTeam only ever reaches an account nobody has
+ * clicked yet.
+ *
+ * Runs against the MEMBER's own projects key, from the member's own seed run
+ * (see amOnTeam on their worlds). Tessa's sign-in is what triggers those runs
+ * via alsoSeedAccounts, but the write lands in their account, not hers.
+ *
+ * Why this is surgical instead of just rewriting the blob: a cast member's
+ * projects are pure seed output today, since nobody signs in as them and a guest
+ * cannot edit, so replacing the whole key the way the legacy orders repair does
+ * would be safe RIGHT NOW and unsafe the moment this ships. Project ids are
+ * minted from the seed's clock (`seed-gh-${now}-working`), the discussions blob
+ * is keyed by project id, and Tessa can now post into it. Regenerate the ids and
+ * every comment she has left is still in the blob, attached to a project that no
+ * longer exists. So: keep the ids, touch only the team.
+ *
+ * Idempotent by `userId`, which no UI writes. Additive except for the one record
+ * it is here to correct: Kim as the account manager, which the seed itself put
+ * there and which is the bug. Anything else on the team is left exactly as it
+ * is, including Ryan and Heather, and including whatever a future edit adds.
+ */
+const ensureAmOnProjectTeams = async (store, projectsKey, blob, now) => {
+  const list = Array.isArray(blob?.value?.list) ? blob.value.list : null;
+  // Not a shape we recognise: leave it alone rather than overwrite it.
+  if (!list) return null;
+
+  const isSeededKim = (m) =>
+    m?.name === 'Kim Marks' && m?.role === 'Account Manager' && !m?.userId;
+
+  let changed = false;
+  const next = list.map((p) => {
+    const team = Array.isArray(p?.team) ? p.team : null;
+    if (!team) return p;
+
+    const hasAm = team.some((m) => m?.userId === AM_SELF.identity);
+    const kim = team.find(isSeededKim);
+    if (hasAm && !kim) return p;
+
+    changed = true;
+    const rest = team.filter((m) => !isSeededKim(m));
+    if (hasAm) return { ...p, team: rest };
+    // Inherit Kim's timestamp rather than stamping `now`. She is not joining the
+    // job today, she is the account manager it has had all along, and the
+    // activity feed reads these timestamps: a fresh `now` would render "Added
+    // Tessa Brandt as account manager" as the newest thing to happen on a
+    // project that has been running for a month.
+    const addedAt = kim?.addedAt || p?.createdAt || now;
+    return { ...p, team: [amTeamMember(addedAt), ...rest] };
+  });
+  if (!changed) return list;
+
+  await store.setJSON(projectsKey, {
+    value: { ...blob.value, list: next },
+    updatedAt: now,
+  });
+  return next;
+};
+
 const buildAmMessages = (now) => ({
   threads: AM_THREAD_SCRIPT.map((script, i) => {
     const messages = script.history.map((h, j) => {
@@ -2378,6 +2491,12 @@ const WORLD_BY_PERSONA = {
         appointments: null,
         orders: null,
         connections: null,
+        // Their projects key is the one seeded key that has to be repaired
+        // rather than only filled, because they were seeded with Kim on the
+        // team before Tessa was put on it. Same idea as `ensureMembers` on her
+        // own world: a flag the world asks for, so seedNewUser is not made to
+        // know these three accounts by name. See ensureAmOnProjectTeams.
+        amOnTeam: true,
       },
     ])
   ),
@@ -2414,8 +2533,13 @@ const blobKey = (userId, key) => `${userId}::${key}`;
  *    connections key is already populated in the live demo and the rule above
  *    means a bump will not rewrite it, so those three arrive through a repair
  *    pass (ensureAmMemberConnections) rather than through the seed proper.
+ * 3: Tessa on her own members' project teams instead of Kim (castProjectTeam),
+ *    so the account manager on the project is the account manager working it,
+ *    and so the discussion can tell she belongs there. Their projects keys are
+ *    already populated in the live demo from v2, so the same rule applies and
+ *    the same answer follows: a repair pass, ensureAmOnProjectTeams.
  */
-export const SEED_VERSION = 2;
+export const SEED_VERSION = 3;
 
 /**
  * The version of the demo conversations seeded into TWILIO.
@@ -2602,6 +2726,16 @@ export async function seedNewUser(userId, persona = DEFAULT_PERSONA, { force = f
         await store.setJSON(projectsKey, { value: seedProjects.payload, updatedAt: now });
       }
     } else {
+      // Already seeded, so the write above will not run: make sure the account
+      // manager is on the teams of the list that is already there. Before the id
+      // extraction below, so `projectList` carries the repaired teams.
+      // See ensureAmOnProjectTeams.
+      if (world.amOnTeam) {
+        const repaired = await ensureAmOnProjectTeams(
+          store, projectsKey, existingProjects, now
+        );
+        if (repaired) existingProjects.value = { ...existingProjects.value, list: repaired };
+      }
       // Try to extract IDs from existing list so messages can still link.
       try {
         const list = existingProjects?.value?.list || [];
