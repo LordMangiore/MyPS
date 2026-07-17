@@ -78,7 +78,11 @@ const ConsultationWizard = ({ isOpen, onClose, pro = null }) => {
     setMessage('');
     setTouchedMessage(false);
     setContact({
-      name: userName && userName !== 'Justin' ? userName : (profile?.firstName ? `${profile.firstName} ${profile.lastName || ''}`.trim() : ''),
+      // The profile is the better source: this field wants a full name, and
+      // `userName` is the session's display name, which is usually just a first
+      // name. It stays as the fallback for the window before the profile loads.
+      // A guest has neither and starts empty.
+      name: [profile?.firstName, profile?.lastName].filter(Boolean).join(' ') || userName || '',
       email: userEmail || '',
       phone: profile?.phone || '',
     });
@@ -140,31 +144,45 @@ const ConsultationWizard = ({ isOpen, onClose, pro = null }) => {
         createdAt: Date.now(),
       };
 
+      // Notify the pro. Server takes care of: writing to the pro's consultation
+      // requests blob, putting it on an account manager's queue, kicking off a
+      // Twilio conversation (if both sides have identities), and emailing.
+      //
+      // This call is the request. Nothing below it may run unless the server
+      // accepted, or the confirm step promises a pro is on their way over a
+      // rejection nobody saw. A failure leaves the wizard on the contact step
+      // with the error visible and the button live, which is the retry.
+      const res = await fetch('/api/consultation-request', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Could not send your request. Try again.');
+      }
+
       // Persist a copy for the requester (if they're logged in). Useful to
-      // show "Consultations requested" in a future history view.
+      // show "Consultations requested" in a future history view, so it carries
+      // the server's id: the two copies are unlinkable without it.
+      //
+      // Saved only once the request is real, and best-effort even then. The
+      // server already holds the request by this point, both as its own record
+      // and on the account manager's work queue (consultation-request.mjs), so
+      // losing this copy loses a history entry, not the consultation. Note it is
+      // the QUEUE that carries it, not a pro: the profile that opens this wizard
+      // passes `userId: null`, so there is nobody to route it to yet. That is
+      // WP11, and it is why this comment does not promise otherwise.
       if (userId) {
         try {
           const existing = await loadUserData('consultations', null);
           const list = Array.isArray(existing?.list) ? existing.list : [];
           await saveUserData('consultations', {
-            list: [...list, { ...payload, role: 'requester' }],
+            list: [...list, { ...payload, id: data.requestId, role: 'requester' }],
           });
         } catch (err) {
           console.warn('Consultation save failed:', err.message);
         }
-      }
-
-      // Notify the pro. Server takes care of: writing to the pro's consultation
-      // requests blob, kicking off a Twilio conversation (if both sides have
-      // identities), and emailing the pro.
-      try {
-        await fetch('/api/consultation-request', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
-        });
-      } catch (err) {
-        console.warn('consultation-request endpoint failed:', err.message);
       }
 
       setRequestSummary(payload);

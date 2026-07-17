@@ -1827,8 +1827,29 @@ export default function ProSourceSettingsRedesign() {
                           <div style={{ fontSize: 13, fontWeight: 700 }}>{(appt.date || '').replace(/^[A-Za-z]+ /, '')}</div>
                         </div>
                         <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ fontSize: 13, fontWeight: 600, color: colors.gray900 }}>
-                            {appt.time} with {appt.person}
+                          <div style={{ fontSize: 13, fontWeight: 600, color: colors.gray900, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                            <span>{appt.time} with {appt.person}</span>
+                            {/* A requested time is not an agreed one, and this
+                                card is the screen the member lands on straight
+                                after asking for it. Without the pill the ask and
+                                the confirmed seeded appointment render
+                                identically, so the booking modal's "nothing is
+                                booked until they confirm" would be contradicted
+                                by the very next thing the member sees. */}
+                            {appt.status === 'requested' && (
+                              <span style={{
+                                fontSize: 10, fontWeight: 700, textTransform: 'uppercase',
+                                color: '#92400e', background: '#fef3c7',
+                                padding: '2px 6px', borderRadius: 3,
+                              }}>Requested</span>
+                            )}
+                            {appt.status === 'confirmed' && (
+                              <span style={{
+                                fontSize: 10, fontWeight: 700, textTransform: 'uppercase',
+                                color: colors.green, background: '#dcfce7',
+                                padding: '2px 6px', borderRadius: 3,
+                              }}>Confirmed</span>
+                            )}
                           </div>
                           <div style={{ fontSize: 12, color: colors.gray500, marginTop: 2 }}>
                             {appt.personRole} · {appt.showroom}
@@ -2732,7 +2753,6 @@ export default function ProSourceSettingsRedesign() {
           setAppointmentModalOpen(false);
           setAppointmentsRefreshKey((k) => k + 1);
         }}
-        isLoggedIn={true}
       />
 
       {/* Add User Modal */}

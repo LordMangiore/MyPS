@@ -9,7 +9,6 @@ import {
   Bell,
   ChevronRight,
   Plus,
-  Paperclip,
   MessageCircle,
   Settings,
   Check,
@@ -1620,23 +1619,6 @@ export default function ProjectDetailPage() {
       color: colors.gray700,
       padding: 0,
     },
-    // Inspiration grid
-    inspirationGrid: {
-      display: 'grid',
-      gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))',
-      gap: 12,
-    },
-    inspirationItem: {
-      aspectRatio: '1',
-      background: colors.gray100,
-      borderRadius: 8,
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      cursor: 'pointer',
-      border: `2px dashed ${colors.gray300}`,
-      transition: 'all 0.15s ease',
-    },
   };
 
   // One saved product line. `index` is its position in projectData.products,
@@ -2351,10 +2333,11 @@ export default function ProjectDetailPage() {
                         <span>Make this message private (visible only to select users)</span>
                       </label>
                     ) : <span />}
+                    {/* "Attach File" is gone: a post is text, and there is
+                        nowhere for a file to go. The discussions blob stores a
+                        body string, and no upload endpoint exists to give it a
+                        URL to store instead. */}
                     <div className="flex gap-3 shrink-0">
-                      <button className="whitespace-nowrap" style={{ ...styles.btnOutline, ...styles.btnSmall }}>
-                        <Paperclip size={14} /> Attach File
-                      </button>
                       <button
                         className="whitespace-nowrap"
                         style={{
@@ -2657,55 +2640,15 @@ export default function ProjectDetailPage() {
                 </div>
               </div>
 
-              {/* Inspiration */}
-              <div style={styles.card}>
-                <div style={styles.cardHeader}>
-                  <h3 style={styles.cardTitle}>Inspiration Board</h3>
-                  <div className="flex gap-2 shrink-0">
-                    <button className="whitespace-nowrap" style={{ ...styles.btnOutline, ...styles.btnSmall }}>
-                      Browse Gallery
-                    </button>
-                    <button className="whitespace-nowrap" style={{ ...styles.btnPrimary, ...styles.btnSmall }}>
-                      + Add Photo
-                    </button>
-                  </div>
-                </div>
-                <div style={styles.cardBody}>
-                  <div style={styles.inspirationGrid}>
-                    <div 
-                      style={styles.inspirationItem}
-                      onMouseOver={(e) => e.currentTarget.style.borderColor = colors.darkBlue}
-                      onMouseOut={(e) => e.currentTarget.style.borderColor = colors.gray300}
-                    >
-                      <span style={{ color: colors.gray400, fontSize: 24 }}>+</span>
-                    </div>
-                    <div 
-                      style={styles.inspirationItem}
-                      onMouseOver={(e) => e.currentTarget.style.borderColor = colors.darkBlue}
-                      onMouseOut={(e) => e.currentTarget.style.borderColor = colors.gray300}
-                    >
-                      <span style={{ color: colors.gray400, fontSize: 24 }}>+</span>
-                    </div>
-                    <div 
-                      style={styles.inspirationItem}
-                      onMouseOver={(e) => e.currentTarget.style.borderColor = colors.darkBlue}
-                      onMouseOut={(e) => e.currentTarget.style.borderColor = colors.gray300}
-                    >
-                      <span style={{ color: colors.gray400, fontSize: 24 }}>+</span>
-                    </div>
-                    <div 
-                      style={styles.inspirationItem}
-                      onMouseOver={(e) => e.currentTarget.style.borderColor = colors.darkBlue}
-                      onMouseOut={(e) => e.currentTarget.style.borderColor = colors.gray300}
-                    >
-                      <span style={{ color: colors.gray400, fontSize: 24 }}>+</span>
-                    </div>
-                  </div>
-                  <p style={{ fontSize: 13, color: colors.gray500, marginTop: 16, marginBottom: 0 }}>
-                    Add photos from our inspiration gallery or upload your own. Collaborate with your team on the perfect look.
-                  </p>
-                </div>
-              </div>
+              {/* The Inspiration Board is gone rather than fixed.
+                  It offered two things: "Browse Gallery" and "+ Add Photo",
+                  backed by four dashed tiles that looked like drop targets. There
+                  is no inspiration gallery in this app to browse, and no upload
+                  path of any kind: no storage, no endpoint, nothing that would
+                  hold a photo once it was picked. A card whose every affordance
+                  promises a capability that does not exist has nothing honest to
+                  link to, so it makes no claim at all. If photo storage ever
+                  lands, this comes back with it. */}
             </div>
 
             {/* Sidebar */}
@@ -2840,14 +2783,30 @@ export default function ProjectDetailPage() {
                   <h3 style={styles.cardTitle}>Quick Actions</h3>
                 </div>
                 <div style={styles.cardBody}>
+                  {/* Both requests are a conversation with the account manager,
+                      the same answer the Estimates & Orders tab already gives:
+                      no endpoint takes an estimate or a design request, and the
+                      showroom fields both in Messages. Two links to /messages
+                      with different labels is not a duplicate, it is two asks
+                      that share one channel, and the label is what the member
+                      goes there to say. Browse Products has a real /shop. */}
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                    <button style={{ ...styles.btnPrimary, justifyContent: 'center', width: '100%' }}>
+                    <Link
+                      to="/messages"
+                      style={{ ...styles.btnPrimary, justifyContent: 'center', width: '100%', textDecoration: 'none' }}
+                    >
                       Request an Estimate
-                    </button>
-                    <button style={{ ...styles.btnOutline, justifyContent: 'center', width: '100%' }}>
+                    </Link>
+                    <Link
+                      to="/messages"
+                      style={{ ...styles.btnOutline, justifyContent: 'center', width: '100%', textDecoration: 'none' }}
+                    >
                       Request Kitchen/Bath Design
-                    </button>
-                    <button style={{ ...styles.btnOutline, justifyContent: 'center', width: '100%' }}>
+                    </Link>
+                    <button
+                      style={{ ...styles.btnOutline, justifyContent: 'center', width: '100%' }}
+                      onClick={() => navigate('/shop')}
+                    >
                       Browse Products
                     </button>
                   </div>
@@ -2879,7 +2838,16 @@ export default function ProjectDetailPage() {
                 >
                   <Plus size={14} /> Add Product
                 </button>
-                <button className="whitespace-nowrap" style={styles.btnPrimary}>Request Estimate</button>
+                {/* Same answer as the Estimates & Orders tab: the request is a
+                    message to the account manager, so it goes where that
+                    conversation already happens. */}
+                <Link
+                  className="whitespace-nowrap"
+                  to="/messages"
+                  style={{ ...styles.btnPrimary, textDecoration: 'none' }}
+                >
+                  Request Estimate
+                </Link>
               </div>
               )}
             </div>
@@ -2929,38 +2897,58 @@ export default function ProjectDetailPage() {
           <div style={styles.emptyState}>
             <div style={styles.emptyIcon}><Palette size={48} color={colors.gray300} /></div>
             <h3 style={styles.emptyTitle}>No Designs Yet</h3>
+            {/* Says the same true thing the Photos tab says, because this tab is
+                in the same position: it renders an unconditional empty state and
+                there is no designs field on a project, so no design can ever
+                arrive here for anyone. The old copy promised a designer would
+                upload them and that you would find them here during
+                installation, which was a delivery mechanism that does not exist.
+                Asking for a designer IS real though, which is what the button
+                below does, so the ask stays and only the promise goes. */}
             <p style={styles.emptyText}>
-              Your ProSource Kitchen & Bath Designer will upload amazing designs for you to see your space come to life. 
-              When you need to access them during installation, you'll find them here.
+              {isGuest
+                ? `Shared designs aren't part of the app yet, so ${ownerName}'s designs live with their designer for now.`
+                : "Shared designs aren't part of the app yet. Your ProSource Kitchen & Bath Designer will get them to you directly, and you can ask for one here."}
             </p>
-            <button style={styles.btnPrimary}>
-              Request Kitchen or Bath Design
-            </button>
+            {/* The design request is a conversation, same as the estimate: no
+                endpoint takes one. Owner only, and for the same reason Quick
+                Actions is: asking the account manager for a designer is the
+                member's ask, and it inverts for the account manager reading her
+                own member's project. */}
+            {canEdit && (
+              <Link to="/messages" style={{ ...styles.btnPrimary, textDecoration: 'none' }}>
+                Request Kitchen or Bath Design
+              </Link>
+            )}
           </div>
         )}
 
-        {/* Photos Tab */}
+        {/* Photos Tab. Both buttons here ("+ Add Photos", "Upload Your First
+            Photo") are gone, and nothing replaces them. Photo upload has no
+            backend: no storage, no endpoint, no field on the project record. It
+            has no honest substitute either, and Messages is specifically not
+            one, since neither transport carries media. So this tab says what is
+            true and makes no offer it cannot keep. The copy went with the
+            buttons: "Add before photos now" was the same promise in a
+            sentence. */}
         {activeTab === 'photos' && (
           <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-              <div>
-                <h2 style={{ fontSize: 20, fontWeight: 600, margin: 0 }}>Project Photos</h2>
-                <p style={{ color: colors.gray500, fontSize: 14, margin: '4px 0 0' }}>
-                  Before, during, and after photos of your project
-                </p>
-              </div>
-              <button style={styles.btnPrimary}>+ Add Photos</button>
+            <div style={{ marginBottom: 24 }}>
+              <h2 style={{ fontSize: 20, fontWeight: 600, margin: 0 }}>Project Photos</h2>
+              {/* The subtitle made the same promise the empty state below just
+                  stopped making. Both say the same thing now. */}
+              <p style={{ color: colors.gray500, fontSize: 14, margin: '4px 0 0' }}>
+                Not part of the app yet
+              </p>
             </div>
 
             <div style={styles.emptyState}>
               <div style={styles.emptyIcon}><Camera size={48} color={colors.gray300} /></div>
               <h3 style={styles.emptyTitle}>No Photos Yet</h3>
               <p style={styles.emptyText}>
-                Document your project progress! Add before photos now, then capture the transformation as work progresses.
+                Project photos aren't part of the app yet. When they land, before
+                and after shots of {isGuest ? 'this project' : 'your project'} will show up here.
               </p>
-              <button style={styles.btnPrimary}>
-                Upload Your First Photo
-              </button>
             </div>
           </div>
         )}

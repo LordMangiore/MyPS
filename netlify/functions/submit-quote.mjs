@@ -290,8 +290,28 @@ export default async function handler(req) {
       }
     }
 
+    // Is there an account manager who will actually pick this up?
+    //
+    // Not the same question as "did the lookup return one", and the difference is
+    // the whole reason this is a variable. lookup-showroom resolves every zip
+    // outside the seeded territories to a FALLBACK carrying a real-looking name
+    // ("A ProSource account manager") and an EMPTY email, whose own address field
+    // says "We'll match you on your first visit". So a truthy `name` means we have
+    // something to print, not somebody to expect a call from, and that fallback is
+    // the common path rather than the edge: every zip we do not seed lands on it.
+    //
+    // The email is the honest test. It gates the notification below, and it tracks
+    // the queue too: an unresolved showroom enqueues under id "pending", which no
+    // account manager's console can select. Nobody is emailed and nobody is
+    // queued, so nobody is coming.
+    const amIsReachable = !!accountManager?.email;
+
     // 5) Email the AM. Skip in dev bypass.
-    if (!DEV_BYPASS && accountManager?.email) {
+    //
+    // Skipped, not failed, when the step 1 lookup resolved no reachable account
+    // manager: there is simply nobody to notify. The requester's confirmation is a
+    // separate block below for that exact reason.
+    if (!DEV_BYPASS && amIsReachable) {
       try {
         const itemLines = cartItems
           .slice(0, 8)
@@ -330,8 +350,20 @@ export default async function handler(req) {
             </div>
           `,
         });
+      } catch (err) {
+        console.warn("AM lead email failed:", err.message);
+      }
+    }
 
-        // Requester confirmation
+    // 6) Email the requester. Skip in dev bypass.
+    //
+    // Deliberately outside step 5's guard and its try. Their request is already
+    // saved by this point, so neither a showroom lookup that resolved no account
+    // manager nor a send to the AM that threw may be the reason the person who
+    // asked for the quote never hears back. What the mail PROMISES still depends
+    // on whether anyone was reached: see amIsReachable.
+    if (!DEV_BYPASS) {
+      try {
         await getResend().emails.send({
           from: FROM_ADDRESS,
           to: normalizedEmail,
@@ -345,9 +377,14 @@ export default async function handler(req) {
               </div>
               <h2 style="margin: 0 0 6px; font-size: 19px;">${isSave ? 'Your project is saved.' : 'Your quote is in.'}</h2>
               <p style="margin: 0 0 14px; color: #525252; line-height: 1.55;">
-                ${isSave
-                  ? (accountManager?.name ? escapeHtml(accountManager.name) + " at " + escapeHtml(showroom?.name || "your ProSource showroom") : "Your ProSource team") + " is your account manager whenever you're ready for pricing or have questions."
-                  : (accountManager?.name ? escapeHtml(accountManager.name) + " at " + escapeHtml(showroom?.name || "your ProSource showroom") : "Your ProSource team") + " will reach out within a business day."}
+                ${amIsReachable
+                  ? escapeHtml(accountManager.name) + " at " + escapeHtml(showroom?.name || "your ProSource showroom") +
+                    (isSave
+                      ? " is your account manager whenever you're ready for pricing or have questions."
+                      : " will reach out within a business day.")
+                  : (isSave
+                      ? "We'll match you with your nearest showroom, and your account manager will pick this up whenever you're ready for pricing."
+                      : "We'll match you with your nearest showroom and be in touch.")}
               </p>
               <p style="margin: 0 0 14px; color: #525252; line-height: 1.55;">
                 In the meantime, you can <a href="${process.env.URL || "https://myprosource.netlify.app"}/projects/${projectId}" style="color:#003087;font-weight:600;">view your project</a> to add details, photos, or message your team.
@@ -356,7 +393,7 @@ export default async function handler(req) {
           `,
         });
       } catch (err) {
-        console.warn("Quote emails failed:", err.message);
+        console.warn("Requester confirmation email failed:", err.message);
       }
     }
 

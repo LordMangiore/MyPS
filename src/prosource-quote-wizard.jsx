@@ -77,6 +77,7 @@ const QuoteWizard = ({ isOpen, onClose, cartItems = [], intent = 'quote' }) => {
   const [notes, setNotes] = useState('');
   const [contact, setContact] = useState({ firstName: '', lastName: '', email: '', phone: '' });
   const [code, setCode] = useState('');
+  const [codeResent, setCodeResent] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [result, setResult] = useState(null); // { projectId, showroom, accountManager }
@@ -92,6 +93,7 @@ const QuoteWizard = ({ isOpen, onClose, cartItems = [], intent = 'quote' }) => {
     setNotes('');
     setContact({ firstName: '', lastName: '', email: '', phone: '' });
     setCode('');
+    setCodeResent(false);
     setBusy(false);
     setError('');
     setResult(null);
@@ -120,10 +122,15 @@ const QuoteWizard = ({ isOpen, onClose, cartItems = [], intent = 'quote' }) => {
 
   const [foundAccount, setFoundAccount] = useState(null);
 
-  // Step 5 (contact) → Send code. OTP works for both new sign-ups and returning
-  // accounts, so we don't gate the flow when an existing email is found. We
-  // just surface that they have an account so they aren't surprised when the
-  // app drops them straight into their existing profile after verification.
+  // Sends the code for whatever is on the contact step. Shared by the contact
+  // step and the verify step's resend, so it does not advance on its own: only
+  // the caller knows whether a send is a step forward or a retry in place.
+  // Reports whether the code actually went out.
+  //
+  // OTP works for both new sign-ups and returning accounts, so we don't gate
+  // the flow when an existing email is found. We just surface that they have an
+  // account so they aren't surprised when the app drops them straight into
+  // their existing profile after verification.
   const sendCode = async () => {
     setBusy(true);
     setError('');
@@ -138,15 +145,35 @@ const QuoteWizard = ({ isOpen, onClose, cartItems = [], intent = 'quote' }) => {
         if (lookup?.found) setFoundAccount(lookup.user);
       } catch {}
       await requestCode(emailLower);
-      goNext();
+      return true;
     } catch (err) {
       setError(err.message || 'Could not send code.');
+      return false;
     } finally {
       setBusy(false);
     }
   };
 
-  // Step 6 (verify) → finalize: verify OTP, submit quote, navigate.
+  // Step 7 (contact) → send the code, then move to verify. Advancing belongs
+  // here rather than in sendCode: from verify, goNext() lands on success, which
+  // renders nothing until verifyAndSubmit has set `result`.
+  const sendCodeAndContinue = async () => {
+    if (await sendCode()) goNext();
+  };
+
+  // Verify step → resend and stay put. A send rewrites the whole stored record
+  // (otp-send.mjs), so the previously emailed code is dead the moment this
+  // succeeds. Clear the box: the input slices to 6 digits, so six stale ones
+  // left in place would swallow the new code as the user typed it.
+  const resendCode = async () => {
+    setCodeResent(false);
+    if (!(await sendCode())) return;
+    setCode('');
+    setCodeResent(true);
+    setTimeout(() => setCodeResent(false), 3000);
+  };
+
+  // Verify step → finalize: verify OTP, submit quote, navigate.
   const verifyAndSubmit = async () => {
     setBusy(true);
     setError('');
@@ -421,13 +448,16 @@ const QuoteWizard = ({ isOpen, onClose, cartItems = [], intent = 'quote' }) => {
               <div style={{ marginTop: 12, fontSize: 12, color: colors.gray500 }}>
                 Didn't get it?{' '}
                 <button
-                  onClick={sendCode}
+                  onClick={resendCode}
+                  disabled={busy}
                   style={{
                     background: 'none', border: 'none', padding: 0,
-                    color: colors.darkBlue, fontWeight: 500, cursor: 'pointer',
+                    color: colors.darkBlue, fontWeight: 500,
+                    cursor: busy ? 'not-allowed' : 'pointer',
+                    opacity: busy ? 0.5 : 1,
                     fontFamily: 'inherit', fontSize: 12,
                   }}
-                >Resend code</button>
+                >{codeResent ? 'Code resent ✓' : 'Resend code'}</button>
               </div>
             </Step>
           )}
@@ -471,7 +501,7 @@ const QuoteWizard = ({ isOpen, onClose, cartItems = [], intent = 'quote' }) => {
               >← Back</button>
               {step === 'contact' ? (
                 <button
-                  onClick={sendCode}
+                  onClick={sendCodeAndContinue}
                   disabled={!stepValid() || busy}
                   style={{
                     ...styles.navBtnPrimary,
