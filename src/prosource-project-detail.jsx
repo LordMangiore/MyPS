@@ -47,6 +47,9 @@ import {
   setProductQty,
   removeProductAt,
   countProductsInRoom,
+  parseMoney,
+  formatMoney,
+  roomCostPerSqFt,
 } from './project-model';
 import { readUserBlob, writeUserBlob, loadMemberProjects } from './member-access';
 import { customerStatusLabel, statusTone, statusIcon } from './order-status';
@@ -381,22 +384,41 @@ export default function ProjectDetailPage() {
   };
 
   /**
-   * Every write below refuses when the viewer is a guest.
+   * Where the project collection is written, and read for a modify-write.
    *
-   * The affordances that call them are already hidden, so these guards should be
-   * unreachable. They are here because "should be" is doing a lot of work in
-   * that sentence: these functions write a whole `{ list }` blob back to an
-   * account, and a guest reaching one would not fail, it would succeed, and
-   * overwrite a member's projects with what a colleague happened to have on
-   * screen. The cost of being wrong is asymmetric, so the check sits at the
-   * write and not only at the button.
+   * The owner's account, always. For the owner that is the signed-in account
+   * (saveUserData / loadUserData). For an account manager editing her member's
+   * project it is the MEMBER, reached explicitly by userId, because saveUserData
+   * is bound to whoever is signed in and would otherwise file her edits under her
+   * own blob where the member would never see them. Same door the discussion
+   * composer already opens (see postComment), generalized to project writes.
+   */
+  const persistProjectsList = (list) =>
+    isGuest
+      ? writeUserBlob(ownerId, 'projects', { list })
+      : saveUserData('projects', { list });
+
+  const loadProjectsList = async () =>
+    normalizeStored(isGuest ? await readUserBlob(ownerId, 'projects') : await loadUserData('projects', null));
+
+  /**
+   * The content writes below refuse unless the viewer may edit the project:
+   * the owner, or the account manager whose member's project this is
+   * (canEditProject). They still refuse for a plain guest.
+   *
+   * The guard matters more than a hidden button, not less: these functions write
+   * a whole `{ list }` blob back to an account, so the wrong caller does not
+   * fail, it succeeds and overwrites. That is exactly why editing has to redirect
+   * to the OWNER (persistProjectsList) rather than widen who writes the signed-in
+   * blob. Archiving and deleting stay on `canEdit` (owner only): they are
+   * destructive and the member's to make.
    */
   const persistProject = async (next = projectData) => {
-    if (!userId || !canEdit) return;
+    if (!userId || !canEditProject) return;
     setSaving(true);
     try {
       const { id, updatedList } = buildUpsertedList(next);
-      await saveUserData('projects', { list: updatedList });
+      await persistProjectsList(updatedList);
       setProjectList(updatedList);
       if (!projectId) {
         setProjectId(id);
@@ -415,7 +437,7 @@ export default function ProjectDetailPage() {
   // so we don't echo the loaded values back as a save.
   const lastPersistedStatus = useRef({ status: null, archived: null });
   useEffect(() => {
-    if (!userId || !loadedProject || !canEdit) return;
+    if (!userId || !loadedProject || !canEditProject) return;
     if (!projectId) return; // brand-new draft, let the explicit save handle it
     if (
       lastPersistedStatus.current.status === projectStatus &&
@@ -423,7 +445,10 @@ export default function ProjectDetailPage() {
     ) return;
     lastPersistedStatus.current = { status: projectStatus, archived };
     const { updatedList } = buildUpsertedList(projectData, projectStatus, archived);
-    saveUserData('projects', { list: updatedList })
+    // Status is a content edit the AM may make; `archived` only ever changes for
+    // the owner (the archive control is owner-only), so this stays correct for
+    // both. persistProjectsList sends it to the project's owner either way.
+    persistProjectsList(updatedList)
       .then(() => setProjectList(updatedList))
       .catch((err) => console.warn('Project status save failed:', err.message));
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -552,7 +577,7 @@ export default function ProjectDetailPage() {
     : (userName || 'You');
 
   const persistTeam = async (nextTeam) => {
-    if (!canEdit) return;
+    if (!canEditProject) return;
     if (!userId || !projectId) {
       // No project saved yet, so keep changes local; first project save will
       // include the team via persistProject below.
@@ -567,7 +592,7 @@ export default function ProjectDetailPage() {
       const overridden = updatedList.map((p) =>
         p.id === projectId ? { ...p, team: nextTeam } : p
       );
-      await saveUserData('projects', { list: overridden });
+      await persistProjectsList(overridden);
       setProjectList(overridden);
     } catch (err) {
       alert(`Could not update team: ${err.message}`);
@@ -586,6 +611,7 @@ export default function ProjectDetailPage() {
       role: conn.role,
       type: conn.type,
       addedAt: Date.now(),
+      ...amStamp(),
     }];
     persistTeam(next);
     setTeamPickerOpen(false);
@@ -654,6 +680,39 @@ export default function ProjectDetailPage() {
    * of the composer before. See postComment.
    */
   const canPost = canEdit || !!teamSelf;
+
+  /**
+   * Who may edit the project's CONTENT: the owner, or the account manager whose
+   * members' project this is (a guest who is on the team, as a real account, and
+   * is showroom staff).
+   *
+   * Deliberately a separate flag from `canEdit`, not a widening of it. `canEdit`
+   * stays owner-only and keeps meaning owner-only, because things hang off it
+   * that must not change for a guest: a guest's post never triggers an AI reply
+   * (postComment), and a guest has no private notes. Only the project-content
+   * writes and their affordances move to this flag.
+   *
+   * CONTENT, not lifecycle. Archiving and deleting a member's project stay the
+   * member's own call (`canEdit`), because they are destructive and they are the
+   * member's to make. See the decision recorded in GAP-ANALYSIS.md.
+   */
+  const canEditProject = canEdit || (isGuest && !!teamSelf && isAccountManager);
+
+  /**
+   * Who to credit for a room or team member added right now.
+   *
+   * `{ addedBy }` naming the account manager when she is the one editing, and
+   * `{}` (nothing) when the owner is, so an owner's own entries stay unstamped
+   * exactly as every entry made before this was. The activity feed reads it: a
+   * room Tessa adds to her member's project must not be credited to the member,
+   * which is the same misattribution the authored-post shape fixed for the
+   * discussion. Products are not added from this page (they come from the shop),
+   * so only rooms and team carry it.
+   */
+  const amStamp = () =>
+    isGuest && teamSelf
+      ? { addedBy: { name: teamSelf.name, initials: teamSelf.initials, userId, type: teamSelf.type } }
+      : {};
 
   useEffect(() => {
     if (!userId || !projectId) return;
@@ -869,6 +928,31 @@ export default function ProjectDetailPage() {
   const [newRoomName, setNewRoomName] = useState('');
   const [renamingRoomId, setRenamingRoomId] = useState(null);
   const [renameDraft, setRenameDraft] = useState('');
+  // Per-room specs (square footage + budget) being edited, and the draft values.
+  // A room's cost-per-sq-ft is never edited: it is derived from these two.
+  const [editingSpecsRoomId, setEditingSpecsRoomId] = useState(null);
+  const [specsDraft, setSpecsDraft] = useState({ squareFootage: '', budget: '' });
+
+  const startEditSpecs = (room) => {
+    setSpecsDraft({
+      squareFootage: room.squareFootage != null ? String(room.squareFootage) : '',
+      budget: room.budget != null ? String(room.budget) : '',
+    });
+    setEditingSpecsRoomId(room.id);
+  };
+
+  const commitSpecs = (roomId) => {
+    setEditingSpecsRoomId(null);
+    const sqft = specsDraft.squareFootage.trim();
+    const nextRooms = rooms.map((r) =>
+      r.id === roomId
+        // budget through parseMoney so "20000"/"$20,000"/blank all normalize; a
+        // cleared field becomes null ("not budgeted"), never 0.
+        ? { ...r, squareFootage: sqft, budget: parseMoney(specsDraft.budget) }
+        : r
+    );
+    persistProjectFields({ rooms: nextRooms });
+  };
 
   /**
    * Narrow write: re-read the collection, patch ONLY this project, save.
@@ -877,16 +961,17 @@ export default function ProjectDetailPage() {
    * never been saved (no projectId) stay local, and persistProject picks them up.
    */
   const persistProjectFields = async (fields) => {
-    if (!canEdit) return;
+    if (!canEditProject) return;
     setProjectData((current) => ({ ...current, ...fields }));
     if (!userId || !projectId) return;
     try {
-      const stored = await loadUserData('projects', null);
-      const list = normalizeStored(stored);
+      // Re-read and write the OWNER's list, so an AM's room and product edits go
+      // to the member's account, not to her own empty one. See persistProjectsList.
+      const list = await loadProjectsList();
       const next = list.map((p) =>
         p.id === projectId ? { ...p, ...fields, updatedAt: Date.now() } : p
       );
-      await saveUserData('projects', { list: next });
+      await persistProjectsList(next);
       setProjectList(next);
     } catch (err) {
       alert(`Could not save project: ${err.message}`);
@@ -900,7 +985,7 @@ export default function ProjectDetailPage() {
       setNewRoomName('');
       return;
     }
-    persistProjectFields({ rooms: [...rooms, makeRoom(trimmed, rooms)] });
+    persistProjectFields({ rooms: [...rooms, makeRoom(trimmed, rooms, amStamp())] });
     setNewRoomName('');
   };
 
@@ -957,12 +1042,25 @@ export default function ProjectDetailPage() {
       initials: ownerName.slice(0, 2).toUpperCase(),
       type: 'tradepro',
     };
+    // An entry the account manager created carries `addedBy`; credit it to her,
+    // not to the owner whose blob it lives in. Same rule as an authored post.
+    // Unstamped means the owner, which is every legacy entry and every entry the
+    // owner made themselves.
+    const by = (entry) =>
+      entry && entry.addedBy && entry.addedBy.name
+        ? {
+            name: entry.addedBy.name,
+            initials: entry.addedBy.initials
+              || entry.addedBy.name.split(/\s+/).map((w) => w[0]).slice(0, 2).join('').toUpperCase(),
+            type: entry.addedBy.type || 'prosource',
+          }
+        : me;
     const events = [];
 
     (projectData.rooms || []).forEach((room) => {
       if (!room.createdAt) return;
       events.push({
-        id: `act-room-${room.id}`, ...me, ts: room.createdAt,
+        id: `act-room-${room.id}`, ...by(room), ts: room.createdAt,
         text: <>Added <strong>{room.name}</strong> as a room</>,
       });
     });
@@ -970,7 +1068,7 @@ export default function ProjectDetailPage() {
     (projectData.products || []).forEach((p, i) => {
       if (!p.addedAt) return;
       events.push({
-        id: `act-product-${p.sku || p.id || 'x'}-${i}`, ...me, ts: p.addedAt,
+        id: `act-product-${p.sku || p.id || 'x'}-${i}`, ...by(p), ts: p.addedAt,
         text: (
           <>
             Added <strong>{p.name}</strong> to{' '}
@@ -983,7 +1081,7 @@ export default function ProjectDetailPage() {
     team.forEach((m) => {
       if (!m.addedAt) return;
       events.push({
-        id: `act-team-${teamKey(m)}`, ...me, ts: m.addedAt,
+        id: `act-team-${teamKey(m)}`, ...by(m), ts: m.addedAt,
         text: (
           <>
             Added <strong>{m.name}</strong>{' '}
@@ -1657,10 +1755,12 @@ export default function ProjectDetailPage() {
               : 'To be quoted'}
         </div>
 
-        {/* A guest reads the same two facts (how many, which room) as plain
-            text. The stepper, the bin and the room picker are writes, and a
-            write here would land in the member's blob. */}
-        {canEdit ? (
+        {/* The stepper, the bin and the room picker are writes. The owner gets
+            them, and so does the account manager editing her member's project
+            (canEditProject): those writes are redirected to the member's blob,
+            which is where they belong. A plain guest reads the two facts (how
+            many, which room) as text. */}
+        {canEditProject ? (
           <>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, margin: '12px 0 10px' }}>
               <button
@@ -1757,22 +1857,30 @@ export default function ProjectDetailPage() {
           {isGuest && (
             <div style={styles.guestBanner}>
               <Eye size={16} style={{ flexShrink: 0, marginTop: 2 }} />
-              <div>
-                <strong>{ownerName}'s project.</strong> You have it open as their account
-                manager: nothing here can be renamed, archived, deleted, or changed. To make a
-                change, ask {ownerName.split(' ')[0]}.
-                {/* The one exception, and it is worth a sentence rather than
-                    letting her find the composer and wonder whether it works.
-                    Named as the exception it is, so the sentence above keeps
-                    meaning what it says about everything else. */}
-                {canPost && ' You can post in the discussion, since you are on this project team.'}
-              </div>
+              {/* Two different guests, two different truths. The account manager
+                  on this project can edit it (canEditProject); everyone else is
+                  reading. Say which, and in both cases name what stays the
+                  member's: archiving and deleting are theirs alone. */}
+              {canEditProject ? (
+                <div>
+                  <strong>{ownerName}'s project.</strong> You have it open as their account
+                  manager, so you can edit it and post in the discussion. Archiving and deleting
+                  it stay {ownerName.split(' ')[0]}'s call.
+                </div>
+              ) : (
+                <div>
+                  <strong>{ownerName}'s project.</strong> You have it open as their account
+                  manager: nothing here can be renamed, archived, deleted, or changed. To make a
+                  change, ask {ownerName.split(' ')[0]}.
+                  {canPost && ' You can post in the discussion, since you are on this project team.'}
+                </div>
+              )}
             </div>
           )}
           <div style={styles.headerTop}>
             <div>
               <div style={styles.breadcrumb}>{backLink}</div>
-              {isGuest ? (
+              {!canEditProject ? (
                 <h1 style={styles.projectTitle}>{projectData.name}</h1>
               ) : editingTitle ? (
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }}>
@@ -1840,11 +1948,12 @@ export default function ProjectDetailPage() {
                 </div>
               </div>
             </div>
-            {/* The whole action cluster (status lifecycle, archive, delete)
-                belongs to whoever owns the project. A guest gets none of it: not
-                greyed out, gone. A disabled Delete still says "you could delete
-                this", and she cannot. */}
-            {canEdit && (
+            {/* The status button is a content edit, so the owner AND the account
+                manager on this project get it (canEditProject). Archive and
+                Delete are not: they are destructive and the member's own call, so
+                the more-menu that holds them stays owner-only (canEdit) below. A
+                plain guest gets none of it. */}
+            {canEditProject && (
             <div style={styles.headerActions}>
               {/* Contextual Status Button */}
               {projectStatus === 'working' && (
@@ -1872,9 +1981,11 @@ export default function ProjectDetailPage() {
                 </button>
               )}
               
-              {/* More Menu */}
+              {/* More Menu: Archive + Delete, owner only. An account manager can
+                  edit the project but not archive or delete it. */}
+              {canEdit && (
               <div style={{ position: 'relative' }}>
-                <button 
+                <button
                   style={styles.moreBtn}
                   onClick={() => setShowMoreMenu(!showMoreMenu)}
                 >
@@ -1901,6 +2012,7 @@ export default function ProjectDetailPage() {
                   </div>
                 )}
               </div>
+              )}
             </div>
             )}
           </div>
@@ -1929,7 +2041,7 @@ export default function ProjectDetailPage() {
               <div style={{ ...styles.card, marginBottom: 24 }}>
                 <div style={styles.cardHeader}>
                   <h3 style={styles.cardTitle}>Project Details</h3>
-                  {isGuest ? null : !isEditingDetails ? (
+                  {!canEditProject ? null : !isEditingDetails ? (
                     <button
                       style={{ ...styles.btnOutline, ...styles.btnSmall }}
                       onClick={() => { setSnapshot(projectData); setIsEditingDetails(true); }}
@@ -2159,62 +2271,131 @@ export default function ProjectDetailPage() {
                       {rooms.map((room) => {
                         const attached = countProductsInRoom(products, room.id);
                         const isRenaming = renamingRoomId === room.id;
+                        const isEditingSpecs = editingSpecsRoomId === room.id;
+                        const cps = roomCostPerSqFt(room);
+                        const sqftNum = Number(String(room.squareFootage ?? '').replace(/[,\s]/g, ''));
+                        // Each present spec, in reading order. Omitted, not
+                        // zeroed, when unset: an unbudgeted room says nothing
+                        // about its budget rather than claiming $0.
+                        const specParts = [
+                          Number.isFinite(sqftNum) && sqftNum > 0 ? `${sqftNum.toLocaleString()} sq ft` : null,
+                          formatMoney(room.budget),
+                          cps != null ? `${formatMoney(cps)}/sq ft` : null,
+                        ].filter(Boolean);
                         return (
-                          <div key={room.id} style={styles.roomRow}>
-                            <Home size={16} color={colors.darkBlue} />
-                            {isRenaming ? (
-                              <input
-                                autoFocus
-                                value={renameDraft}
-                                onChange={(e) => setRenameDraft(e.target.value)}
-                                onBlur={() => commitRename(room.id)}
-                                onKeyDown={(e) => {
-                                  if (e.key === 'Enter') commitRename(room.id);
-                                  if (e.key === 'Escape') setRenamingRoomId(null);
-                                }}
-                                style={{
-                                  flex: 1, fontSize: 14, fontWeight: 600, color: colors.gray900,
-                                  padding: '4px 8px', border: `2px solid ${colors.darkBlue}`,
-                                  borderRadius: 6, outline: 'none', fontFamily: 'inherit',
-                                }}
-                              />
-                            ) : (
-                              <>
-                                <span style={{ flex: 1, fontSize: 14, fontWeight: 600, color: colors.gray900 }}>
-                                  {room.name}
-                                </span>
-                                <span style={{ fontSize: 12, color: colors.gray500 }}>
-                                  {attached > 0
-                                    ? `${attached} product${attached !== 1 ? 's' : ''}`
-                                    : 'No products'}
-                                </span>
-                                {canEdit && (
-                                  <>
-                                    <button
-                                      title={`Rename ${room.name}`}
-                                      onClick={() => { setRenamingRoomId(room.id); setRenameDraft(room.name); }}
-                                      style={styles.roomIconBtn}
-                                    >
-                                      <Pencil size={14} />
-                                    </button>
-                                    <button
-                                      title={`Remove ${room.name}`}
-                                      onClick={() => removeRoom(room)}
-                                      style={{ ...styles.roomIconBtn, color: colors.red }}
-                                    >
-                                      <X size={15} />
-                                    </button>
-                                  </>
-                                )}
-                              </>
-                            )}
+                          <div key={room.id} style={{ ...styles.roomRow, flexDirection: 'column', alignItems: 'stretch', gap: 6 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                              <Home size={16} color={colors.darkBlue} style={{ flexShrink: 0 }} />
+                              {isRenaming ? (
+                                <input
+                                  autoFocus
+                                  value={renameDraft}
+                                  onChange={(e) => setRenameDraft(e.target.value)}
+                                  onBlur={() => commitRename(room.id)}
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') commitRename(room.id);
+                                    if (e.key === 'Escape') setRenamingRoomId(null);
+                                  }}
+                                  style={{
+                                    flex: 1, fontSize: 14, fontWeight: 600, color: colors.gray900,
+                                    padding: '4px 8px', border: `2px solid ${colors.darkBlue}`,
+                                    borderRadius: 6, outline: 'none', fontFamily: 'inherit',
+                                  }}
+                                />
+                              ) : (
+                                <>
+                                  <span style={{ flex: 1, fontSize: 14, fontWeight: 600, color: colors.gray900 }}>
+                                    {room.name}
+                                  </span>
+                                  <span style={{ fontSize: 12, color: colors.gray500 }}>
+                                    {attached > 0
+                                      ? `${attached} product${attached !== 1 ? 's' : ''}`
+                                      : 'No products'}
+                                  </span>
+                                  {canEditProject && (
+                                    <>
+                                      <button
+                                        title={`Edit ${room.name} size and budget`}
+                                        onClick={() => (isEditingSpecs ? setEditingSpecsRoomId(null) : startEditSpecs(room))}
+                                        style={{ ...styles.roomIconBtn, color: isEditingSpecs ? colors.darkBlue : undefined }}
+                                      >
+                                        <Edit2 size={14} />
+                                      </button>
+                                      <button
+                                        title={`Rename ${room.name}`}
+                                        onClick={() => { setRenamingRoomId(room.id); setRenameDraft(room.name); }}
+                                        style={styles.roomIconBtn}
+                                      >
+                                        <Pencil size={14} />
+                                      </button>
+                                      <button
+                                        title={`Remove ${room.name}`}
+                                        onClick={() => removeRoom(room)}
+                                        style={{ ...styles.roomIconBtn, color: colors.red }}
+                                      >
+                                        <X size={15} />
+                                      </button>
+                                    </>
+                                  )}
+                                </>
+                              )}
+                            </div>
+
+                            {/* Specs: derived cost-per-sq-ft alongside the size
+                                and budget it comes from, or an inline editor. */}
+                            {isEditingSpecs ? (
+                              <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8, paddingLeft: 26 }}>
+                                <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: colors.gray500 }}>
+                                  Size
+                                  <input
+                                    autoFocus
+                                    type="number"
+                                    min="0"
+                                    value={specsDraft.squareFootage}
+                                    onChange={(e) => setSpecsDraft((d) => ({ ...d, squareFootage: e.target.value }))}
+                                    onKeyDown={(e) => { if (e.key === 'Enter') commitSpecs(room.id); if (e.key === 'Escape') setEditingSpecsRoomId(null); }}
+                                    placeholder="sq ft"
+                                    style={{ width: 90, padding: '4px 8px', border: `1px solid ${colors.gray300}`, borderRadius: 6, fontSize: 13, fontFamily: 'inherit' }}
+                                  />
+                                </label>
+                                <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: colors.gray500 }}>
+                                  Budget $
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    value={specsDraft.budget}
+                                    onChange={(e) => setSpecsDraft((d) => ({ ...d, budget: e.target.value }))}
+                                    onKeyDown={(e) => { if (e.key === 'Enter') commitSpecs(room.id); if (e.key === 'Escape') setEditingSpecsRoomId(null); }}
+                                    placeholder="dollars"
+                                    style={{ width: 110, padding: '4px 8px', border: `1px solid ${colors.gray300}`, borderRadius: 6, fontSize: 13, fontFamily: 'inherit' }}
+                                  />
+                                </label>
+                                <button onClick={() => commitSpecs(room.id)} style={{ ...styles.btnPrimary, ...styles.btnSmall }}>
+                                  <Check size={13} /> Save
+                                </button>
+                                <button onClick={() => setEditingSpecsRoomId(null)} style={{ ...styles.roomIconBtn }} title="Cancel">
+                                  <X size={15} />
+                                </button>
+                              </div>
+                            ) : specParts.length > 0 ? (
+                              <div style={{ fontSize: 12, color: colors.gray700, paddingLeft: 26 }}>
+                                {specParts.join('  ·  ')}
+                              </div>
+                            ) : canEditProject ? (
+                              <button
+                                onClick={() => startEditSpecs(room)}
+                                style={{ alignSelf: 'flex-start', marginLeft: 26, background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontSize: 12, color: colors.darkBlue, fontFamily: 'inherit' }}
+                              >
+                                + Add size &amp; budget
+                              </button>
+                            ) : null}
                           </div>
                         );
                       })}
                     </div>
                   )}
 
-                  {canEdit && (
+                  {canEditProject && (
                   <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
                     <input
                       type="text"
@@ -2239,7 +2420,7 @@ export default function ProjectDetailPage() {
                   </div>
                   )}
 
-                  {canEdit && ROOM_OPTIONS.some((o) => !rooms.some((r) => r.name.toLowerCase() === o.toLowerCase())) && (
+                  {canEditProject && ROOM_OPTIONS.some((o) => !rooms.some((r) => r.name.toLowerCase() === o.toLowerCase())) && (
                     <>
                       <div style={{ fontSize: 12, fontWeight: 600, color: colors.gray500, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 8 }}>
                         Quick add
@@ -2657,7 +2838,7 @@ export default function ProjectDetailPage() {
               <div style={styles.card}>
                 <div style={styles.cardHeader}>
                   <h3 style={styles.cardTitle}>Project Team</h3>
-                  {canEdit && (
+                  {canEditProject && (
                     <button
                       className="whitespace-nowrap"
                       onClick={() => setAddTeamOpen(true)}
@@ -2700,7 +2881,7 @@ export default function ProjectDetailPage() {
                               </div>
                               <div style={styles.memberRole}>{m.role}</div>
                             </div>
-                            {canEdit && (
+                            {canEditProject && (
                               <button
                                 onClick={() => removeTeamMember(m.connectionId)}
                                 title="Remove from team"

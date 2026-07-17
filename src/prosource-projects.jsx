@@ -454,14 +454,15 @@ function AmMemberProjects() {
               <FolderOpen size={26} color={colors.darkBlue} />
               Member projects
             </h1>
-            {/* "Read only" with the exception named, rather than the flat claim
-                this used to make. On the projects she is on the team of, she can
-                post in the discussion, and a page that told her otherwise would
-                be talking her out of the one thing she can do here. */}
+            {/* She works these projects, she does not just watch them: on the
+                ones she is on the team of she can edit the project and post in
+                the discussion. What stays the member's is naming, archiving and
+                deleting. The old copy said "nothing here can be changed", which
+                is no longer true and would talk her out of her own job. */}
             <p style={styles.pageDesc}>
               {userName ? `${userName}, every` : 'Every'} project your members are running, grouped by
-              whose it is. You can open any of them, and post in the discussion on the ones you are on
-              the team of, but their work stays theirs: nothing here can be renamed, changed or deleted.
+              whose it is. Open any of them; on the ones you are on the team of you can edit the project
+              and post in the discussion. Archiving and deleting stay the member's own.
             </p>
           </div>
           <button

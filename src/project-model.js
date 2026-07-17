@@ -12,10 +12,26 @@
  *     targetStart, targetCompletion, squareFootage, notes,
  *     status, archived, team: [...],
  *     showroomId: 'st-louis' | 'chicago' | null,
- *     rooms: [{ id, name, type?, squareFootage?, notes?, createdAt }],
+ *     rooms: [{ id, name, type?, squareFootage?, budget?, notes?, createdAt, addedBy? }],
  *     products: [{ id, sku, name, category, qty, price, roomId, ...snapshot }],
  *     createdAt, updatedAt,
  *   }
+ *
+ * A room carries its OWN specs, not just the project's. `squareFootage` and
+ * `budget` are the room's, so a bathroom can be 120 sq ft and $20,000 inside a
+ * project whose overall budget is a separate, larger number. `budget` is a plain
+ * number of dollars (or null: null means "not budgeted yet", never $0), kept
+ * deliberately independent of the project's `budgetRange` picklist: the two do
+ * not sum or reconcile, because the project's overall figure is the bigger
+ * envelope and the rooms are the line items under it. Cost-per-sq-ft is not
+ * stored; it is derived from budget ÷ squareFootage (roomCostPerSqFt) so the two
+ * numbers can never contradict.
+ *
+ * `addedBy`, when present, records the account that created the entry as
+ * { name, userId, type }. It exists because an account manager can now edit her
+ * members' projects, and a room she adds must not be credited to the member in
+ * the activity feed. Absent means the owner, which is every entry made before
+ * this and every entry the owner makes themselves.
  *
  * `showroomId` names the showroom supplying the job, matching an `id` in the
  * account's `showrooms` list (see auth-context). Most accounts work with exactly
@@ -138,6 +154,39 @@ const slugify = (value) =>
  */
 export const roomIdFromName = (name) => `room-${slugify(name) || 'area'}`;
 
+/**
+ * A dollar amount, or null. Follows the money rule the rest of the app uses:
+ * null means "not set / not priced yet", never $0. Blank, junk and negatives all
+ * read as null; 0 is a real, priced-at-zero value and is kept.
+ */
+export const parseMoney = (raw) => {
+  if (raw == null || raw === '') return null;
+  const n = Number(String(raw).replace(/[$,\s]/g, ''));
+  return Number.isFinite(n) && n >= 0 ? n : null;
+};
+
+/** `$1,234` for whole dollars, `$1,234.56` only when there are cents. null → null. */
+export const formatMoney = (raw) => {
+  const n = parseMoney(raw);
+  if (n == null) return null;
+  return '$' + n.toLocaleString('en-US', {
+    minimumFractionDigits: n % 1 === 0 ? 0 : 2,
+    maximumFractionDigits: 2,
+  });
+};
+
+/**
+ * A room's cost per square foot, derived rather than stored so it can never
+ * disagree with the budget and footage it comes from. null unless both a budget
+ * and a positive footage are present.
+ */
+export const roomCostPerSqFt = (room) => {
+  const budget = parseMoney(room?.budget);
+  const sqft = Number(String(room?.squareFootage ?? '').replace(/[,\s]/g, ''));
+  if (budget == null || !Number.isFinite(sqft) || sqft <= 0) return null;
+  return budget / sqft;
+};
+
 /** Build a new room, guaranteeing its id is unique within `existingRooms`. */
 export const makeRoom = (name, existingRooms = [], extra = {}) => {
   const trimmed = String(name || '').trim();
@@ -174,6 +223,11 @@ export const normalizeRooms = (rooms, fallbackCreatedAt = null) => {
       ...(typeof room === 'string' ? {} : room),
       id,
       name,
+      // Coerced to a number-or-null so a room budget entered as "20000" or
+      // "$20,000" and one entered as 20000 compare equal, and an unset budget is
+      // honestly null rather than an empty string. Everything else the room
+      // carries (squareFootage, notes, type, addedBy) rides through the spread.
+      budget: parseMoney(source.budget),
       createdAt: source.createdAt ?? fallbackCreatedAt ?? null,
     });
   });

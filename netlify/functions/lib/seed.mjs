@@ -132,8 +132,8 @@ const buildSeedProjects = (now) => {
           targetCompletion: new Date(now + days(75)).toISOString().slice(0, 10),
           squareFootage: "180",
           rooms: [
-            room('Kitchen', now - days(14), { type: 'Kitchen', squareFootage: '180', notes: 'Sight-line to dining stays open. No upper cabinets on the south wall.' }),
-            room('Pantry', now - days(12), { type: 'Pantry', squareFootage: '32' }),
+            room('Kitchen', now - days(14), { type: 'Kitchen', squareFootage: '180', budget: 34000, notes: 'Sight-line to dining stays open. No upper cabinets on the south wall.' }),
+            room('Pantry', now - days(12), { type: 'Pantry', squareFootage: '32', budget: 3600 }),
           ],
           products: [
             product({
@@ -188,7 +188,7 @@ const buildSeedProjects = (now) => {
           targetCompletion: new Date(now - days(20)).toISOString().slice(0, 10),
           squareFootage: "90",
           rooms: [
-            room('Master Bathroom', now - days(110), { type: 'Bathroom', squareFootage: '90', notes: 'Curbless shower, floor slopes to the linear drain.' }),
+            room('Master Bathroom', now - days(110), { type: 'Bathroom', squareFootage: '90', budget: 26000, notes: 'Curbless shower, floor slopes to the linear drain.' }),
           ],
           products: [
             product({
@@ -229,8 +229,8 @@ const buildSeedProjects = (now) => {
           targetCompletion: new Date(now - days(95)).toISOString().slice(0, 10),
           squareFootage: "640",
           rooms: [
-            room('Outdoor/Patio', now - days(220), { type: 'Outdoor', squareFootage: '520' }),
-            room('Grill Island', now - days(210), { type: 'Outdoor', squareFootage: '120' }),
+            room('Outdoor/Patio', now - days(220), { type: 'Outdoor', squareFootage: '520', budget: 22000 }),
+            room('Grill Island', now - days(210), { type: 'Outdoor', squareFootage: '120', budget: 11000 }),
           ],
           products: [
             product({
@@ -1249,8 +1249,8 @@ const buildHomeownerProjects = (now) => {
           targetCompletion: new Date(now + days(46)).toISOString().slice(0, 10),
           squareFootage: '58',
           rooms: [
-            room('Guest Bathroom', now - days(21), { type: 'Bathroom', squareFootage: '42', notes: 'Tub stays. Floor and vanity top only.' }),
-            room('Hallway', now - days(19), { type: 'Hallway', squareFootage: '16', notes: 'Runs from the guest bath door to the stairs.' }),
+            room('Guest Bathroom', now - days(21), { type: 'Bathroom', squareFootage: '42', budget: 9500, notes: 'Tub stays. Floor and vanity top only.' }),
+            room('Hallway', now - days(19), { type: 'Hallway', squareFootage: '16', budget: 1400, notes: 'Runs from the guest bath door to the stairs.' }),
           ],
           products: [
             product({
@@ -1691,8 +1691,8 @@ const buildGwenProjects = (now) => {
           targetCompletion: new Date(now + days(64)).toISOString().slice(0, 10),
           squareFootage: '215',
           rooms: [
-            room('Kitchen', now - days(30), { type: 'Kitchen', squareFootage: '165', notes: 'North run only. Load bearing wall coming out, engineer signed off.' }),
-            room('Dining Room', now - days(30), { type: 'Dining Room', squareFootage: '50', notes: 'Floor has to run through from the kitchen with no transition strip.' }),
+            room('Kitchen', now - days(30), { type: 'Kitchen', squareFootage: '165', budget: 29000, notes: 'North run only. Load bearing wall coming out, engineer signed off.' }),
+            room('Dining Room', now - days(30), { type: 'Dining Room', squareFootage: '50', budget: 5200, notes: 'Floor has to run through from the kitchen with no transition strip.' }),
           ],
           products: [
             product({
@@ -1728,7 +1728,7 @@ const buildGwenProjects = (now) => {
           targetCompletion: new Date(now - days(32)).toISOString().slice(0, 10),
           squareFootage: '28',
           rooms: [
-            room('Powder Room', now - days(80), { type: 'Bathroom', squareFootage: '28' }),
+            room('Powder Room', now - days(80), { type: 'Bathroom', squareFootage: '28', budget: 6800 }),
           ],
           products: [
             product({
@@ -1779,8 +1779,8 @@ const buildOwenProjects = (now) => {
           targetCompletion: new Date(now + days(80)).toISOString().slice(0, 10),
           squareFootage: '640',
           rooms: [
-            room('Family Room', now - days(18), { type: 'Living Room', squareFootage: '480', notes: 'Sump pit is in the far corner. Nothing permanent over it.' }),
-            room('Office', now - days(18), { type: 'Office', squareFootage: '160' }),
+            room('Family Room', now - days(18), { type: 'Living Room', squareFootage: '480', budget: 17500, notes: 'Sump pit is in the far corner. Nothing permanent over it.' }),
+            room('Office', now - days(18), { type: 'Office', squareFootage: '160', budget: 6400 }),
           ],
           products: [
             product({
@@ -1835,7 +1835,7 @@ const buildCamilleProjects = (now) => {
           targetCompletion: new Date(now + days(58)).toISOString().slice(0, 10),
           squareFootage: '1100',
           rooms: [
-            room('Whole House', now - days(12), { type: 'Other', squareFootage: '1100', notes: 'One floor throughout. Photographs matter more than wear layer.' }),
+            room('Whole House', now - days(12), { type: 'Other', squareFootage: '1100', budget: 21000, notes: 'One floor throughout. Photographs matter more than wear layer.' }),
           ],
           products: [
             product({
@@ -1865,8 +1865,8 @@ const buildCamilleProjects = (now) => {
           targetCompletion: new Date(now - days(105)).toISOString().slice(0, 10),
           squareFootage: '260',
           rooms: [
-            room('Kitchen', now - days(170), { type: 'Kitchen', squareFootage: '190' }),
-            room('Hall Bathroom', now - days(170), { type: 'Bathroom', squareFootage: '70' }),
+            room('Kitchen', now - days(170), { type: 'Kitchen', squareFootage: '190', budget: 33000 }),
+            room('Hall Bathroom', now - days(170), { type: 'Bathroom', squareFootage: '70', budget: 15000 }),
           ],
           products: [
             product({
