@@ -5,9 +5,11 @@ import {
   ensureConversation,
 } from "./lib/twilio.mjs";
 import {
+  AM_MEMBER_CAST,
   AM_SELF,
   AM_THREAD_SCRIPT,
   DEMO_ACCOUNT_USER_ID,
+  HOMEOWNER_THREAD_SCRIPT,
   TWILIO_SEED_VERSION,
   twilioSeedMarkerKey,
 } from "./lib/seed.mjs";
@@ -21,8 +23,9 @@ import {
  * POST /api/twilio-conversations
  *   body: { action: "seed", userId, userType?, projectIds?, force? }
  *     → idempotently create the demo conversations this user should actually
- *       have. A member (trade pro, homeowner) gets the six demo personas; an
- *       account manager gets her own members. See resolveUserType.
+ *       have. A trade pro gets his six demo personas; a homeowner gets her
+ *       account manager, her designer and her installer; an account manager gets
+ *       her own members. See resolveUserType and the seed plans.
  *       Runs on every Messages init and blocks before the SDK connects, so it
  *       skips out at a version marker once it has nothing left to do. `force`
  *       ignores the marker: the client sends it when it can SEE the marker is
@@ -45,6 +48,11 @@ import {
 
 // Demo participants we seed conversations with. In production these would be
 // real Twilio identities (user IDs). For the demo they're fixed strings.
+//
+// Every identity with an AI voice behind it belongs in here, whoever it talks
+// to, because this is also the list the retirement sweep works from: an identity
+// missing from it can never be recognised as a thread an account should no
+// longer be holding.
 const DEMO_PARTICIPANTS = {
   kim: "demo-kim-marks",
   bubba: "demo-bubba-beans",
@@ -52,6 +60,11 @@ const DEMO_PARTICIPANTS = {
   sarah: "demo-sarah-chen",
   heather: "demo-heather-yager",
   denise: "demo-denise-okafor",
+  // The account manager's AI members. Described in lib/seed.mjs rather than
+  // here because their identity has to agree with the userId of the account
+  // behind it and the connection that carries both, and none of that is this
+  // file's business. See AM_MEMBER_CAST.
+  ...Object.fromEntries(AM_MEMBER_CAST.map((m) => [m.key, m.identity])),
 };
 
 const PROJECT_KEY_BY_PARTICIPANT = {
@@ -164,7 +177,45 @@ const DEMO_DETAILS = {
       },
     ],
   },
+  // The account manager's AI members. Their card and their thread come from the
+  // cast in lib/seed.mjs, where the blob transport reads them too, so the two
+  // transports cannot drift into two different conversations. Their history is
+  // written TO an account manager, because Tessa is the only person any of them
+  // talks to: they are on nobody's roster but hers (see AM_ROSTER below).
+  ...Object.fromEntries(
+    AM_MEMBER_CAST.map((m) => [
+      m.identity,
+      {
+        name: m.name,
+        initials: m.initials,
+        role: m.role,
+        type: m.type,
+        history: m.history,
+      },
+    ])
+  ),
 };
+
+/**
+ * Who each kind of account is actually seeded threads with.
+ *
+ * DEMO_DETAILS is a cast list, not a roster: it describes everyone with an AI
+ * voice, and it grew past the six the trade pro knows the moment the account
+ * manager got members of her own. Seeding "everyone in DEMO_DETAILS" was fine
+ * while those were the same set and is a bug now, so who-gets-whom is written
+ * down instead of inferred.
+ *
+ * The trade pro's six, in this exact order, are what he has always had and are
+ * not to be touched: they are the heart of the demo.
+ */
+const TRADEPRO_ROSTER = [
+  DEMO_PARTICIPANTS.kim,
+  DEMO_PARTICIPANTS.bubba,
+  DEMO_PARTICIPANTS.ryan,
+  DEMO_PARTICIPANTS.sarah,
+  DEMO_PARTICIPANTS.heather,
+  DEMO_PARTICIPANTS.denise,
+];
 
 const uniqueNameFor = (userId, otherIdentity) =>
   `ps-${userId}__${otherIdentity}`;
@@ -187,9 +238,10 @@ const uniqueNameFor = (userId, otherIdentity) =>
 // than a change nobody made yet, and an explicit `userType` still wins for any
 // caller that does know.
 //
-// Anything unrecognised is a member, which is exactly what every caller got
-// before this parameter existed: the trade pro and homeowner paths are byte for
-// byte the seed they already had.
+// Anything unrecognised is a trade pro, which is exactly what every caller got
+// before this parameter existed, and his path is byte for byte the seed it
+// already was. The homeowner path is the one that has changed: she used to be
+// "a member" too, and a member meant Justin's six.
 const USER_TYPE_BY_USER_ID = {
   [DEMO_ACCOUNT_USER_ID.tradepro]: "tradepro",
   [DEMO_ACCOUNT_USER_ID.homeowner]: "homeowner",
@@ -204,15 +256,35 @@ const resolveUserType = (claimed, userId) =>
   DEFAULT_USER_TYPE;
 
 /**
- * Marks a conversation as written by the current account-manager script.
+ * Marks a conversation as written by the current script for that kind of
+ * account.
  *
- * Tessa's threads already exist in the live demo under the old scheme (six
- * member-facing personas), and her Kim thread has the wrong words in it. The
- * marker is how the seed tells "I already fixed this one" from "this predates
- * the fix", so the repair happens exactly once instead of wiping her real
- * conversation with Kim on every page load.
+ * Tessa's threads existed in the live demo under the old scheme (six
+ * member-facing personas), and her Kim thread had the wrong words in it.
+ * Alicia's are in the same state today: her Kim thread opens with the Shaw LVP
+ * samples for the Beans kitchen, which is Justin's kitchen and Justin's
+ * conversation. The marker is how the seed tells "I already fixed this one" from
+ * "this predates the fix", so the repair happens exactly once instead of wiping
+ * a real conversation on every page load.
+ *
+ * The trade pro has no marker and wants none. His threads have always been
+ * right, so there is nothing to repair, and a repair pass over them could only
+ * ever throw away chat he has actually had.
  */
 const AM_SEED_MARKER = "am";
+const HOMEOWNER_SEED_MARKER = "homeowner";
+
+/**
+ * Which script's marker an account's threads should be carrying, if any.
+ *
+ * Absent (the trade pro, and anything unrecognised) means "no repair pass":
+ * out-of-plan threads are still retired, but a planned thread is left exactly
+ * as it is however old it is.
+ */
+const SEED_MARKER_BY_USER_TYPE = {
+  accountmanager: AM_SEED_MARKER,
+  homeowner: HOMEOWNER_SEED_MARKER,
+};
 
 /**
  * Where the "I have already seeded this user's conversations" marker lives.
@@ -258,24 +330,63 @@ const attributesOf = (convo) => {
 };
 
 /**
- * A member's world: the six demo personas, every one of them a scripted contact
- * with an AI voice. Unchanged from before this endpoint knew about personas.
+ * A trade pro's world: his six demo personas, every one of them a scripted
+ * contact with an AI voice. His account manager, the second showroom's account
+ * manager, his designer, his two clients and his installer.
+ *
+ * Byte for byte the plan this built before rosters existed, which is the point:
+ * the trade pro demo works and nothing here is trying to improve it.
  */
-const memberSeedPlan = (projectIds) =>
-  Object.entries(DEMO_DETAILS).map(([identity, details]) => ({
-    identity,
-    friendlyName: details.name,
+const tradeproSeedPlan = (projectIds) =>
+  TRADEPRO_ROSTER.map((identity) => {
+    const details = DEMO_DETAILS[identity];
+    return {
+      identity,
+      friendlyName: details.name,
+      attributes: {
+        counterpartyName: details.name,
+        counterpartyInitials: details.initials,
+        counterpartyRole: details.role,
+        counterpartyType: details.type,
+        // The client reads this to decide whether the other side is a
+        // scripted demo contact or a real signed-in user.
+        counterpartyIdentity: identity,
+        projectId: projectIds[PROJECT_KEY_BY_PARTICIPANT[identity]] || null,
+      },
+      history: details.history,
+    };
+  });
+
+/**
+ * A homeowner's world: her account manager, her designer, her installer.
+ *
+ * The three of them come from lib/seed.mjs's shared script for the same reason
+ * the account manager's do: the blob transport seeds the same threads, and two
+ * copies of a conversation drift.
+ *
+ * This case did not exist before. Every account that was not an account manager
+ * got the trade pro's six, so Alicia held threads with two other homeowners and
+ * with a contractor's flooring installer, all of them reading like Justin wrote
+ * them, because Justin did. A homeowner's people are the showroom's people, and
+ * she has no more business in Bubba's kitchen than he has in her bathroom.
+ *
+ * Her threads DO carry a projectId, unlike the account manager's: the job they
+ * are about is her own.
+ */
+const homeownerSeedPlan = (projectIds) =>
+  HOMEOWNER_THREAD_SCRIPT.map((script) => ({
+    identity: script.identity,
+    friendlyName: script.name,
     attributes: {
-      counterpartyName: details.name,
-      counterpartyInitials: details.initials,
-      counterpartyRole: details.role,
-      counterpartyType: details.type,
-      // The client reads this to decide whether the other side is a
-      // scripted demo contact or a real signed-in user.
-      counterpartyIdentity: identity,
-      projectId: projectIds[PROJECT_KEY_BY_PARTICIPANT[identity]] || null,
+      counterpartyName: script.name,
+      counterpartyInitials: script.initials,
+      counterpartyRole: script.role,
+      counterpartyType: script.type,
+      counterpartyIdentity: script.identity,
+      projectId: projectIds[script.projectKey] || null,
+      seedScript: HOMEOWNER_SEED_MARKER,
     },
-    history: details.history,
+    history: script.history,
   }));
 
 /**
@@ -323,44 +434,46 @@ const amSeedPlan = (userId) =>
   }));
 
 /**
- * Undo the old seeding scheme for one account manager. Runs before her real
- * threads are seeded, and is a no-op from the second call onwards.
+ * Undo the old seeding scheme for one account. Runs before the real threads are
+ * seeded, and is a no-op from the second call onwards.
  *
  * The old seed handed EVERY account the six demo personas, so the live demo has
- * Tessa holding threads that are somebody else's: Bubba asking to come to the
- * showroom Saturday, Sarah thanking her for a patio. Those cannot simply be left
- * alone. Seeding is idempotent by uniqueName and skips a conversation that
- * already has messages, so without this her wrong threads would survive the fix
- * and stay in her list (the client renders every conversation she is subscribed
- * to, not just the ones the plan names), and her Kim thread would keep its
- * member-facing sales copy forever.
+ * accounts holding threads that are somebody else's: Tessa with Bubba asking to
+ * come to the showroom Saturday, Alicia with Sarah thanking her for a patio.
+ * Those cannot simply be left alone. Seeding is idempotent by uniqueName and
+ * skips a conversation that already has messages, so without this the wrong
+ * threads survive the fix and stay in the list (the client renders every
+ * conversation it is subscribed to, not just the ones the plan names), and the
+ * Kim thread keeps copy written for a different person forever.
  *
- * Deleting rather than un-subscribing her: `ps-${userId}__${identity}` is
- * per-user, so these conversations are hers alone and nobody else's list can
+ * Deleting rather than un-subscribing: `ps-${userId}__${identity}` is per-user,
+ * so these conversations belong to this account alone and nobody else's list can
  * lose anything. Justin's own Kim thread is `ps-ps-demo-prosource-com__...` and
- * is untouched. Removing just her participant would leave a conversation with
- * nothing but a persona in it: orphaned, which is the thing we were told to
- * avoid.
+ * is untouched by a sweep of Alicia's. Removing just the participant would leave
+ * a conversation with nothing but a persona in it: orphaned, which is the thing
+ * we were told to avoid.
  *
  * Two rules, both narrow on purpose:
- *   • not in her plan (Bubba, Sarah, Ryan, Heather, Denise) -> should never have
- *     existed for her; delete it.
- *   • in her plan (Kim) -> delete ONLY while it lacks the current marker, so the
- *     wrong words are replaced exactly once and every later seed leaves the real
- *     conversation she has been having alone.
+ *   • not in this account's plan -> should never have existed for it; delete it.
+ *     This is what takes Bubba, Sarah and Denise off the homeowner's list, and
+ *     what took the same crowd off the account manager's.
+ *   • in the plan -> delete ONLY while it lacks `marker`, so the wrong words are
+ *     replaced exactly once and every later seed leaves the real conversation
+ *     that has been going on alone. A caller with no marker (the trade pro)
+ *     never reaches this rule at all: nothing planned is even fetched.
  *
- * A conversation carrying a `connectionId` is spared either way: that is one she
- * opened herself from Connections, not one the seed wrote, and it is not ours to
- * throw away.
+ * A conversation carrying a `connectionId` is spared either way: that is one the
+ * user opened themselves from Connections, not one the seed wrote, and it is not
+ * ours to throw away.
  */
-const retireLegacyAmConversations = async (client, userId, plan) => {
-  const planned = new Map(plan.map((entry) => [entry.identity, entry]));
-  // Only ever considers the seeded personas. Her real member threads are keyed
-  // by userId and can never match, so they are out of reach of this sweep.
-  const candidates = new Set([
-    ...Object.values(DEMO_PARTICIPANTS),
-    ...plan.map((entry) => entry.identity),
-  ]);
+const retireStaleConversations = async (client, userId, plan, marker) => {
+  const planned = new Set(plan.map((entry) => entry.identity));
+  // Only ever considers identities with a persona behind them. Threads with a
+  // real account (the account manager's with Justin and Alicia) are keyed by
+  // userId and can never match, so they are out of reach of this sweep.
+  const candidates = [
+    ...new Set([...Object.values(DEMO_PARTICIPANTS), ...planned]),
+  ].filter((identity) => !planned.has(identity) || marker);
 
   for (const identity of candidates) {
     const uniqueName = uniqueNameFor(userId, identity);
@@ -372,16 +485,16 @@ const retireLegacyAmConversations = async (client, userId, plan) => {
     }
 
     const attrs = attributesOf(convo);
-    if (attrs.connectionId) continue; // hers, started by hand
-    if (planned.has(identity) && attrs.seedScript === AM_SEED_MARKER) {
+    if (attrs.connectionId) continue; // theirs, started by hand
+    if (planned.has(identity) && attrs.seedScript === marker) {
       continue; // already reseeded under the current script
     }
 
     try {
       await client.conversations.v1.conversations(convo.sid).remove();
-      console.log(`Retired legacy AM conversation ${uniqueName}`);
+      console.log(`Retired stale conversation ${uniqueName}`);
     } catch (err) {
-      // Best effort. A conversation we cannot remove is a stale thread in her
+      // Best effort. A conversation we cannot remove is a stale thread in a
       // list, not a failed sign-in.
       console.warn(`Failed to retire ${uniqueName}:`, err.message);
     }
@@ -429,13 +542,18 @@ export default async function handler(req) {
       }
 
       const resolvedType = resolveUserType(userType, userId);
-      const isAccountManager = resolvedType === "accountmanager";
       // Built before the marker is consulted because the fingerprint is taken
       // from it. Costs nothing: building a plan is pure, it is the Twilio calls
       // further down that are worth skipping.
-      const plan = isAccountManager
-        ? amSeedPlan(userId)
-        : memberSeedPlan(projectIds);
+      //
+      // Anything unrecognised lands on the trade pro's plan, which is what every
+      // caller got before this endpoint knew what kind of account it was seeding.
+      const plan =
+        resolvedType === "accountmanager"
+          ? amSeedPlan(userId)
+          : resolvedType === "homeowner"
+            ? homeownerSeedPlan(projectIds)
+            : tradeproSeedPlan(projectIds);
       const store = markerStore();
       const markerKey = twilioSeedMarkerKey(userId);
       const fingerprint = planFingerprint(plan);
@@ -473,10 +591,15 @@ export default async function handler(req) {
       }
 
       // Retire whatever the old scheme left behind before seeding the real
-      // threads, so she isn't holding both.
-      if (isAccountManager) {
-        await retireLegacyAmConversations(client, userId, plan);
-      }
+      // threads, so nobody is holding both. A no-op for the trade pro: his plan
+      // covers every persona there is a thread for, so there is nothing out of
+      // plan to sweep and no marker asking for a rewrite.
+      await retireStaleConversations(
+        client,
+        userId,
+        plan,
+        SEED_MARKER_BY_USER_TYPE[resolvedType] || null
+      );
 
       // One conversation at a time was costing seconds on every single open of
       // the Messages page: this seed is not a one-off, it runs on every init,

@@ -1,5 +1,5 @@
 import { getStore } from "@netlify/blobs";
-import { seedNewUser, seedMarkerKeys } from "./lib/seed.mjs";
+import { AM_MEMBER_CAST, seedNewUser, seedMarkerKeys } from "./lib/seed.mjs";
 
 /**
  * Sign in to one of the pre-seeded demo accounts. This is the backend for the
@@ -19,13 +19,19 @@ import { seedNewUser, seedMarkerKeys } from "./lib/seed.mjs";
  *
  * Every persona is a person you can sign in AS, which is why none of them is one
  * of the demo's AI personas (Kim Marks, Denise Okafor, Heather Yager, Bubba
- * Beans, Sarah Chen, Ryan O'Toole). Those six are answered by the model in their
+ * Beans, Sarah Chen, Ryan O'Toole, and Tessa's three members Gwen Halloran, Owen
+ * Pruitt and Camille Ostrowski). Those nine are answered by the model in their
  * own voice (see ai-reply.mjs PERSONAS, DEMO_CONTACTS in src/twilio-client.js),
  * so signing in as one would put two voices on one person: the bot speaking for
  * her and you typing as her, racing each other in the same thread. The two sets
  * must not overlap, by name or by identity: personas you talk FROM here, personas
  * you talk TO there. None of the accounts below carries a `demoIdentity`, and
  * none shares a name with one that does.
+ *
+ * Three of those nine have accounts of their own (AM_MEMBER_CAST), which does
+ * NOT make them a fourth persona here. An account is not a way in; a PERSONAS
+ * entry is, because that is what the landing page's buttons post. They are
+ * seeded (see alsoSeedAccounts) and never signed into.
  *
  * `persona` is a body field rather than a second endpoint or a query param on
  * purpose: the client contract (POST here, get a session back) does not change,
@@ -312,6 +318,22 @@ const PERSONAS = {
     // seeding her seeds her members too. All of it is idempotent, so this
     // costs a couple of no-op reads when they already exist.
     alsoSeed: ["tradepro", "homeowner"],
+    // Her AI members, seeded for exactly the same reason and in exactly the
+    // same way, just addressed differently. Justin and Alicia above are named by
+    // persona key because they are personas: you can sign in as them. Gwen, Owen
+    // and Camille cannot be named that way and must not be, because a persona
+    // key is a way in and nobody may ever sign in as an AI voice. They are
+    // accounts without a door, so what identifies them is their userId, which
+    // lib/seed.mjs derives from their email the same way every other account's
+    // is derived from its own.
+    //
+    // Without this her Projects screen is a roster of members with nothing under
+    // any of their names: it reads each member's projects blob by userId, and an
+    // account nobody has ever seeded has no blob to read.
+    alsoSeedAccounts: AM_MEMBER_CAST.map((m) => ({
+      userId: m.userId,
+      seed: m.seedPersona,
+    })),
   },
   homeowner: {
     email: HOMEOWNER_EMAIL,
@@ -483,6 +505,17 @@ export default async function handler(req) {
         await seedNewUser(userIdForEmail(spec.email), spec.seed, { force });
       } catch (err) {
         console.warn(`alsoSeed ${other} failed:`, err.message);
+      }
+    }
+
+    // The accounts with no persona key to name them by (see alsoSeedAccounts).
+    // Same contract, same best-effort handling: an AI member whose account could
+    // not be set up costs that member's projects, not the sign-in.
+    for (const account of persona.alsoSeedAccounts || []) {
+      try {
+        await seedNewUser(account.userId, account.seed, { force });
+      } catch (err) {
+        console.warn(`alsoSeedAccounts ${account.userId} failed:`, err.message);
       }
     }
 

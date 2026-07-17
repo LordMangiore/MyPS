@@ -1287,97 +1287,138 @@ const buildHomeownerProjects = (now) => {
   };
 };
 
-const buildHomeownerMessages = (now, projectIds) => {
-  const kim2 = now - minutes(50);
-  const kim1 = now - days(1) - minutes(10);
-  const heather2 = now - days(2);
-  const heather1 = now - days(2) - minutes(35);
-
-  return {
-    threads: [
+/**
+ * A homeowner's messages: the three people a homeowner working through a
+ * showroom actually has, in her own voice.
+ *
+ * Exported for the same reason AM_THREAD_SCRIPT is: twilio-conversations.mjs
+ * seeds these same threads into Twilio, so one script feeds both transports and
+ * Messages reads the same whether Twilio is up or the blob is the fallback.
+ * Before this existed the Twilio side had no homeowner case at all and handed
+ * Alicia the trade pro's six threads verbatim, so she was reading Justin's mail:
+ * Kim telling her about the Beans kitchen samples, Bubba asking to meet at the
+ * showroom, Sarah thanking her for a patio.
+ *
+ * Who is here and why:
+ *   Kim -> her account manager. Every homeowner has one.
+ *   Heather -> her designer, who is drawing the vanity layouts the job is
+ *     waiting on.
+ *   Ryan -> her installer. He is Justin's installer too, which is ordinary: an
+ *     installer works for whoever books him.
+ *
+ * All three are AI personas, which is the sanctioned direction: Alicia is a
+ * person you sign in AS, they are people she talks TO. Bubba and Sarah are
+ * deliberately absent. They are homeowners like her, with no more reason to be
+ * in her inbox than two strangers picked off the street.
+ *
+ * `projectKey` names which of her projects the thread is about. All three point
+ * at the same job because she has exactly one.
+ *
+ * `agoMs` only drives the blob transport, which builds its own timestamps.
+ * Twilio stamps messages as they are posted. Oldest first.
+ */
+export const HOMEOWNER_THREAD_SCRIPT = [
+  {
+    identity: 'demo-kim-marks',
+    name: 'Kim Marks',
+    initials: 'KM',
+    role: 'Account Manager',
+    type: 'prosource',
+    projectKey: 'working',
+    unread: true,
+    history: [
       {
-        id: 1,
-        projectId: projectIds.working,
-        name: 'Kim Marks',
-        initials: 'KM',
-        type: 'prosource',
-        role: 'Account Manager',
-        lastMessage:
-          "Ryan has you penciled in for the week of the 12th. I'll confirm once the tile lands.",
-        timestamp: fmtRelativeTimestamp(kim2),
-        unread: true,
-        updatedAt: kim2,
-        messages: [
-          {
-            id: 1,
-            sender: 'Kim Marks',
-            isMe: false,
-            text:
-              "Hi Alicia! The Perpetuo tile is in stock, so once you sign off on the estimate we can have it here in about two weeks.",
-            time: fmtTime(kim1),
-            date: fmtDate(kim1),
-            timestamp: kim1,
-          },
-          {
-            id: 2,
-            sender: 'Me',
-            isMe: true,
-            text:
-              "That works. Can we hold off on the hallway hardwood until I've seen Heather's layouts?",
-            time: fmtTime(kim1 + minutes(45)),
-            date: fmtDate(kim1 + minutes(45)),
-            timestamp: kim1 + minutes(45),
-          },
-          {
-            id: 3,
-            sender: 'Kim Marks',
-            isMe: false,
-            text:
-              "Ryan has you penciled in for the week of the 12th. I'll confirm once the tile lands.",
-            time: fmtTime(kim2),
-            date: fmtDate(kim2),
-            timestamp: kim2,
-          },
-        ],
+        from: 'them',
+        agoMs: days(1) + minutes(10),
+        body: 'Hi Alicia! The Perpetuo tile is in stock, so once you sign off on the estimate we can have it here in about two weeks.',
       },
       {
-        id: 2,
-        projectId: projectIds.working,
-        name: 'Heather Yager',
-        initials: 'HY',
-        type: 'prosource',
-        role: 'Designer',
-        lastMessage:
-          'Two vanity layouts coming your way. One keeps the linen closet, one trades it for a wider top.',
-        timestamp: fmtRelativeTimestamp(heather2),
-        unread: false,
-        updatedAt: heather2,
-        messages: [
-          {
-            id: 1,
-            sender: 'Me',
-            isMe: true,
-            text:
-              'Hi Heather, is there any way to get a wider vanity in there without losing the linen closet?',
-            time: fmtTime(heather1),
-            date: fmtDate(heather1),
-            timestamp: heather1,
-          },
-          {
-            id: 2,
-            sender: 'Heather Yager',
-            isMe: false,
-            text:
-              'Two vanity layouts coming your way. One keeps the linen closet, one trades it for a wider top.',
-            time: fmtTime(heather2),
-            date: fmtDate(heather2),
-            timestamp: heather2,
-          },
-        ],
+        from: 'user',
+        agoMs: days(1) - minutes(35),
+        body: "That works. Can we hold off on the hallway hardwood until I've seen Heather's layouts?",
+      },
+      {
+        from: 'them',
+        agoMs: minutes(50),
+        body: "Ryan has you penciled in for the week of the 12th. I'll confirm once the tile lands.",
       },
     ],
-  };
-};
+  },
+  {
+    identity: 'demo-heather-yager',
+    name: 'Heather Yager',
+    initials: 'HY',
+    role: 'Designer',
+    type: 'prosource',
+    projectKey: 'working',
+    unread: false,
+    history: [
+      {
+        from: 'user',
+        agoMs: days(2) + minutes(35),
+        body: 'Hi Heather, is there any way to get a wider vanity in there without losing the linen closet?',
+      },
+      {
+        from: 'them',
+        agoMs: days(2),
+        body: 'Two vanity layouts coming your way. One keeps the linen closet, one trades it for a wider top.',
+      },
+    ],
+  },
+  {
+    identity: 'demo-ryan-otoole',
+    name: "Ryan O'Toole",
+    initials: 'RO',
+    role: 'Flooring Installer',
+    type: 'tradepro',
+    projectKey: 'working',
+    unread: false,
+    history: [
+      {
+        from: 'user',
+        agoMs: days(3) + minutes(20),
+        body: "Hi Ryan, Kim says you'll be doing the install. The hallway outside the bath has a bit of a dip in it. Is that going to be a problem?",
+      },
+      {
+        from: 'them',
+        agoMs: days(3),
+        body: "Not a problem, I'll flat patch it before anything goes down. I do want to look at it once the vanity is out though.",
+      },
+    ],
+  },
+];
+
+const buildHomeownerMessages = (now, projectIds) => ({
+  threads: HOMEOWNER_THREAD_SCRIPT.map((script, i) => {
+    const messages = script.history.map((h, j) => {
+      const ts = now - h.agoMs;
+      const isMe = h.from === 'user';
+      return {
+        id: j + 1,
+        sender: isMe ? 'Me' : script.name,
+        isMe,
+        text: h.body,
+        time: fmtTime(ts),
+        date: fmtDate(ts),
+        timestamp: ts,
+      };
+    });
+    const last = messages[messages.length - 1];
+    return {
+      id: i + 1,
+      projectId: projectIds[script.projectKey] || null,
+      name: script.name,
+      initials: script.initials,
+      type: script.type,
+      role: script.role,
+      lastMessage: last.text,
+      timestamp: fmtRelativeTimestamp(last.timestamp),
+      unread: !!script.unread,
+      updatedAt: last.timestamp,
+      messages,
+    };
+  }),
+});
 
 const buildHomeownerConnections = (projectList = []) => {
   const sharedProjects = (connectionId) =>
@@ -1526,6 +1567,405 @@ const buildHomeownerAppointments = (now) => {
 };
 
 // ===========================================================================
+// Tessa's AI members: Gwen Halloran, Owen Pruitt, Camille Ostrowski
+// ===========================================================================
+//
+// An AI member is two things at once, and it has to be both:
+//
+//   a `demoIdentity`, so the model answers as them and Tessa's threads move
+//     when she types into them. Without this she is talking to a wall: her only
+//     other members are Justin and Alicia, who are real accounts, so nothing
+//     replies unless a second browser is signed in as one of them.
+//   a real seeded `userId` with its own blobs, so they have projects. Without
+//     this she has an inbox and nothing else: `membersFromConnections` in
+//     src/member-access.js keys her Projects screen off a connection's userId,
+//     and an AI persona with no account behind it is not a member, it is a
+//     colleague.
+//
+// Both at once is safe here and nowhere else, because of who these people are
+// NOT: nobody signs in as them. The rule that must not break is that anything
+// with a sign-in button (Justin, Tessa, Alicia) is never an AI persona, or the
+// model answers in your voice while you sit logged in as yourself, racing you
+// in your own thread. These three have no sign-in button, no landing page tile
+// and no PERSONAS entry in demo-session.mjs. Their accounts exist to be READ
+// (by Tessa, over her connections list), not to be entered.
+//
+// Fresh names on purpose. src/twilio-client.js matches demo contacts by name as
+// a compat shim, so a name that collides with a sign-in account is enough to
+// hand that account an AI voice. Nobody here shares a name with anyone.
+//
+// Their voices are in netlify/functions/ai-reply.mjs. Their threads to Tessa are
+// in AM_THREAD_SCRIPT below.
+
+// "ps-" + the email with every character outside [a-z0-9] replaced by a dash.
+// The same convention as `userIdForEmail` in demo-session.mjs and `legacyUserId`
+// in otp-verify.mjs, so an AI member's account is an ordinary account that
+// happens to have nobody signing into it. Derived rather than written out so a
+// typo cannot silently mint a second, empty account under a userId nothing else
+// agrees with.
+const userIdForEmail = (email) => 'ps-' + email.replace(/[^a-z0-9]/g, '-');
+
+const castProjectTeam = (now) => [
+  // The same showroom team the other seeded worlds carry. Deliberately not
+  // Tessa: she is a default owner on the ACCOUNT, not a name on the team, which
+  // is exactly why her Projects screen reads her members' lists whole instead of
+  // filtering by team. See membersFromConnections.
+  { connectionId: 1, name: 'Kim Marks', initials: 'KM', role: 'Account Manager', type: 'prosource', addedAt: now - days(30) },
+  { connectionId: 2, name: 'Heather Yager', initials: 'HY', role: 'Designer', type: 'prosource', addedAt: now - days(30) },
+];
+
+// Gwen runs two bathrooms and a kitchen at a time and is always one quote
+// behind. Her working job is the one she is chasing Tessa about.
+const buildGwenProjects = (now) => {
+  const ids = {
+    working: `seed-gh-${now}-working`,
+    complete: `seed-gh-${now}-complete`,
+    published: null,
+  };
+
+  return {
+    ids,
+    payload: {
+      list: [
+        {
+          id: ids.working,
+          name: 'Ferndale Ave Kitchen',
+          type: 'Kitchen Remodel',
+          showroomId: 'st-louis',
+          team: [
+            ...castProjectTeam(now),
+            { connectionId: 5, name: "Ryan O'Toole", initials: 'RO', role: 'Flooring Installer', type: 'tradepro', addedAt: now - days(20) },
+          ],
+          description:
+            'Galley kitchen opened into the dining room. Wall comes out, cabinets go back on the north run only. Client signs Friday or the whole thing slides to spring.',
+          address: '3812 Ferndale Ave, Webster Groves, MO 63119',
+          budgetRange: '$25,000 - $50,000',
+          targetStart: new Date(now + days(9)).toISOString().slice(0, 10),
+          targetCompletion: new Date(now + days(64)).toISOString().slice(0, 10),
+          squareFootage: '215',
+          rooms: [
+            room('Kitchen', now - days(30), { type: 'Kitchen', squareFootage: '165', notes: 'North run only. Load bearing wall coming out, engineer signed off.' }),
+            room('Dining Room', now - days(30), { type: 'Dining Room', squareFootage: '50', notes: 'Floor has to run through from the kitchen with no transition strip.' }),
+          ],
+          products: [
+            product({
+              id: 'prod-006', sku: 'sku-prod-006', name: 'KraftMaid Durham Maple Shaker Cabinet',
+              brand: 'KraftMaid', category: 'Cabinets', colorName: 'Dove White',
+              price: 485.0, unit: 'EA', qty: 11, image: IMG.cabinet,
+              roomId: 'room-kitchen', addedAt: now - days(6),
+            }),
+            product({
+              id: 'prod-001', sku: 'sku-prod-001', name: 'Factory Direct Pier Engineered 6-3/8" Oak Hardwood Flooring',
+              brand: 'Factory Direct', category: 'Hardwood', colorName: 'Strawthorne Oak',
+              price: 7.6, unit: 'SF', sfPerBox: 32.81, qty: 215, image: IMG.oak,
+              roomId: 'room-kitchen', addedAt: now - days(5),
+            }),
+          ],
+          notes: 'Cabinet quote outstanding with Tessa. Framing crew is off this job Thursday either way.',
+          status: 'working',
+          archived: false,
+          createdAt: now - days(30),
+          updatedAt: now - days(5),
+        },
+        {
+          id: ids.complete,
+          name: 'Kingsbury Powder Room',
+          type: 'Bathroom Remodel',
+          showroomId: 'st-louis',
+          team: castProjectTeam(now),
+          description:
+            'Small powder room off the entry. Pedestal sink out, floating vanity in, floor tile run on the diagonal. Signed off last month.',
+          address: '6120 Kingsbury Ave, St. Louis, MO 63112',
+          budgetRange: '$5,000 - $10,000',
+          targetStart: new Date(now - days(70)).toISOString().slice(0, 10),
+          targetCompletion: new Date(now - days(32)).toISOString().slice(0, 10),
+          squareFootage: '28',
+          rooms: [
+            room('Powder Room', now - days(80), { type: 'Bathroom', squareFootage: '28' }),
+          ],
+          products: [
+            product({
+              id: 'prod-003', sku: 'sku-prod-003', name: 'Daltile Perpetuo Porcelain Floor Tile 12x24',
+              brand: 'Daltile', category: 'Tile & Stone', colorName: 'Brilliant White',
+              price: 6.49, unit: 'SF', sfPerBox: 15.6, qty: 34, image: IMG.tile,
+              roomId: 'room-powder-room', addedAt: now - days(60),
+            }),
+          ],
+          notes: 'Client wants the same vanity in the upstairs bath next year.',
+          status: 'complete',
+          archived: false,
+          createdAt: now - days(80),
+          updatedAt: now - days(32),
+        },
+      ],
+    },
+  };
+};
+
+// Owen owns one house and is doing one thing to it, slowly, while reading
+// everything he can find about it first.
+const buildOwenProjects = (now) => {
+  const ids = {
+    working: `seed-op-${now}-working`,
+    complete: null,
+    published: null,
+  };
+
+  return {
+    ids,
+    payload: {
+      list: [
+        {
+          id: ids.working,
+          name: 'Pruitt Basement Finish',
+          type: 'Other',
+          showroomId: 'st-louis',
+          team: [
+            ...castProjectTeam(now),
+            { connectionId: 5, name: "Ryan O'Toole", initials: 'RO', role: 'Flooring Installer', type: 'tradepro', addedAt: now - days(11) },
+          ],
+          description:
+            'Finishing the basement into a family room and a small office. Slab is dry but the previous owner had a sump pump put in, so everything down there has to be able to take a wet day.',
+          address: '1147 Sappington Barracks Rd, Crestwood, MO 63126',
+          budgetRange: '$10,000 - $25,000',
+          targetStart: new Date(now + days(24)).toISOString().slice(0, 10),
+          targetCompletion: new Date(now + days(80)).toISOString().slice(0, 10),
+          squareFootage: '640',
+          rooms: [
+            room('Family Room', now - days(18), { type: 'Living Room', squareFootage: '480', notes: 'Sump pit is in the far corner. Nothing permanent over it.' }),
+            room('Office', now - days(18), { type: 'Office', squareFootage: '160' }),
+          ],
+          products: [
+            product({
+              id: 'prod-002', sku: 'sku-prod-002', name: 'COREtec Pro Plus Enhanced Luxury Vinyl Plank',
+              brand: 'COREtec', category: 'LVP / LVT', colorName: 'Pembroke Pine',
+              price: 4.99, unit: 'SF', sfPerBox: 36.64, qty: 640, image: IMG.lvp,
+              roomId: 'room-family-room', addedAt: now - days(9),
+            }),
+            // Unassigned on purpose: he has not decided whether the office gets
+            // the same floor or something warmer, and has asked three times.
+            product({
+              id: 'prod-001', sku: 'sku-prod-001', name: 'Factory Direct Pier Engineered 6-3/8" Oak Hardwood Flooring',
+              brand: 'Factory Direct', category: 'Hardwood', colorName: 'Strawthorne Oak',
+              price: 7.6, unit: 'SF', sfPerBox: 32.81, qty: 1, image: IMG.oak,
+              roomId: null, addedAt: now - days(3),
+            }),
+          ],
+          notes: 'Wants a moisture reading on the slab before anything is ordered.',
+          status: 'working',
+          archived: false,
+          createdAt: now - days(18),
+          updatedAt: now - days(3),
+        },
+      ],
+    },
+  };
+};
+
+// Camille buys for houses she does not live in. Two at a time, always.
+const buildCamilleProjects = (now) => {
+  const ids = {
+    working: `seed-co-${now}-working`,
+    complete: null,
+    published: `seed-co-${now}-published`,
+  };
+
+  return {
+    ids,
+    payload: {
+      list: [
+        {
+          id: ids.working,
+          name: 'Ivanhoe Flip: Whole Floor',
+          type: 'Other',
+          showroomId: 'st-louis',
+          team: castProjectTeam(now),
+          description:
+            'Three bed ranch, closing Friday, on the market in nine weeks. One floor through the whole house, no transitions, nothing that needs acclimating for a fortnight.',
+          address: '1900 Ivanhoe Ave, St. Louis, MO 63139',
+          budgetRange: '$5,000 - $10,000',
+          targetStart: new Date(now + days(6)).toISOString().slice(0, 10),
+          targetCompletion: new Date(now + days(58)).toISOString().slice(0, 10),
+          squareFootage: '1100',
+          rooms: [
+            room('Whole House', now - days(12), { type: 'Other', squareFootage: '1100', notes: 'One floor throughout. Photographs matter more than wear layer.' }),
+          ],
+          products: [
+            product({
+              id: 'prod-002', sku: 'sku-prod-002', name: 'COREtec Pro Plus Enhanced Luxury Vinyl Plank',
+              brand: 'COREtec', category: 'LVP / LVT', colorName: 'Pembroke Pine',
+              price: 4.99, unit: 'SF', sfPerBox: 36.64, qty: 1100, image: IMG.lvp,
+              roomId: 'room-whole-house', addedAt: now - days(2),
+            }),
+          ],
+          notes: 'Wants the Delmar flip priced off the same run if the number holds.',
+          status: 'working',
+          archived: false,
+          createdAt: now - days(12),
+          updatedAt: now - days(2),
+        },
+        {
+          id: ids.published,
+          name: 'Shenandoah Flip: Kitchen & Bath',
+          type: 'Kitchen Remodel',
+          showroomId: 'st-louis',
+          team: castProjectTeam(now),
+          description:
+            'Quartz, shaker boxes, tile floor. Sold over asking in four days, so this is the recipe until it stops working.',
+          address: '3355 Shenandoah Ave, St. Louis, MO 63104',
+          budgetRange: '$15,000 - $25,000',
+          targetStart: new Date(now - days(160)).toISOString().slice(0, 10),
+          targetCompletion: new Date(now - days(105)).toISOString().slice(0, 10),
+          squareFootage: '260',
+          rooms: [
+            room('Kitchen', now - days(170), { type: 'Kitchen', squareFootage: '190' }),
+            room('Hall Bathroom', now - days(170), { type: 'Bathroom', squareFootage: '70' }),
+          ],
+          products: [
+            product({
+              id: 'prod-005', sku: 'sku-prod-005', name: 'Silestone Calacatta Gold Quartz Countertop',
+              brand: 'Silestone', category: 'Countertops', colorName: 'Calacatta Gold',
+              price: 72.0, unit: 'SF', qty: 32, image: IMG.quartz,
+              roomId: 'room-kitchen', addedAt: now - days(150),
+            }),
+            product({
+              id: 'prod-003', sku: 'sku-prod-003', name: 'Daltile Perpetuo Porcelain Floor Tile 12x24',
+              brand: 'Daltile', category: 'Tile & Stone', colorName: 'Brilliant White',
+              price: 6.49, unit: 'SF', sfPerBox: 15.6, qty: 70, image: IMG.tile,
+              roomId: 'room-hall-bathroom', addedAt: now - days(148),
+            }),
+          ],
+          notes: 'Listing photos are on the public profile. Client okayed them.',
+          status: 'published',
+          archived: false,
+          createdAt: now - days(170),
+          updatedAt: now - days(100),
+        },
+      ],
+    },
+  };
+};
+
+// Whose projects are whose. Kept next to the builders and keyed by the cast's
+// own `key` so WORLD_BY_PERSONA can be built from the cast itself rather than
+// listing all three people a second time and getting one of them wrong.
+const PROJECTS_BY_CAST_MEMBER = {
+  gwen: buildGwenProjects,
+  owen: buildOwenProjects,
+  camille: buildCamilleProjects,
+};
+
+/**
+ * The AI members, in one place, because every part of them has to agree.
+ *
+ * `identity` and `userId` are the two halves of the design and are read from
+ * here by four different files: ai-reply.mjs speaks as the identity,
+ * twilio-conversations.mjs seeds a thread with it, demo-session.mjs seeds the
+ * account behind the userId, and buildAmConnections below hands Tessa a
+ * connection carrying both. Written out once so they cannot drift into four
+ * slightly different people.
+ *
+ * `history` is their thread with Tessa: written TO an account manager, because
+ * that is the only person any of them talks to. Oldest first, `agoMs` as in
+ * AM_THREAD_SCRIPT.
+ */
+export const AM_MEMBER_CAST = [
+  {
+    key: 'gwen',
+    identity: 'demo-gwen-halloran',
+    email: 'gwen@halloranbuilds.com',
+    userId: userIdForEmail('gwen@halloranbuilds.com'),
+    seedPersona: 'member-gwen-halloran',
+    name: 'Gwen Halloran',
+    initials: 'GH',
+    role: 'Kitchen & Bath Remodeler',
+    type: 'tradepro',
+    phone: '(314) 555-0311',
+    location: 'Webster Groves, MO',
+    unread: true,
+    history: [
+      {
+        from: 'them',
+        agoMs: days(1) + minutes(30),
+        body: 'Tessa, Ferndale kitchen. Need the KraftMaid number today. Client signs Friday or she walks.',
+      },
+      {
+        from: 'user',
+        agoMs: days(1),
+        body: "On it. I'll have the cabinet pricing back to you this afternoon.",
+      },
+      {
+        from: 'them',
+        agoMs: minutes(35),
+        body: "Any word? Framing crew is off this job Thursday and I've got nothing to hand them.",
+      },
+    ],
+  },
+  {
+    key: 'owen',
+    identity: 'demo-owen-pruitt',
+    email: 'owen.pruitt@email.com',
+    userId: userIdForEmail('owen.pruitt@email.com'),
+    seedPersona: 'member-owen-pruitt',
+    name: 'Owen Pruitt',
+    initials: 'OP',
+    role: 'Homeowner',
+    type: 'client',
+    phone: '(314) 555-0426',
+    location: 'Crestwood, MO',
+    unread: true,
+    history: [
+      {
+        from: 'them',
+        agoMs: days(2) + minutes(15),
+        body: "Hi Tessa, sorry to come back to this again. I know you said the rigid core plank is fine on a basement slab, but I read a long thread last night about moisture and now I'm second guessing the whole floor.",
+      },
+      {
+        from: 'user',
+        agoMs: days(2),
+        body: 'No need to apologise. Rigid core is exactly what a basement wants, and we can put a meter on the slab before anything is ordered.',
+      },
+      {
+        from: 'them',
+        agoMs: minutes(150),
+        body: 'Okay, that helps. Does the meter reading cost anything? And sorry, one more: is the underlayment in the number you sent me or is that separate?',
+      },
+    ],
+  },
+  {
+    key: 'camille',
+    identity: 'demo-camille-ostrowski',
+    email: 'camille@ostrowskiproperties.com',
+    userId: userIdForEmail('camille@ostrowskiproperties.com'),
+    seedPersona: 'member-camille-ostrowski',
+    name: 'Camille Ostrowski',
+    initials: 'CO',
+    role: 'Property Renovator',
+    type: 'tradepro',
+    phone: '(314) 555-0733',
+    location: 'St. Louis, MO',
+    unread: false,
+    history: [
+      {
+        from: 'them',
+        agoMs: days(3),
+        body: 'Tessa, Camille. 1900 Ivanhoe closes Friday. I need eleven hundred feet of something that photographs like white oak and prices like carpet.',
+      },
+      {
+        from: 'user',
+        agoMs: days(3) - minutes(45),
+        body: 'The COREtec Pembroke Pine is your best value at that footage, and I can hold enough for the whole floor.',
+      },
+      {
+        from: 'them',
+        agoMs: days(2),
+        body: "Hold it. If it lands under five a foot I'll take the Delmar house off the same run. Send me the number, not the brochure.",
+      },
+    ],
+  },
+];
+
+// ===========================================================================
 // Account manager persona: Tessa Brandt
 // ===========================================================================
 //
@@ -1561,9 +2001,20 @@ export const DEMO_ACCOUNT_USER_ID = {
 const buildAmConnections = () => {
   // No `projects` derivation to do: Tessa owns no projects, so she shares none.
   // 0 is the honest count, and the field is never null (null would mean
-  // "unknown"). Her colleagues carry a demoIdentity because they are AI personas
-  // she can talk to; her customers carry a userId because they are real accounts
-  // somebody can sign in as. Nobody gets both, and Tessa gets neither.
+  // "unknown").
+  //
+  // What a connection carries says what kind of person it is, and there are now
+  // three kinds:
+  //   demoIdentity only -> a colleague. An AI persona with no account behind
+  //     her (Kim, Heather, Denise): someone Tessa talks to, not someone she
+  //     sells to. Nothing to open.
+  //   userId only -> a real demo account (Justin, Alicia). Their projects load,
+  //     and their threads only move when somebody is signed in as them.
+  //   both -> an AI member (see AM_MEMBER_CAST). The demoIdentity is who answers
+  //     her; the userId is whose projects she opens. This is the combination
+  //     that makes her book of business real rather than a list of names, and it
+  //     is safe precisely because nobody signs in as them.
+  // Tessa carries neither, and must not: she is the person you sign in AS.
   const connection = (fields) => ({
     projects: 0,
     demoIdentity: DEMO_IDENTITY_BY_NAME[fields.name] || null,
@@ -1587,6 +2038,15 @@ const buildAmConnections = () => {
         phone: '(314) 555-0264', location: 'University City, MO',
         userId: DEMO_ACCOUNT_USER_ID.homeowner,
       }),
+      // Her AI members, ids 11+. Both fields, on purpose: see above.
+      ...AM_MEMBER_CAST.map((m, i) =>
+        connection({
+          id: 11 + i, name: m.name, initials: m.initials, role: m.role,
+          type: m.type, email: m.email, phone: m.phone, location: m.location,
+          userId: m.userId,
+          demoIdentity: m.identity,
+        })
+      ),
       // --- Her colleagues ---
       connection({
         id: 1, name: 'Kim Marks', initials: 'KM', role: 'Account Manager',
@@ -1638,12 +2098,18 @@ export const AM_SELF = {
  *     is their userId. No AI persona speaks for them: the thread only moves when
  *     someone is actually signed in as them, which makes it the one thread you
  *     can demo live from both sides in two browsers.
+ *   Gwen, Owen, Camille -> her AI members (AM_MEMBER_CAST). Their identity is a
+ *     `demo-` identity, so they answer on their own, and their account is real,
+ *     so the job each one is talking about is a job she can open. They are why
+ *     this screen is worth showing to somebody: before them, every thread Tessa
+ *     had was either silent or Kim.
  *   Kim -> a showroom colleague and an AI persona, so hers is a `demo-`
  *     identity and she answers on her own.
  *
- * Bubba, Sarah and Ryan are deliberately absent: they are Justin's clients, not
+ * Bubba and Sarah are deliberately absent: they are Justin's clients, not
  * Tessa's, and an account manager reading her customers' customers' mail is the
- * bug this script exists to fix.
+ * bug this script exists to fix. Ryan is absent for the same reason, one step
+ * further out: he is her customers' subcontractor.
  *
  * Threads carry no projectId: the jobs they're about live in her customers'
  * accounts, not hers, so there is no project of Tessa's to link to. Null is the
@@ -1695,6 +2161,18 @@ export const AM_THREAD_SCRIPT = [
       },
     ],
   },
+  // Her AI members, spliced in from the one place they are described. Their
+  // script entry IS their cast entry: same identity, same card, same thread, so
+  // the person who answers her is the person whose projects she opens.
+  ...AM_MEMBER_CAST.map((m) => ({
+    identity: m.identity,
+    name: m.name,
+    initials: m.initials,
+    role: m.role,
+    type: m.type,
+    unread: m.unread,
+    history: m.history,
+  })),
   {
     identity: DEMO_IDENTITY_BY_NAME['Kim Marks'],
     name: 'Kim Marks',
@@ -1711,6 +2189,53 @@ export const AM_THREAD_SCRIPT = [
     ],
   },
 ];
+
+/**
+ * Put an account manager's AI members on her list when the list is already there.
+ *
+ * The seed's oldest rule is "write a key only when it is empty", because
+ * everything the demo has been clicked into lives in those same keys. Tessa's
+ * connections key has been populated in the live demo since long before her AI
+ * members existed, so bumping SEED_VERSION does not put them on it: a bump
+ * re-runs the seed, and the seed looks at a full key and leaves. She would sign
+ * in to threads from three people who do not appear anywhere else in her
+ * account, and a Projects screen that has never heard of them.
+ *
+ * So this is the same shape as ensureRequestedQuote: a repair pass that runs
+ * against a key that already has data in it, and adds only what is missing.
+ * Idempotent by `demoIdentity`, which is the one field on these records that
+ * cannot be edited from the UI, so a member she has renamed or re-roled is
+ * still recognised as present and is not duplicated.
+ *
+ * Ids are assigned from the end of her existing list rather than taken from the
+ * cast, because they have to be unique WITHIN this list and this list may have
+ * grown since. On an unedited demo account the two agree anyway (her seed stops
+ * at 10, the cast starts at 11).
+ *
+ * Deliberately additive only. Anything else on her list is hers, including
+ * whatever she has added by hand, and a repair that removed rows would be a
+ * reset wearing a repair's clothes.
+ */
+const ensureAmMemberConnections = async (store, connectionsKey, blob, now) => {
+  const list = Array.isArray(blob?.value?.list) ? blob.value.list : null;
+  // Not a shape we recognise: leave it alone rather than overwrite it.
+  if (!list) return;
+
+  const present = new Set(list.map((c) => c?.demoIdentity).filter(Boolean));
+  const missing = buildAmConnections().list.filter(
+    (c) => c.userId && c.demoIdentity && !present.has(c.demoIdentity)
+  );
+  if (!missing.length) return;
+
+  const nextId = Math.max(0, ...list.map((c) => Number(c?.id) || 0)) + 1;
+  await store.setJSON(connectionsKey, {
+    value: {
+      ...blob.value,
+      list: [...list, ...missing.map((c, i) => ({ ...c, id: nextId + i }))],
+    },
+    updatedAt: now,
+  });
+};
 
 const buildAmMessages = (now) => ({
   threads: AM_THREAD_SCRIPT.map((script, i) => {
@@ -1812,7 +2337,50 @@ const WORLD_BY_PERSONA = {
     appointments: buildAmAppointments,
     orders: null,
     connections: buildAmConnections,
+    // Her connections key is the one seeded key that has to be repaired rather
+    // than only filled, because her AI members arrived after she did. Same idea
+    // as `requestedQuote` on the trade pro: a flag on the world, so the repair
+    // is something a world asks for rather than something seedNewUser knows
+    // about one persona by name.
+    ensureMembers: true,
   },
+
+  // --- Tessa's AI members ----------------------------------------------------
+  //
+  // A world per AI member, because they are accounts and this is what an account
+  // is made of. `projects` and nothing else, deliberately:
+  //
+  //   projects, because that is the whole reason they have an account at all.
+  //   Tessa's Projects screen reads each member's `projects` blob by userId
+  //   (loadMemberProjects in src/member-access.js), so without this key she has
+  //   a roster of members with nothing under any of their names.
+  //
+  //   nothing else, because nobody signs in as them and every other key is only
+  //   ever read from inside the account that owns it. Their messages live in
+  //   Twilio (seeded against Tessa's account, since it is her thread), their
+  //   connections list would be a screen no one opens, and inventing orders for
+  //   them would put unpriced quotes in the work queue that no demo click can
+  //   ever resolve. A null builder leaves the key untouched rather than writing
+  //   it empty, which is the same contract the `am` world above relies on.
+  //
+  // These keys are still theirs and still real: sign in through the OTP flow as
+  // gwen@halloranbuilds.com and you would land on this exact data, because the
+  // userId is derived from the email the same way every other account's is.
+  ...Object.fromEntries(
+    AM_MEMBER_CAST.map((m) => [
+      m.seedPersona,
+      {
+        displayName: m.name,
+        requestedQuote: false,
+        projects: PROJECTS_BY_CAST_MEMBER[m.key],
+        messages: null,
+        carts: null,
+        appointments: null,
+        orders: null,
+        connections: null,
+      },
+    ])
+  ),
 };
 
 const DEFAULT_PERSONA = 'tradepro';
@@ -1840,8 +2408,14 @@ const blobKey = (userId, key) => `${userId}::${key}`;
  * ensureRequestedQuote, the work queue) and fills keys that did not exist
  * before. Rewording copy inside a key that is already populated is still only
  * reachable by ?reset=1, exactly as it was before the marker existed.
+ *
+ * 2: Tessa's AI members (AM_MEMBER_CAST). Three new persona worlds, so three
+ *    accounts to seed from nothing, plus her three new connections. Her
+ *    connections key is already populated in the live demo and the rule above
+ *    means a bump will not rewrite it, so those three arrive through a repair
+ *    pass (ensureAmMemberConnections) rather than through the seed proper.
  */
-export const SEED_VERSION = 1;
+export const SEED_VERSION = 2;
 
 /**
  * The version of the demo conversations seeded into TWILIO.
@@ -1855,13 +2429,18 @@ export const SEED_VERSION = 1;
  * Twilio.
  *
  * So: BUMP THIS whenever the conversation copy changes. That means DEMO_DETAILS
- * in twilio-conversations.mjs, AM_THREAD_SCRIPT in this file, or any of the
- * names, roles, or attributes either of them writes. Skip the bump and the
- * refresh never runs for accounts that already exist, the rewritten copy never
- * reaches the live demo, and we are back in exactly the trap
- * refreshConversationCopy was added to escape.
+ * in twilio-conversations.mjs, AM_THREAD_SCRIPT or HOMEOWNER_THREAD_SCRIPT in
+ * this file, or any of the names, roles, or attributes any of them writes. Skip
+ * the bump and the refresh never runs for accounts that already exist, the
+ * rewritten copy never reaches the live demo, and we are back in exactly the
+ * trap refreshConversationCopy was added to escape.
+ *
+ * 2: Tessa's three AI members join AM_THREAD_SCRIPT, and the homeowner stops
+ *    being handed the trade pro's six threads and gets HOMEOWNER_THREAD_SCRIPT
+ *    instead. The homeowner half of that is the half that needs this bump most:
+ *    without it Alicia keeps the threads she already has, which are Justin's.
  */
-export const TWILIO_SEED_VERSION = 1;
+export const TWILIO_SEED_VERSION = 2;
 
 /**
  * Where the markers live: the same per-user store and the same `${userId}::`
@@ -2093,6 +2672,10 @@ export async function seedNewUser(userId, persona = DEFAULT_PERSONA, { force = f
     if (!existingConns && world.connections) {
       const conns = world.connections(projectList);
       await store.setJSON(connectionsKey, { value: conns, updatedAt: now });
+    } else if (existingConns && world.ensureMembers) {
+      // Already seeded, so the write above will not run: make sure her AI
+      // members are on the list she already has. See ensureAmMemberConnections.
+      await ensureAmMemberConnections(store, connectionsKey, existingConns, now);
     }
 
     // Last, and only once everything above has actually landed. Anything that

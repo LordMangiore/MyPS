@@ -54,8 +54,16 @@ export const loadMemberProjects = async (memberUserId) =>
  *
  * A connection carrying a real `userId` is a real account with real blobs. One
  * carrying only a `demoIdentity` is an AI persona (Kim, Denise): a colleague the
- * demo speaks as, not a customer with projects to look at. Nobody carries both,
- * so the presence of a userId is the entire test.
+ * demo speaks as, not a customer with projects to look at.
+ *
+ * Some carry BOTH, and they are members too. An AI member (Gwen, Owen, Camille:
+ * see AM_MEMBER_CAST in netlify/functions/lib/seed.mjs) is a demoIdentity so the
+ * model answers her threads, and a real seeded account so she has projects to
+ * open. The two fields answer different questions, and only one of them is this
+ * function's question: a userId means an account with blobs behind it, whoever
+ * or whatever does the talking. So the presence of a userId is still the entire
+ * test, and it is deliberately not `!demoIdentity && userId`. That would filter
+ * out exactly the members this screen exists to show.
  *
  * Note what this does NOT do: it does not ask whether the account manager
  * appears on any project's `team`. She is a default owner on the member's

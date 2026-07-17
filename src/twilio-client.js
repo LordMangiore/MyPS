@@ -26,6 +26,19 @@ export const DEMO_CONTACTS = {
   ryan: { identity: 'demo-ryan-otoole', name: "Ryan O'Toole" },
   sarah: { identity: 'demo-sarah-chen', name: 'Sarah Chen' },
   heather: { identity: 'demo-heather-yager', name: 'Heather Yager' },
+  // The account manager's members. They differ from everyone above in one way
+  // that does not show up here: each also has a real account with real projects
+  // (AM_MEMBER_CAST in netlify/functions/lib/seed.mjs), so their connection
+  // record carries a userId as well as this identity. `identityForConnection`
+  // below is what makes that work, by resolving the demoIdentity first: it is
+  // the AI who answers her, and the account that holds the projects she opens.
+  //
+  // Every name in this map is a name the model will speak for, including via
+  // the shim below. So no name here may ever belong to an account with a
+  // sign-in button (Justin Reyes, Tessa Brandt, Alicia Navarro).
+  gwen: { identity: 'demo-gwen-halloran', name: 'Gwen Halloran' },
+  owen: { identity: 'demo-owen-pruitt', name: 'Owen Pruitt' },
+  camille: { identity: 'demo-camille-ostrowski', name: 'Camille Ostrowski' },
 };
 
 const DEMO_IDENTITY_SET = new Set(
