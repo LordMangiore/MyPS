@@ -397,46 +397,55 @@ export default async function handler(req) {
         await retireLegacyAmConversations(client, userId, plan);
       }
 
-      const created = [];
-      for (const entry of plan) {
-        const convo = await ensureConversation({
-          uniqueName: uniqueNameFor(userId, entry.identity),
-          friendlyName: entry.friendlyName,
-          attributes: entry.attributes,
-          participants: [userId, entry.identity],
-        });
+      // One conversation at a time was costing seconds on every single open of
+      // the Messages page: this seed is not a one-off, it runs on every init,
+      // and it blocks before the SDK is even allowed to connect. Each entry is
+      // half a dozen REST round trips (create, fetch, participants, a message
+      // check), so six of them in a chain is ~30 sequential calls to Twilio.
+      // The entries are independent of each other, so nothing was being bought
+      // by making them queue. Ordering still matters WITHIN a conversation, so
+      // each one's history is posted in sequence, inside its own task.
+      const created = await Promise.all(
+        plan.map(async (entry) => {
+          const convo = await ensureConversation({
+            uniqueName: uniqueNameFor(userId, entry.identity),
+            friendlyName: entry.friendlyName,
+            attributes: entry.attributes,
+            participants: [userId, entry.identity],
+          });
 
-        // Post seeded history (only if the conversation has zero messages).
-        let existingCount = 0;
-        try {
-          const msgs = await client.conversations.v1
-            .conversations(convo.sid)
-            .messages.list({ limit: 1 });
-          existingCount = msgs.length;
-        } catch {}
+          // Post seeded history (only if the conversation has zero messages).
+          let existingCount = 0;
+          try {
+            const msgs = await client.conversations.v1
+              .conversations(convo.sid)
+              .messages.list({ limit: 1 });
+            existingCount = msgs.length;
+          } catch {}
 
-        if (existingCount === 0) {
-          for (const h of entry.history) {
-            const author = h.from === "user" ? userId : entry.identity;
-            try {
-              await client.conversations.v1
-                .conversations(convo.sid)
-                .messages.create({ author, body: h.body });
-            } catch (err) {
-              console.warn(
-                `Failed to seed message in ${convo.sid}:`,
-                err.message
-              );
+          if (existingCount === 0) {
+            for (const h of entry.history) {
+              const author = h.from === "user" ? userId : entry.identity;
+              try {
+                await client.conversations.v1
+                  .conversations(convo.sid)
+                  .messages.create({ author, body: h.body });
+              } catch (err) {
+                console.warn(
+                  `Failed to seed message in ${convo.sid}:`,
+                  err.message
+                );
+              }
             }
           }
-        }
 
-        created.push({
-          sid: convo.sid,
-          identity: entry.identity,
-          name: entry.friendlyName,
-        });
-      }
+          return {
+            sid: convo.sid,
+            identity: entry.identity,
+            name: entry.friendlyName,
+          };
+        })
+      );
 
       return Response.json({
         enabled: true,

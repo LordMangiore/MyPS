@@ -143,22 +143,26 @@ export const ensureConversation = async ({
     }
   }
 
-  // Add any missing participants.
-  for (const identity of participants) {
-    try {
-      await client.conversations.v1
-        .conversations(convo.sid)
-        .participants.create({ identity });
-    } catch (err) {
-      // 50433 = participant already exists; ignore.
-      if (err?.code !== 50433) {
-        console.warn(
-          `Failed to add participant ${identity} to ${convo.sid}:`,
-          err.message
-        );
+  // Add any missing participants. In parallel: they are independent of each
+  // other, and this runs on every Messages init, where each extra round trip to
+  // Twilio is time the user spends looking at a spinner.
+  await Promise.all(
+    participants.map(async (identity) => {
+      try {
+        await client.conversations.v1
+          .conversations(convo.sid)
+          .participants.create({ identity });
+      } catch (err) {
+        // 50433 = participant already exists; ignore.
+        if (err?.code !== 50433) {
+          console.warn(
+            `Failed to add participant ${identity} to ${convo.sid}:`,
+            err.message
+          );
+        }
       }
-    }
-  }
+    })
+  );
 
   return convo;
 };
