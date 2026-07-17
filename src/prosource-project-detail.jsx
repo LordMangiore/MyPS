@@ -25,7 +25,6 @@ import {
   Minus,
   MoreHorizontal,
   Archive,
-  Edit2,
   Trash2,
   ArrowRight,
   User,
@@ -40,7 +39,6 @@ import {
   normalizeStored,
   makeRoom,
   removeRoomFromProject,
-  renameRoomInProject,
   groupProductsByRoom,
   roomLabel,
   moveProductToRoom,
@@ -926,29 +924,40 @@ export default function ProjectDetailPage() {
   const products = projectData.products || [];
 
   const [newRoomName, setNewRoomName] = useState('');
-  const [renamingRoomId, setRenamingRoomId] = useState(null);
-  const [renameDraft, setRenameDraft] = useState('');
-  // Per-room specs (square footage + budget) being edited, and the draft values.
-  // A room's cost-per-sq-ft is never edited: it is derived from these two.
-  const [editingSpecsRoomId, setEditingSpecsRoomId] = useState(null);
-  const [specsDraft, setSpecsDraft] = useState({ squareFootage: '', budget: '' });
+  // One editor per room, not two. Name, size, budget and notes are edited
+  // together: a rename pencil beside a specs pencil read as "two edits" and
+  // there was nowhere to put a note. A room's cost-per-sq-ft is never in here,
+  // because it is derived from size and budget rather than entered.
+  const [editingRoomId, setEditingRoomId] = useState(null);
+  const [roomDraft, setRoomDraft] = useState({ name: '', squareFootage: '', budget: '', notes: '' });
 
-  const startEditSpecs = (room) => {
-    setSpecsDraft({
+  const startEditRoom = (room) => {
+    setRoomDraft({
+      name: room.name || '',
       squareFootage: room.squareFootage != null ? String(room.squareFootage) : '',
       budget: room.budget != null ? String(room.budget) : '',
+      notes: room.notes || '',
     });
-    setEditingSpecsRoomId(room.id);
+    setEditingRoomId(room.id);
   };
 
-  const commitSpecs = (roomId) => {
-    setEditingSpecsRoomId(null);
-    const sqft = specsDraft.squareFootage.trim();
+  const commitRoom = (roomId) => {
+    const name = roomDraft.name.trim();
+    setEditingRoomId(null);
+    // A room must keep a name; a blank one leaves everything as it was.
+    if (!name) return;
     const nextRooms = rooms.map((r) =>
       r.id === roomId
-        // budget through parseMoney so "20000"/"$20,000"/blank all normalize; a
-        // cleared field becomes null ("not budgeted"), never 0.
-        ? { ...r, squareFootage: sqft, budget: parseMoney(specsDraft.budget) }
+        ? {
+            ...r,
+            name,
+            squareFootage: roomDraft.squareFootage.trim(),
+            // budget through parseMoney so "20000"/"$20,000"/blank all normalize;
+            // a cleared field becomes null ("not budgeted"), never 0.
+            budget: parseMoney(roomDraft.budget),
+            // Keep the id, so products stay linked to this room across a rename.
+            notes: roomDraft.notes.trim(),
+          }
         : r
     );
     persistProjectFields({ rooms: nextRooms });
@@ -1001,12 +1010,6 @@ export default function ProjectDetailPage() {
     persistProjectFields(removeRoomFromProject(projectData, room.id));
   };
 
-  const commitRename = (roomId) => {
-    const name = renameDraft.trim();
-    setRenamingRoomId(null);
-    if (!name) return;
-    persistProjectFields(renameRoomInProject(projectData, roomId, name));
-  };
 
   const changeProductQty = (index, delta) => {
     const current = products[index];
@@ -2270,8 +2273,7 @@ export default function ProjectDetailPage() {
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }}>
                       {rooms.map((room) => {
                         const attached = countProductsInRoom(products, room.id);
-                        const isRenaming = renamingRoomId === room.id;
-                        const isEditingSpecs = editingSpecsRoomId === room.id;
+                        const isEditing = editingRoomId === room.id;
                         const cps = roomCostPerSqFt(room);
                         const sqftNum = Number(String(room.squareFootage ?? '').replace(/[,\s]/g, ''));
                         // Each present spec, in reading order. Omitted, not
@@ -2283,27 +2285,70 @@ export default function ProjectDetailPage() {
                           cps != null ? `${formatMoney(cps)}/sq ft` : null,
                         ].filter(Boolean);
                         return (
-                          <div key={room.id} style={{ ...styles.roomRow, flexDirection: 'column', alignItems: 'stretch', gap: 6 }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                              <Home size={16} color={colors.darkBlue} style={{ flexShrink: 0 }} />
-                              {isRenaming ? (
-                                <input
-                                  autoFocus
-                                  value={renameDraft}
-                                  onChange={(e) => setRenameDraft(e.target.value)}
-                                  onBlur={() => commitRename(room.id)}
-                                  onKeyDown={(e) => {
-                                    if (e.key === 'Enter') commitRename(room.id);
-                                    if (e.key === 'Escape') setRenamingRoomId(null);
-                                  }}
-                                  style={{
-                                    flex: 1, fontSize: 14, fontWeight: 600, color: colors.gray900,
-                                    padding: '4px 8px', border: `2px solid ${colors.darkBlue}`,
-                                    borderRadius: 6, outline: 'none', fontFamily: 'inherit',
-                                  }}
-                                />
-                              ) : (
-                                <>
+                          <div key={room.id} style={{ ...styles.roomRow, flexDirection: 'column', alignItems: 'stretch', gap: 8 }}>
+                            {isEditing ? (
+                              /* One editor for the whole room: name, size, budget,
+                                 notes. Replaces the pair of pencils that read as
+                                 two separate edits. */
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                                  <Home size={16} color={colors.darkBlue} style={{ flexShrink: 0 }} />
+                                  <input
+                                    autoFocus
+                                    value={roomDraft.name}
+                                    onChange={(e) => setRoomDraft((d) => ({ ...d, name: e.target.value }))}
+                                    onKeyDown={(e) => { if (e.key === 'Enter') commitRoom(room.id); if (e.key === 'Escape') setEditingRoomId(null); }}
+                                    placeholder="Room name"
+                                    style={{ flex: 1, fontSize: 14, fontWeight: 600, color: colors.gray900, padding: '6px 10px', border: `2px solid ${colors.darkBlue}`, borderRadius: 6, outline: 'none', fontFamily: 'inherit' }}
+                                  />
+                                </div>
+                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, paddingLeft: 26 }}>
+                                  <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: colors.gray500 }}>
+                                    Size
+                                    <input
+                                      type="number" min="0"
+                                      value={roomDraft.squareFootage}
+                                      onChange={(e) => setRoomDraft((d) => ({ ...d, squareFootage: e.target.value }))}
+                                      onKeyDown={(e) => { if (e.key === 'Enter') commitRoom(room.id); if (e.key === 'Escape') setEditingRoomId(null); }}
+                                      placeholder="sq ft"
+                                      style={{ width: 90, padding: '5px 8px', border: `1px solid ${colors.gray300}`, borderRadius: 6, fontSize: 13, fontFamily: 'inherit' }}
+                                    />
+                                  </label>
+                                  <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: colors.gray500 }}>
+                                    Budget $
+                                    <input
+                                      type="number" min="0"
+                                      value={roomDraft.budget}
+                                      onChange={(e) => setRoomDraft((d) => ({ ...d, budget: e.target.value }))}
+                                      onKeyDown={(e) => { if (e.key === 'Enter') commitRoom(room.id); if (e.key === 'Escape') setEditingRoomId(null); }}
+                                      placeholder="dollars"
+                                      style={{ width: 110, padding: '5px 8px', border: `1px solid ${colors.gray300}`, borderRadius: 6, fontSize: 13, fontFamily: 'inherit' }}
+                                    />
+                                  </label>
+                                </div>
+                                <div style={{ paddingLeft: 26 }}>
+                                  <textarea
+                                    value={roomDraft.notes}
+                                    onChange={(e) => setRoomDraft((d) => ({ ...d, notes: e.target.value }))}
+                                    onKeyDown={(e) => { if (e.key === 'Escape') setEditingRoomId(null); }}
+                                    placeholder="Notes for this room (optional)"
+                                    rows={2}
+                                    style={{ width: '100%', boxSizing: 'border-box', padding: '6px 10px', border: `1px solid ${colors.gray300}`, borderRadius: 6, fontSize: 13, fontFamily: 'inherit', resize: 'vertical' }}
+                                  />
+                                </div>
+                                <div style={{ display: 'flex', gap: 8, paddingLeft: 26 }}>
+                                  <button onClick={() => commitRoom(room.id)} style={{ ...styles.btnPrimary, ...styles.btnSmall }}>
+                                    <Check size={13} /> Save
+                                  </button>
+                                  <button onClick={() => setEditingRoomId(null)} style={{ ...styles.btnOutline, ...styles.btnSmall }}>
+                                    Cancel
+                                  </button>
+                                </div>
+                              </div>
+                            ) : (
+                              <>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                                  <Home size={16} color={colors.darkBlue} style={{ flexShrink: 0 }} />
                                   <span style={{ flex: 1, fontSize: 14, fontWeight: 600, color: colors.gray900 }}>
                                     {room.name}
                                   </span>
@@ -2315,15 +2360,8 @@ export default function ProjectDetailPage() {
                                   {canEditProject && (
                                     <>
                                       <button
-                                        title={`Edit ${room.name} size and budget`}
-                                        onClick={() => (isEditingSpecs ? setEditingSpecsRoomId(null) : startEditSpecs(room))}
-                                        style={{ ...styles.roomIconBtn, color: isEditingSpecs ? colors.darkBlue : undefined }}
-                                      >
-                                        <Edit2 size={14} />
-                                      </button>
-                                      <button
-                                        title={`Rename ${room.name}`}
-                                        onClick={() => { setRenamingRoomId(room.id); setRenameDraft(room.name); }}
+                                        title={`Edit ${room.name}`}
+                                        onClick={() => startEditRoom(room)}
                                         style={styles.roomIconBtn}
                                       >
                                         <Pencil size={14} />
@@ -2337,58 +2375,27 @@ export default function ProjectDetailPage() {
                                       </button>
                                     </>
                                   )}
-                                </>
-                              )}
-                            </div>
-
-                            {/* Specs: derived cost-per-sq-ft alongside the size
-                                and budget it comes from, or an inline editor. */}
-                            {isEditingSpecs ? (
-                              <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8, paddingLeft: 26 }}>
-                                <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: colors.gray500 }}>
-                                  Size
-                                  <input
-                                    autoFocus
-                                    type="number"
-                                    min="0"
-                                    value={specsDraft.squareFootage}
-                                    onChange={(e) => setSpecsDraft((d) => ({ ...d, squareFootage: e.target.value }))}
-                                    onKeyDown={(e) => { if (e.key === 'Enter') commitSpecs(room.id); if (e.key === 'Escape') setEditingSpecsRoomId(null); }}
-                                    placeholder="sq ft"
-                                    style={{ width: 90, padding: '4px 8px', border: `1px solid ${colors.gray300}`, borderRadius: 6, fontSize: 13, fontFamily: 'inherit' }}
-                                  />
-                                </label>
-                                <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: colors.gray500 }}>
-                                  Budget $
-                                  <input
-                                    type="number"
-                                    min="0"
-                                    value={specsDraft.budget}
-                                    onChange={(e) => setSpecsDraft((d) => ({ ...d, budget: e.target.value }))}
-                                    onKeyDown={(e) => { if (e.key === 'Enter') commitSpecs(room.id); if (e.key === 'Escape') setEditingSpecsRoomId(null); }}
-                                    placeholder="dollars"
-                                    style={{ width: 110, padding: '4px 8px', border: `1px solid ${colors.gray300}`, borderRadius: 6, fontSize: 13, fontFamily: 'inherit' }}
-                                  />
-                                </label>
-                                <button onClick={() => commitSpecs(room.id)} style={{ ...styles.btnPrimary, ...styles.btnSmall }}>
-                                  <Check size={13} /> Save
-                                </button>
-                                <button onClick={() => setEditingSpecsRoomId(null)} style={{ ...styles.roomIconBtn }} title="Cancel">
-                                  <X size={15} />
-                                </button>
-                              </div>
-                            ) : specParts.length > 0 ? (
-                              <div style={{ fontSize: 12, color: colors.gray700, paddingLeft: 26 }}>
-                                {specParts.join('  ·  ')}
-                              </div>
-                            ) : canEditProject ? (
-                              <button
-                                onClick={() => startEditSpecs(room)}
-                                style={{ alignSelf: 'flex-start', marginLeft: 26, background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontSize: 12, color: colors.darkBlue, fontFamily: 'inherit' }}
-                              >
-                                + Add size &amp; budget
-                              </button>
-                            ) : null}
+                                </div>
+                                {specParts.length > 0 && (
+                                  <div style={{ fontSize: 12, color: colors.gray700, paddingLeft: 26 }}>
+                                    {specParts.join('  ·  ')}
+                                  </div>
+                                )}
+                                {room.notes && (
+                                  <div style={{ fontSize: 12, color: colors.gray500, paddingLeft: 26, lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>
+                                    {room.notes}
+                                  </div>
+                                )}
+                                {specParts.length === 0 && !room.notes && canEditProject && (
+                                  <button
+                                    onClick={() => startEditRoom(room)}
+                                    style={{ alignSelf: 'flex-start', marginLeft: 26, background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontSize: 12, color: colors.darkBlue, fontFamily: 'inherit' }}
+                                  >
+                                    + Add size, budget &amp; notes
+                                  </button>
+                                )}
+                              </>
+                            )}
                           </div>
                         );
                       })}
