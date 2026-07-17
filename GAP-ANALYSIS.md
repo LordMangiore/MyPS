@@ -437,3 +437,53 @@ to), WP12 (consultation wizard reports success even when the server rejects; the
 appointment modal is fully mocked and notifies nobody), WP6 leftovers
 (Inspiration Board, Attach File, Quick Actions are inert placeholders), WP13
 (security, deferred by decision).
+
+## Next up: Tessa belongs on her own members' project teams
+
+**The ask (project owner):** "Tessa's members' projects should have her as a
+project team member, not Kim Marks, because Tessa should be able to comment on
+her own members' projects. She is working on them with them."
+
+**Why it is wrong today.** The AI member cast (Gwen Halloran, Owen Pruitt,
+Camille Ostrowski) are TESSA's members: they message her, and their projects show
+in her projects view. But their seeded project teams carry Kim Marks as the
+account manager, because that is what every project seed has always done. So the
+account manager on the project is not the account manager who is actually working
+it. On Justin's and Alicia's projects Kim is defensible (Kim is their assigned AM
+persona, and their conversations need AI replies). On Gwen's, Owen's and
+Camille's it is simply wrong: Tessa is their AM, and she is the one signed in.
+
+**Two pieces of work, and the second is the real one.**
+
+1. Seed Tessa onto her own members' project teams instead of Kim
+   (`buildGwen*/buildOwen*/buildCamille*` project builders in
+   `netlify/functions/lib/seed.mjs`; `AM_SELF` already describes her). Needs a
+   `SEED_VERSION` bump, and note the write-only-if-empty rule: already-seeded
+   member accounts will need an additive repair pass, exactly like
+   `ensureAmMemberConnections`. Leave Justin's and Alicia's teams alone.
+
+2. Let her comment. The project discussion is currently read-only for a guest,
+   and NOT for a reason that goes away by putting her on the team. The composer
+   stamps `author: 'Me'` with no identity, and the reader renders that as whoever
+   is looking. So her comment would either land in her own blob, where the member
+   never sees it, or land in theirs and render TO THEM as words they said
+   themselves. This was verified empirically, not assumed: a test post stored as
+   `author: 'Me', identity: null`.
+
+   So the real task is an authored-post shape: a post carries who wrote it
+   (identity plus display name), the member's own feed renders an authored post
+   as that person rather than as itself, and legacy un-authored posts keep
+   rendering as the owner (do not migrate them to Tessa). Only then does
+   "she is on the team, so she can post" become safe. Files:
+   `src/prosource-project-detail.jsx` (composer, reader, and the `isGuest`
+   guards), and the discussions blob shape.
+
+**Guard rails that still hold.** Her posting must be HER, never a demo persona,
+and it must not trigger an AI reply on a project she is a guest on. Everything
+else on that page stays read-only for a guest: the write functions each save a
+whole `{list}` blob keyed on the signed-in account, so a guard removed by mistake
+does not error, it silently overwrites a member's projects.
+
+**Do not "fix" Kim on Justin's and Alicia's projects.** Kim being their AM is
+load-bearing: she is an AI persona, so their conversations get replies. Tessa is
+a human account you sign in as. Both facts have to stay true.
