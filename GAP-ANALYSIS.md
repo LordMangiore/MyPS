@@ -35,6 +35,11 @@ Scope for the agent:
   prosource-login.jsx:249), unused address state (:52-56).
 
 ### WP2. Rooms as real entities + products tied to rooms
+> ✅ **Shipped session 1; extended 2026-07-17 (commits 0ed233c, cc3baa4).** Rooms
+> are real entities as below, and now carry their own `budget` and
+> `squareFootage` with a derived cost-per-sq-ft (rule 13) plus a notes field, all
+> edited in one per-room editor. Independent of the project's overall budget on
+> purpose.
 **Confirmed:** `project.rooms` is an array of plain strings from a hardcoded
 14-item picklist (src/prosource-project-detail.jsx:403-418), rendered as tags
 (:1149-1151). The create wizard never asks about rooms and writes `rooms: []`
@@ -140,10 +145,10 @@ but shop products use `listPrice`, so every cart item price is `undefined`
 > buttons wired to a real destination, pointed at the conversation that does the
 > job (Messages), or removed. Sweep confirms every `<button>` in the file now
 > carries an onClick. Photos and Designs tabs say the feature is not in the app
-> rather than offering uploads with nowhere to go. Still open from this WP: the
-> hardcoded "Last updated Dec 18, 2025" header (see Still open below — a separate
-> session is on it), archive toggle bug, fake activity feeds, project-linked
-> saved carts, shared-module extraction.
+> rather than offering uploads with nowhere to go. The hardcoded "Last updated
+> Dec 18, 2025" header is also now fixed (commit 773c1f1, reads the real
+> `updatedAt`). Still open from this WP: archive toggle bug, fake activity feeds,
+> project-linked saved carts, shared-module extraction.
 - Dead buttons (all no onClick, src/prosource-project-detail.jsx): "+ Add
   Product" / "Request Estimate" (:1781-1782), dashed Add Product card
   (:1811-1827), Discussion "Attach File" (:1328-1330), Inspiration Board buttons
@@ -482,6 +487,24 @@ The following were added in session 2 (2026-07-17):
     account (editable). They must never share state: one page for both is what
     printed your name over Mae Reedy's history. On your own profile, unfilled
     fields start EMPTY, never borrowed from a pro.
+13. **A room's budget is its own, independent of the project's, and
+    cost-per-sq-ft is derived, never stored.** Room `budget` is a number of
+    dollars or null ("not budgeted", never $0), separate from the project's
+    `budgetRange` picklist: they do not sum or reconcile, the project figure is
+    the envelope and the rooms are line items under it. Cost-per-sq-ft is computed
+    from budget ÷ footage (`roomCostPerSqFt`) so the two can never contradict.
+14. **An account manager editing a member's project writes to the MEMBER's blob,
+    not her own.** `saveUserData`/`loadUserData` bind to the signed-in account, so
+    her edits would file under her empty blob; `persistProjectsList`/
+    `loadProjectsList` redirect the read-modify-write to the owner when a guest AM
+    is editing, exactly as the discussion composer does. A room or team entry she
+    adds carries `addedBy` so the activity feed credits her, not the member.
+15. **`canEditProject` is a separate flag from `canEdit`, never a widening of
+    it.** `canEdit` stays owner-only because things hang off it that must not
+    change for a guest: no AI reply fires when a guest posts, and a guest has no
+    private notes. Only project CONTENT (details, title, rooms, room specs,
+    products, team, status) moves to `canEditProject` (owner, or the AM on the
+    team). Archiving and deleting stay `canEdit`: destructive, the member's own.
 
 ## Known seams, accepted deliberately
 
@@ -513,9 +536,10 @@ this document._
 
 ## What shipped this session
 
-Three commits on `main`, none pushed yet (the owner decides when, since `main`
+Six commits on `main`, all pushed and deployed (the owner releases each; `main`
 auto-deploys to the live demo). Each was verified by driving the real app, not
-just by building.
+just by building. The first three landed together; the last three (Overview
+below, "Later the same day") came out of the owner clicking through the result.
 
 1. **`1889ecf` — Tessa on her own members' project teams + authored posts.**
    The "Next up" job from session 1, both halves. Seed side: `castProjectTeam`
@@ -537,6 +561,36 @@ just by building.
    The consultation wizard's false "X will reach out" promise was fixed here too,
    because a per-pro route was what made honest routing expressible.
 
+### Later the same day (2026-07-17), from the owner clicking through it
+
+4. **`0ed233c` — rooms carry their own specs, and the AM can edit member
+   projects.** Two owner asks off one screenshot. Rooms gained an independent
+   `budget` and `squareFootage` with a derived cost-per-sq-ft (see rule 13);
+   `parseMoney`/`formatMoney`/`roomCostPerSqFt` live in `project-model.js`, no
+   migration needed because the room schema already spread unknown fields
+   through, and the 15 seeded rooms got budgets (no `SEED_VERSION` bump: a new
+   field inside an already-populated blob is write-only-if-empty regardless). And
+   the account manager can now EDIT her members' projects, not just read them:
+   the project writes redirect to the owner's blob the same way the discussion
+   composer does, gated on a new `canEditProject` flag that is deliberately not a
+   widening of `canEdit` (see rules 14–15). Content only; archive and delete stay
+   the member's. Verified: her edits landed in the member's blob, hers stayed
+   null, and her added room is attributed to her in the activity feed.
+
+5. **`cc3baa4` — one room editor + a notes field.** The room row had two pencils
+   (rename, specs) that read as "edit twice" and no place for a note. Collapsed to
+   a single editor covering name, size, budget, and notes; the note was already on
+   the model and in seed copy but nothing surfaced it. Saving keeps the room id,
+   so a rename no longer detaches its products.
+
+6. **`773c1f1` — the project header shows a real "Last updated" date.** Was a
+   hardcoded `Dec 18, 2025` on every project; now reads the record's real
+   `updatedAt`, and drops the line for a record too old to have one. (This is the
+   WP6 remainder a separate worktree session had been dispatched for; it was on a
+   stale base and diverging from the heavily-rewritten file, so it was done here
+   instead. The only `Dec 18, 2025` left is inside the `{false && (` sample block,
+   which never renders.)
+
 ## Corrections to this document's own claims
 
 - **WP14 blast radius was backwards.** Session 1 warned that a wrongly-removed
@@ -556,29 +610,39 @@ just by building.
 ## Still open (current)
 
 - **WP13** — security. Deferred by decision, not scheduled. Unchanged.
-- **"Last updated Dec 18, 2025"** — hardcoded header on the project detail page
-  (still at `src/prosource-project-detail.jsx`, search the literal). A separate
-  local session was dispatched to fix it (render the real `updatedAt`); not yet
-  committed to this branch as of this handoff.
 - **WP6 remainders** — the "more" menu's archive item still calls
   `setArchived(true)` unconditionally, so its "Unarchive Project" label
   re-archives (a separate working unarchive control exists elsewhere on the page,
   so fix the menu item, not that one). Plus fake activity feeds, project-linked
-  saved carts, and the shared-module extraction. Only the dead buttons were done
-  this session.
+  saved carts, and the shared-module extraction. The dead buttons and the
+  hardcoded "Last updated" date are now done.
 - **WP11 depth** — the directory is client-side demo content by design; there is
   no review submission, no real photo storage, and profileVisibility is still not
   enforced (it is saved but nothing reads it). These are intentional non-goals
   for a demo, recorded so nobody re-files them as bugs.
+- **Cross-user whole-blob race, now more exposed** — with the AM able to edit
+  member projects, the WP14 last-write-wins race is cross-user: the member and
+  the account manager editing the same project at once will clobber each other.
+  Same accepted seam a real database would fix; not introduced by the AM-edit
+  work, just reachable by two people now instead of one in two tabs.
+- **Stale worktree** — `.claude/worktrees/gracious-antonelli-a13703` (branch
+  `claude/gracious-antonelli-a13703`) holds an in-progress "Last updated" fix on
+  a base three commits behind `main`, in a file since heavily rewritten. `main`
+  already has that fix (`773c1f1`); the worktree is redundant and would conflict.
+  Safe to abandon.
 - **Housekeeping:** a stray empty file named `directory` is tracked at the repo
   root (`git ls-files directory`). Looks like junk; left in place because this
   session did not create it. Safe to `git rm` if the owner confirms.
 
 ## Rules added this session
 
-See load-bearing rules 8–12 in the session-1 handoff list above (kept in one
+See load-bearing rules 8–15 in the session-1 handoff list above (kept in one
 place so the reference stays complete). In short: an account manager on a team
 carries a `userId` and never a demo identity; authored posts distinguish real
 accounts from personas and must not blur them; the team repair is surgical to
 protect discussion ids; a directory pro is content with a name that must not
-collide; and a pro's profile and your own are two routes off two sources.
+collide; a pro's profile and your own are two routes off two sources; a room's
+budget is independent of the project's and cost-per-sq-ft is derived; an AM's
+project edits redirect to the member's blob; and `canEditProject` is a separate
+flag from `canEdit` so a guest still triggers no AI reply and archive/delete stay
+the owner's.
