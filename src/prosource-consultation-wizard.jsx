@@ -131,6 +131,11 @@ const ConsultationWizard = ({ isOpen, onClose, pro = null }) => {
     try {
       const payload = {
         toProName: pro?.name || proName,
+        // Which directory pro this was about. Distinct from toProUserId, which
+        // stays null and means what it says: there is no account to route to.
+        // The two are not interchangeable and collapsing them would turn "we
+        // know who they were reading about" into "we delivered it to them".
+        toProId: pro?.proId || null,
         toProUserId: pro?.userId || null,
         fromName: contact.name.trim(),
         fromEmail: contact.email.trim(),
@@ -359,17 +364,30 @@ const ConsultationWizard = ({ isOpen, onClose, pro = null }) => {
             </Step>
           )}
 
+          {/* Says who actually has this, which is not the pro whose page it was
+              opened from.
+
+              A pro in the directory is demo content, not an account: no inbox,
+              no userId, nothing to deliver to (see src/pro-directory.js). What
+              really happens is that consultation-request.mjs files the request
+              and puts it on the work queue for the showroom nearest the zip,
+              where an account manager picks it up. So this used to promise a
+              named stranger would call, when the request had never been within
+              reach of them. It names the showroom instead, because the showroom
+              is who will actually be in touch, and it still records which pro
+              was being looked at. */}
           {step === 'confirm' && submitted && requestSummary && (
-            <Step title="You're in." sub={`${proName} will reach out shortly.`}>
+            <Step title="You're in." sub="Your local ProSource showroom has your request.">
               <div style={styles.summaryCard}>
                 <SummaryRow label="Project" value={requestSummary.projectType} />
                 <SummaryRow label="Where" value={requestSummary.zip} />
                 <SummaryRow label="Budget" value={requestSummary.budget} />
                 <SummaryRow label="Timing" value={(TIMING_OPTIONS.find((t) => t.value === requestSummary.timing) || {}).label || ''} />
                 <SummaryRow label="From" value={`${requestSummary.fromName} · ${requestSummary.fromEmail}`} />
+                <SummaryRow label="About" value={proName} />
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 16, color: colors.green, fontSize: 13 }}>
-                <CheckCircle size={18} /> Sent to {proName}
+                <CheckCircle size={18} /> An account manager will follow up about working with {proName}
               </div>
               {!userId && (
                 <div style={{ marginTop: 16, padding: 14, background: '#f0f5ff', borderRadius: 8, fontSize: 13, color: colors.darkBlue, display: 'flex', gap: 10, alignItems: 'flex-start' }}>

@@ -1,7 +1,16 @@
-import React, { useState, useEffect } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { Link, useParams } from 'react-router-dom';
 import { useAuth } from './auth-context';
 import ConsultationWizard from './prosource-consultation-wizard';
+import {
+  findPro,
+  proFullName,
+  ratingOf,
+  reviewCountOf,
+  reviewBreakdownOf,
+  reviewTagsOf,
+  reviewsForTag,
+} from './pro-directory';
 import {
   Star,
   MapPin,
@@ -24,7 +33,6 @@ import {
   ThumbsUp,
   Pencil,
   Save,
-  Camera,
   Globe,
   Lock,
   Plus,
@@ -33,17 +41,37 @@ import {
 } from 'lucide-react';
 
 const ProSourcePublicProfile = () => {
-  const { profile, saveProfile: persistProfile, userId } = useAuth();
-  const [searchParams] = useSearchParams();
-  // /profile is reused for both "your own profile" (My Profile menu link)
-  // and "someone else's profile" (Find a Pro / connection card). The link
-  // that lands here from the user menu carries ?own=1; everywhere else,
-  // we treat it as a public pro profile being viewed by a homeowner.
-  const isOwnProfile = searchParams.get('own') === '1';
+  const { profile, saveProfile: persistProfile, userId, showrooms } = useAuth();
+  /**
+   * Whose profile this is, and it is now answered by the URL rather than by a
+   * flag on it.
+   *
+   * /profile/:proId is a pro out of the directory: somebody else, read only.
+   * /profile with no id is your own, editable, read from your own account.
+   *
+   * This used to be one page for both, switched by `?own=1`, and the switch
+   * changed two buttons and nothing else. Both readings rendered the SAME state,
+   * which was seeded from the signed-in account and back-filled with one
+   * hardcoded pro's defaults, so "look at a pro" showed you your own name and
+   * business over that pro's bio, address, reviews and phone number. There was
+   * no arrangement of flags that fixed it, because there was only ever one
+   * person's worth of state. Two sources, two routes.
+   *
+   * `?own=1` is still accepted and ignored: every My Profile link in the app
+   * carries it, and they all still mean the same thing they meant, which is
+   * this route without an id.
+   */
+  const { proId } = useParams();
+  const directoryPro = proId ? findPro(proId) : null;
+  const isOwnProfile = !proId;
+  // A URL naming a pro who is not in the directory. Not the same as your own
+  // profile and not an empty one: it is a page about somebody who does not
+  // exist, and the only honest thing to render is that.
+  const proNotFound = !!proId && !directoryPro;
 
-  // Demo-only favorited-pros store. Keyed by the displayed pro slug;
-  // there's only one pro in the demo so we use a stable identifier.
-  const PRO_SLUG = 'mae-reedy';
+  // Demo-only favorited-pros store, keyed per pro so saving one does not save
+  // them all. Your own profile is not something you save.
+  const PRO_SLUG = proId || 'me';
   const [proSaved, setProSaved] = useState(() => {
     try {
       const raw = localStorage.getItem('prosource_saved_pros');
@@ -65,48 +93,127 @@ const ProSourcePublicProfile = () => {
   const [showAllPhotos, setShowAllPhotos] = useState(false);
   const [reviewFilter, setReviewFilter] = useState('all');
   const [consultOpen, setConsultOpen] = useState(false);
+  const [openCredential, setOpenCredential] = useState(null);
+
+  // Where "(N reviews)" scrolls to.
+  const reviewsRef = useRef(null);
+  const scrollToReviews = () =>
+    reviewsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+  /**
+   * Copy a link to whoever is being shown.
+   *
+   * `window.location.href` deliberately, rather than a link built from PRO_SLUG:
+   * on your own profile the honest answer is the page you are on, and on a pro's
+   * it is already their canonical URL now that they have one. Before there were
+   * per-pro routes there was no link worth copying, which is presumably why this
+   * button never did anything.
+   */
+  const [shareLabel, setShareLabel] = useState('Share');
+  const shareTimer = useRef(null);
+  const copyProfileLink = async () => {
+    try {
+      await navigator.clipboard.writeText(window.location.href);
+      setShareLabel('Link copied');
+    } catch {
+      // Clipboard can be refused (permissions, insecure origin). Say so rather
+      // than flash a success and leave nothing on the clipboard.
+      setShareLabel('Press Ctrl+C');
+    }
+    clearTimeout(shareTimer.current);
+    shareTimer.current = setTimeout(() => setShareLabel('Share'), 2500);
+  };
+  useEffect(() => () => clearTimeout(shareTimer.current), []);
+
+  /**
+   * The word in front of the score. It used to be the literal "Exceptional",
+   * which was true of the one hardcoded 5.0 and would be a lie over a 3.8.
+   */
+  const ratingLabel = (rating) => {
+    if (rating >= 4.8) return 'Exceptional';
+    if (rating >= 4.4) return 'Great';
+    if (rating >= 3.5) return 'Good';
+    return 'Rated';
+  };
 
   // Edit mode
   const [isEditing, setIsEditing] = useState(false);
   const [snapshot, setSnapshot] = useState(null);
   const [savingProfile, setSavingProfile] = useState(false);
 
-  // Editable profile fields \u2014 seeded from the saved profile when available,
-  // otherwise fall back to the demo sample data (Mae R.).
+  /**
+   * What the fields below start as.
+   *
+   * A pro's page is the pro's, whole: their name, their bio, their address,
+   * their phone. Your page is yours, and where you have not filled something in
+   * it starts EMPTY rather than borrowing from a pro. That emptiness is the fix.
+   * These defaults used to be Mae Reedy's, so an account with no bio published
+   * hers under its own name, an account with no address published her street,
+   * and both looked authored rather than blank.
+   */
   const p = profile || {};
   const ba = p.businessAddress || p.address || {};
+  const init = directoryPro
+    ? {
+        firstName: directoryPro.firstName,
+        lastName: directoryPro.lastName,
+        company: directoryPro.company,
+        bio: directoryPro.bio,
+        specialties: directoryPro.specialties,
+        phone: directoryPro.phone,
+        businessPhone: '',
+        location: directoryPro.location,
+        street: directoryPro.address.street,
+        city: directoryPro.address.city,
+        state: directoryPro.address.state,
+        zip: directoryPro.address.zip,
+        certifications: directoryPro.certifications,
+      }
+    : {
+        firstName: p.firstName || '',
+        lastName: p.lastName || '',
+        company: p.business?.name || '',
+        bio: p.bio || '',
+        specialties: p.specialties || [],
+        phone: p.phone || '',
+        businessPhone: p.business?.phone || '',
+        location: p.location || (ba.city && ba.state ? `${ba.city}, ${ba.state}` : ''),
+        street: ba.street || '',
+        city: ba.city || '',
+        state: ba.state || '',
+        zip: ba.zip || '',
+        certifications: p.certifications || [],
+      };
 
-  const [firstName, setFirstName] = useState(p.firstName || 'Mae');
-  const [lastName, setLastName] = useState(p.lastName || 'R.');
-  const [companyName, setCompanyName] = useState(p.business?.name || 'Mae Reedy Build + Design');
-  const [bio, setBio] = useState(p.bio || "Mae Reedy is the founder of Mae Reedy Build + Design, a Dallas-based studio known for pairing design vision with construction precision. Trained in art with roots in textiles and handmade goods, she entered interiors through hands-on collaboration and mentorship, then earned her contractor's license to serve her community when it needed qualified builders. Mae leads with process\u2014clear roadmaps, structured meetings, and visual presentations that reduce friction and keep projects on track.");
-  const [specialties, setSpecialties] = useState(p.specialties || [
-    'Kitchen & Bathroom',
-    'Flooring Installation',
-    'Interior Design',
-    'Remodeling',
-    'Room Additions',
-    'Architects & Building Design',
-  ]);
+  const [firstName, setFirstName] = useState(init.firstName);
+  const [lastName, setLastName] = useState(init.lastName);
+  const [companyName, setCompanyName] = useState(init.company);
+  const [bio, setBio] = useState(init.bio);
+  const [specialties, setSpecialties] = useState(init.specialties);
   const [newSpecialty, setNewSpecialty] = useState('');
-  const [primaryPhone, setPrimaryPhone] = useState(p.phone || '972-449-0356');
-  const [businessPhone, setBusinessPhone] = useState(p.business?.phone || '');
-  const [location, setLocation] = useState(p.location || ((ba.city && ba.state) ? `${ba.city}, ${ba.state}` : 'Allen, TX'));
-  const [streetAddress, setStreetAddress] = useState(ba.street || '25 Prestige Circle');
-  const [city, setCity] = useState(ba.city || 'Allen');
-  const [stateName, setStateName] = useState(ba.state || 'TX');
-  const [zip, setZip] = useState(ba.zip || '75002');
+  const [primaryPhone, setPrimaryPhone] = useState(init.phone);
+  const [businessPhone, setBusinessPhone] = useState(init.businessPhone);
+  const [location, setLocation] = useState(init.location);
+  const [streetAddress, setStreetAddress] = useState(init.street);
+  const [city, setCity] = useState(init.city);
+  const [stateName, setStateName] = useState(init.state);
+  const [zip, setZip] = useState(init.zip);
   const [profileVisibility, setProfileVisibility] = useState(p.profileVisibility || 'public');
-  const [certifications, setCertifications] = useState(p.certifications || [
-    { id: 1, name: 'Licensed Contractor', issuer: 'Texas TDLR', date: 'Jan 2021' },
-    { id: 2, name: 'Insured', issuer: '', date: '' },
-  ]);
-  const [portfolioPhotos, setPortfolioPhotos] = useState(p.portfolioPhotos || [1, 2, 3, 4, 5, 6]);
+  const [certifications, setCertifications] = useState(init.certifications);
+  const [portfolioPhotos, setPortfolioPhotos] = useState(
+    directoryPro
+      ? Array.from({ length: directoryPro.photoCount }, (_, i) => i + 1)
+      : p.portfolioPhotos || []
+  );
 
   // When the profile blob loads after mount, refresh fields if the user is
   // still on defaults. Don't clobber unsaved edits.
+  //
+  // Never on a pro's page. The blob is the SIGNED-IN account's, and letting it
+  // land here would rewrite the pro you are reading with your own name a beat
+  // after it rendered: exactly the bug the two routes exist to remove.
   useEffect(() => {
-    if (!profile || isEditing) return;
+    if (directoryPro || !profile || isEditing) return;
     if (profile.firstName) setFirstName(profile.firstName);
     if (profile.lastName) setLastName(profile.lastName);
     if (profile.business?.name) setCompanyName(profile.business.name);
@@ -882,32 +989,6 @@ const ProSourcePublicProfile = () => {
       alignItems: 'center',
       gap: 4,
     },
-    photoUploadOverlay: {
-      position: 'absolute',
-      inset: 0,
-      background: 'rgba(0,0,0,0.4)',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      cursor: 'pointer',
-      borderRadius: 8,
-    },
-    coverPhotoEditBtn: {
-      position: 'absolute',
-      bottom: 16,
-      right: 16,
-      padding: '8px 16px',
-      background: 'rgba(0,0,0,0.6)',
-      color: '#fff',
-      border: 'none',
-      borderRadius: 6,
-      fontSize: 12,
-      fontWeight: 500,
-      cursor: 'pointer',
-      display: 'flex',
-      alignItems: 'center',
-      gap: 6,
-    },
     visibilityBar: {
       display: 'flex',
       gap: 8,
@@ -948,20 +1029,6 @@ const ProSourcePublicProfile = () => {
       justifyContent: 'center',
       padding: 0,
     },
-    addPhotoTile: {
-      aspectRatio: '1',
-      borderRadius: 8,
-      border: `2px dashed ${colors.gray300}`,
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'center',
-      justifyContent: 'center',
-      cursor: 'pointer',
-      gap: 4,
-      fontSize: 12,
-      color: colors.gray500,
-      background: '#fff',
-    },
     editFormLabel: {
       display: 'block',
       fontSize: 12,
@@ -973,71 +1040,53 @@ const ProSourcePublicProfile = () => {
     },
   };
 
-  // Read-only data
+  /**
+   * The reputation half of the page: stats, reviews, rating, chips.
+   *
+   * Sourced from the directory pro being viewed, and on your own profile from
+   * the demo's sample pro, which is what your own profile has always shown.
+   * The reviews are filler and are meant to be: they exist to show what a
+   * populated profile looks like. What is no longer filler is the arithmetic
+   * around them. Rating, review count, star breakdown and chip counts are all
+   * derived from the review list itself (see src/pro-directory.js), so the
+   * headline cannot claim thirty over a list of six, and a chip cannot offer
+   * eleven and deliver one. That derivation is what makes the chips safe to
+   * wire up.
+   */
+  const shownPro = directoryPro || findPro('mae-reedy');
   const pro = {
-    memberSince: '2021',
-    rating: 5.0,
-    reviewCount: 30,
-    stats: {
-      hired: 59,
-      yearsInBusiness: 2,
-      employees: 3,
-      backgroundCheck: true,
-    },
-    reviews: [
-      {
-        id: 1,
-        name: 'Christopher C.',
-        initials: 'CC',
-        rating: 5,
-        date: 'Aug 23, 2025',
-        source: 'Thumbtack',
-        text: 'I had an amazing experience from the beginning to the end. Everyone was very timely. They got everything done correctly and left my flooring looking amazing. I would definitely recommend them to all that need new flooring installed in their home.',
-        details: 'Luxury vinyl flooring \u2022 751 - 1,000 sq ft \u2022 Vinyl or linoleum \u2022 Home',
-        photos: 1,
-      },
-      {
-        id: 2,
-        name: 'Teri S.',
-        initials: 'TS',
-        rating: 5,
-        date: 'Jul 17, 2025',
-        source: 'Thumbtack',
-        text: 'MAR Flooring came out to provide an estimate on removing my old kitchen floor and hallway. They were on time, professional, and after choosing them for the install, the work was top notch. I will definitely call them again for any flooring type of work.',
-        details: 'Laminate \u2022 751 - 1,000 sq ft \u2022 Home',
-        photos: 0,
-      },
-      {
-        id: 3,
-        name: 'Greg S.',
-        initials: 'GS',
-        rating: 5,
-        date: 'Apr 20, 2025',
-        source: 'Thumbtack',
-        text: 'Mar flooring was great to deal with. Both of the guys were on time during installation. They were professional and friendly. The flooring looks great and we are very happy we used MAR!',
-        details: 'Luxury vinyl flooring \u2022 1,001 - 1,500 sq ft \u2022 Home',
-        photos: 2,
-      },
-    ],
+    memberSince: shownPro.memberSince,
+    rating: ratingOf(shownPro),
+    reviewCount: reviewCountOf(shownPro),
+    stats: shownPro.stats,
+    reviews: shownPro.reviews,
   };
 
-  const reviewBreakdown = [
-    { stars: 5, percent: 97 },
-    { stars: 4, percent: 3 },
-    { stars: 3, percent: 0 },
-    { stars: 2, percent: 0 },
-    { stars: 1, percent: 0 },
-  ];
+  const reviewBreakdown = reviewBreakdownOf(shownPro);
+  const filterTags = reviewTagsOf(shownPro);
+  // The chips actually filter now. `reviewFilter` used to be set by them and
+  // read by nothing.
+  const visibleReviews = reviewsForTag(shownPro, reviewFilter);
+  const visiblePhotos =
+    isEditing || showAllPhotos ? portfolioPhotos : portfolioPhotos.slice(0, 6);
 
-  const filterTags = [
-    { id: 'all', label: 'All', count: 30 },
-    { id: 'floor', label: 'floor', count: 11 },
-    { id: 'install', label: 'install', count: 7 },
-    { id: 'project', label: 'project', count: 2 },
-    { id: 'vinyl', label: 'vinyl', count: 3 },
-    { id: 'carpet', label: 'carpet', count: 3 },
-    { id: 'kitchen', label: 'kitchen', count: 2 },
-  ];
+  // Derived from the names on screen rather than stored, so it cannot disagree
+  // with the heading right beside it while someone is typing into either field.
+  const shownInitials =
+    `${(firstName[0] || '').toUpperCase()}${(lastName[0] || '').replace('.', '').toUpperCase()}` || '?';
+
+  /**
+   * The showroom on the sidebar: the pro's when you are reading a pro, and your
+   * account's own when you are reading yourself. Null when there is neither,
+   * which is a real state for a signed-out visitor, and the card is dropped
+   * rather than filled with somebody else's address.
+   */
+  const shownShowroom = useMemo(() => {
+    if (directoryPro) return directoryPro.showroom;
+    const mine = (showrooms || [])[0];
+    return mine ? { name: mine.name, address: mine.address, phone: mine.phone } : null;
+  }, [directoryPro, showrooms]);
+
 
   const renderStars = (rating, size = 16) => {
     return (
@@ -1154,10 +1203,17 @@ const ProSourcePublicProfile = () => {
     setPortfolioPhotos(portfolioPhotos.filter((_, i) => i !== index));
   };
 
-  const addPhoto = () => {
-    const newId = portfolioPhotos.length > 0 ? Math.max(...portfolioPhotos) + 1 : 1;
-    setPortfolioPhotos([...portfolioPhotos, newId]);
-  };
+  /**
+   * There is no addPhoto, and that is the fix rather than the gap.
+   *
+   * It used to push the next integer onto the list and save it, so "Add Photo"
+   * produced a grey placeholder tile and persisted it to your profile forever.
+   * Nothing was uploaded, because nothing in this app can upload: no storage, no
+   * endpoint, no field to hold a URL. A control that reports success and adds a
+   * picture of nothing is worse than no control, which is the whole reason this
+   * pass exists. removePhoto stays: profiles saved before this can still be
+   * cleared of the tiles that button minted.
+   */
 
   const visibilityBtnStyle = (isActive, type) => ({
     padding: '6px 12px',
@@ -1173,11 +1229,41 @@ const ProSourcePublicProfile = () => {
     gap: 4,
   });
 
+  /**
+   * A URL naming a pro who is not in the directory.
+   *
+   * Says so, rather than falling back to a pro who does exist or to your own
+   * profile. Both would answer a question about somebody else with a page about
+   * somebody else again, and the reader would have no way to tell. Same reason
+   * the project page answers a bad id with "not found" instead of a new draft.
+   */
+  if (proNotFound) {
+    return (
+      <div style={styles.wrapper}>
+        <Link to="/pros" style={styles.backLink}>
+          <ArrowLeft size={18} /> Back to Find a Pro
+        </Link>
+        <div style={{ maxWidth: 560, margin: '48px auto', textAlign: 'center' }}>
+          <h1 style={{ fontSize: 22, fontWeight: 700, color: colors.gray900, margin: '0 0 8px' }}>
+            We could not find that pro
+          </h1>
+          <p style={{ color: colors.gray500, fontSize: 14, lineHeight: 1.6, margin: 0 }}>
+            The link may be out of date, or they may no longer be listed. Everyone
+            working out of your showroom is on <Link to="/pros" style={{ color: colors.darkBlue, fontWeight: 600 }}>Find a Pro</Link>.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
      <div style={styles.wrapper}>
-      {/* Back Link */}
-      <Link to="/settings" style={styles.backLink}>
-        <ArrowLeft size={18} /> Back to Dashboard
+      {/* Back to where you came from: a pro's page belongs to the directory,
+          your own belongs to your dashboard. This was always the dashboard,
+          which on a pro's page sent a signed-out visitor somewhere they cannot
+          go. */}
+      <Link to={directoryPro ? '/pros' : '/settings'} style={styles.backLink}>
+        <ArrowLeft size={18} /> {directoryPro ? 'Back to Find a Pro' : 'Back to Dashboard'}
       </Link>
 
       {/* Edit Mode Banner */}
@@ -1197,22 +1283,23 @@ const ProSourcePublicProfile = () => {
 
       {/* Hero Section */}
       <div style={styles.hero}>
-        <div style={styles.coverPhoto}>
-          {isEditing && (
-            <button style={styles.coverPhotoEditBtn}>
-              <Camera size={14} /> Change Cover Photo
-            </button>
-          )}
-        </div>
+        {/* "Change Cover Photo" lived here and did nothing. There is no image
+            upload anywhere in this app: no storage, no endpoint, and no field on
+            a profile to hold a URL. Same answer as the project page's photo
+            tab, for the same reason. The gradient is the cover. */}
+        <div style={styles.coverPhoto} />
         <div style={styles.container}>
           <div className="flex-wrap" style={styles.heroContent}>
+            {/* The initials of whoever this page is about. This was the literal
+                string "MR", so every pro and every account wore Mae Reedy's
+                monogram: the single clearest symptom of one page rendering one
+                hardcoded person. */}
+            {/* No camera overlay in edit mode. It was a div with a camera icon
+                and no handler: it darkened on hover, invited the click, and
+                swallowed it. See the cover photo above for why there is nothing
+                to wire it to. */}
             <div style={styles.profilePhoto}>
-              MR
-              {isEditing && (
-                <div style={styles.photoUploadOverlay}>
-                  <Camera size={24} color="#fff" />
-                </div>
-              )}
+              {shownInitials}
             </div>
             <div style={styles.heroInfo}>
               {isEditing ? (
@@ -1246,9 +1333,15 @@ const ProSourcePublicProfile = () => {
               )}
 
               <div style={styles.ratingRow}>
-                <span style={styles.ratingScore}>Exceptional {pro.rating.toFixed(1)}</span>
+                <span style={styles.ratingScore}>{ratingLabel(pro.rating)} {pro.rating.toFixed(1)}</span>
                 {renderStars(pro.rating)}
-                <a style={styles.reviewCount}>({pro.reviewCount} reviews)</a>
+                {/* Was an <a> with no href, styled like a link and doing
+                    nothing. It is the reviews, so it goes to the reviews. */}
+                <button
+                  type="button"
+                  style={{ ...styles.reviewCount, background: 'none', border: 'none', padding: 0, cursor: 'pointer', font: 'inherit' }}
+                  onClick={scrollToReviews}
+                >({pro.reviewCount} reviews)</button>
               </div>
 
               {isEditing ? (
@@ -1277,8 +1370,14 @@ const ProSourcePublicProfile = () => {
                       <Pencil size={14} /> Edit Profile
                     </button>
                   )}
-                  <button style={styles.shareBtn}>
-                    <Share2 size={14} /> Share
+                  {/* Share copies the URL rather than opening the OS share
+                      sheet: navigator.share is not there on desktop Chrome,
+                      which is where this gets demoed, and a button that works on
+                      one machine and silently does nothing on another is the
+                      thing being fixed. Clipboard is available everywhere this
+                      runs and the label says what happened. */}
+                  <button style={styles.shareBtn} onClick={copyProfileLink}>
+                    <Share2 size={14} /> {shareLabel}
                   </button>
                   {!isOwnProfile && (
                     <button
@@ -1496,8 +1595,21 @@ const ProSourcePublicProfile = () => {
                 <h2 style={styles.cardTitle}>Projects & Photos</h2>
               </div>
               <div style={styles.cardBody}>
+                {/* The grid used to render every photo and then offer a "View
+                    all" button under it, which is why that button had nothing to
+                    do: everything was already on screen and `showAllPhotos` was
+                    read by nobody. Six, then the rest on request, gives both
+                    controls something real to mean. Editing always shows all of
+                    them: you cannot manage what is hidden. */}
+                {portfolioPhotos.length === 0 ? (
+                  <div style={{ fontSize: 13, color: colors.gray500, padding: '16px 0' }}>
+                    {isOwnProfile
+                      ? 'No photos on your profile yet.'
+                      : 'This pro has not added photos yet.'}
+                  </div>
+                ) : (
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-2" style={{ ...styles.gallery, display: undefined, gridTemplateColumns: undefined, gap: undefined }}>
-                  {portfolioPhotos.map((item, i) => (
+                  {visiblePhotos.map((item, i) => (
                     <div key={i} style={styles.galleryItem}>
                       <Image size={32} color={colors.gray400} />
                       {isEditing && (
@@ -1505,30 +1617,30 @@ const ProSourcePublicProfile = () => {
                           <X size={12} />
                         </button>
                       )}
-                      {!isEditing && i === 5 && portfolioPhotos.length > 6 && (
-                        <div style={styles.galleryOverlay}>
+                      {!isEditing && !showAllPhotos && i === 5 && portfolioPhotos.length > 6 && (
+                        <div style={styles.galleryOverlay} onClick={() => setShowAllPhotos(true)}>
                           See all ({portfolioPhotos.length})
                         </div>
                       )}
                     </div>
                   ))}
-                  {isEditing && (
-                    <div style={styles.addPhotoTile} onClick={addPhoto}>
-                      <Plus size={20} />
-                      <span>Add Photo</span>
-                    </div>
-                  )}
                 </div>
+                )}
               </div>
-              {!isEditing && (
-                <button style={styles.seeAllBtn}>
-                  View all {portfolioPhotos.length} photos <ChevronRight size={16} />
+              {/* Only when there is something still hidden. A "View all 4
+                  photos" button under four photos is the dead-button pattern
+                  wearing a number. */}
+              {!isEditing && portfolioPhotos.length > 6 && (
+                <button style={styles.seeAllBtn} onClick={() => setShowAllPhotos((v) => !v)}>
+                  {showAllPhotos
+                    ? <>Show fewer <ChevronDown size={16} style={{ transform: 'rotate(180deg)' }} /></>
+                    : <>View all {portfolioPhotos.length} photos <ChevronRight size={16} /></>}
                 </button>
               )}
             </div>
 
             {/* Reviews */}
-            <div style={styles.card}>
+            <div style={styles.card} ref={reviewsRef}>
               <div style={styles.cardHeader}>
                 <h2 style={styles.cardTitle}>Reviews</h2>
               </div>
@@ -1574,7 +1686,7 @@ const ProSourcePublicProfile = () => {
                   ))}
                 </div>
 
-                {pro.reviews.map((review) => (
+                {visibleReviews.map((review) => (
                   <div key={review.id} style={styles.reviewCard}>
                     <div style={styles.reviewHeader}>
                       <div style={styles.reviewerInfo}>
@@ -1608,7 +1720,12 @@ const ProSourcePublicProfile = () => {
           {/* Sidebar */}
           <div style={styles.sidebar}>
             <div style={styles.stickyBox}>
-              {/* Consultation CTA */}
+              {/* Consultation CTA. Only on somebody else's page: you cannot
+                  hire yourself, and this card sat on your own profile offering
+                  it. Note the whole card goes, not just the button. Leaving the
+                  heading and the "replies within a business day" promise above a
+                  hidden button would be the same claim with nothing under it. */}
+              {directoryPro && (
               <div style={styles.ctaCard}>
                 <div style={styles.ctaTitle}>Request a Consultation</div>
                 <div style={styles.ctaSubtitle}>Free, no obligation · Replies within a business day</div>
@@ -1631,46 +1748,89 @@ const ProSourcePublicProfile = () => {
                 )}
 
               </div>
+              )}
 
               {/* ProSource Showroom */}
-              <div style={styles.showroomCard}>
-                <div style={styles.showroomTitle}>ProSource Showroom</div>
-                <div style={styles.showroomName}>ProSource of Allen</div>
+              {/* The showroom this profile works out of. Hardcoded to Allen,
+                  TX until now, under every pro and every account regardless of
+                  where they are: a St. Louis contractor's page listed a Texas
+                  showroom and a Texas phone number.
 
-                <div style={styles.showroomContact}>
-                  <MapPin size={14} style={styles.showroomContactIcon} />
-                  <span style={styles.showroomContactText}>
-                    25 Prestige Circle<br />
-                    Allen, TX 75002
-                  </span>
-                </div>
-                <div style={styles.showroomContact}>
-                  <Phone size={14} style={styles.showroomContactIcon} />
-                  <span style={styles.showroomContactText}>972-449-0356</span>
-                </div>
+                  The map placeholder is gone rather than restyled. It was a grey
+                  box with the word "placeholder" in it, promising a map that no
+                  part of this app has ever had. */}
+              {shownShowroom && (
+                <div style={styles.showroomCard}>
+                  <div style={styles.showroomTitle}>ProSource Showroom</div>
+                  <div style={styles.showroomName}>{shownShowroom.name}</div>
 
-                <div style={styles.showroomMap}>
-                  Map placeholder
+                  <div style={styles.showroomContact}>
+                    <MapPin size={14} style={styles.showroomContactIcon} />
+                    <span style={{ ...styles.showroomContactText, whiteSpace: 'pre-line' }}>
+                      {shownShowroom.address}
+                    </span>
+                  </div>
+                  {shownShowroom.phone && (
+                    <div style={styles.showroomContact}>
+                      <Phone size={14} style={styles.showroomContactIcon} />
+                      <span style={styles.showroomContactText}>{shownShowroom.phone}</span>
+                    </div>
+                  )}
                 </div>
-              </div>
+              )}
 
               {/* Credentials */}
               <div style={styles.credentialsCard}>
                 <h3 style={{ ...styles.cardTitle, fontSize: 16, marginBottom: 12 }}>Credentials</h3>
-                <div style={styles.credentialItem}>
-                  <CheckCircle size={16} style={styles.credentialIcon} />
-                  <span style={styles.credentialText}>Licensed Contractor</span>
-                </div>
-                <div style={{ ...styles.credentialItem, borderBottom: 'none' }}>
-                  <CheckCircle size={16} style={styles.credentialIcon} />
-                  <span style={styles.credentialText}>Insured</span>
-                </div>
+                {/* Reads the certifications this profile actually carries. It
+                    used to print "Licensed Contractor" and "Insured" as literals
+                    regardless, so the pro's own list was editable, saved, and
+                    then ignored by the card that claimed to show it.
+
+                    "View credential details" was a button under two lines with
+                    no detail behind them. The detail is the issuer and the date,
+                    which the records have and the card was throwing away, so it
+                    expands each one rather than navigating to a page that does
+                    not exist. */}
+                {certifications.length === 0 ? (
+                  <div style={{ fontSize: 12, color: colors.gray500 }}>
+                    {isOwnProfile
+                      ? 'None added yet. Add them from Edit Profile.'
+                      : 'This pro has not listed any credentials.'}
+                  </div>
+                ) : (
+                  certifications.map((c, i) => {
+                    const detail = [c.issuer, c.date].filter(Boolean).join(' · ');
+                    const open = openCredential === c.id;
+                    const last = i === certifications.length - 1;
+                    return (
+                      <div key={c.id ?? i} style={last ? { ...styles.credentialItem, borderBottom: 'none' } : styles.credentialItem}>
+                        <CheckCircle size={16} style={styles.credentialIcon} />
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <span style={styles.credentialText}>{c.name}</span>
+                          {open && (
+                            <div style={{ fontSize: 11, color: colors.gray500, marginTop: 4 }}>
+                              {detail || 'No issuer or date on this credential.'}
+                            </div>
+                          )}
+                        </div>
+                        {detail && (
+                          <button
+                            type="button"
+                            onClick={() => setOpenCredential(open ? null : c.id)}
+                            title={open ? 'Hide details' : 'Show details'}
+                            style={{ background: 'none', border: 'none', cursor: 'pointer', color: colors.gray500, padding: 2, display: 'flex' }}
+                          >
+                            <ChevronDown size={14} style={open ? { transform: 'rotate(180deg)' } : undefined} />
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })
+                )}
                 <p style={{ fontSize: 11, color: colors.gray500, marginTop: 12, lineHeight: 1.5 }}>
                   All credentials are self-reported by the professional and have not been independently verified by ProSource.
                 </p>
-                <button style={styles.viewCredentials}>
-                  View credential details
-                </button>
               </div>
             </div>
           </div>
@@ -1690,15 +1850,27 @@ const ProSourcePublicProfile = () => {
         </div>
       )}
 
-      <ConsultationWizard
-        isOpen={consultOpen}
-        onClose={() => setConsultOpen(false)}
-        pro={{
-          name: `${firstName} ${lastName}`.trim(),
-          initials: `${(firstName[0] || '').toUpperCase()}${(lastName[0] || '').toUpperCase()}`,
-          userId: null, // placeholder: pro routing is single-profile in the demo
-        }}
-      />
+      {/* Only from a pro's page. The button that opens this does not exist on
+          your own, because requesting a consultation with yourself is not a
+          thing, and `firstName`/`lastName` there are YOURS: the old mount read
+          them either way, so the wizard's "we sent it to X" named whoever was
+          logged in. */}
+      {directoryPro && (
+        <ConsultationWizard
+          isOpen={consultOpen}
+          onClose={() => setConsultOpen(false)}
+          pro={{
+            name: proFullName(directoryPro),
+            initials: `${directoryPro.firstName[0]}${directoryPro.lastName[0]}`.toUpperCase(),
+            // Their directory id, not a userId, because a pro is not an account
+            // (see src/pro-directory.js). It rides along so the request records
+            // WHO it was about; it is not somewhere the request can be
+            // delivered, and the wizard's copy must not imply that it is.
+            proId: directoryPro.id,
+            userId: null,
+          }}
+        />
+      )}
     </div>
   );
 };

@@ -199,9 +199,16 @@ const Layout = () => {
 
         <div className="flex items-center gap-3 md:gap-4 text-sm">
           {/* "Find a Pro" is a customer's errand. Tessa's equivalent is her
-              connections list, which is already in the account menu. */}
+              connections list, which is already in the account menu.
+
+              It goes to the pro directory now, signed in or not. It used to send
+              a signed-in member to /connections, which is the people they
+              already work with rather than a pro they have yet to find, and a
+              signed-out one to a single hardcoded profile. Neither was the
+              errand. /connections is still in the account menu, where it
+              belongs. */}
           {!isAccountManager && (
-            <Link to={isLoggedIn ? "/connections" : "/profile"} className="hidden md:inline" style={{ color: '#525252', textDecoration: 'none' }}>Find a Pro</Link>
+            <Link to="/pros" className="hidden md:inline" style={{ color: '#525252', textDecoration: 'none' }}>Find a Pro</Link>
           )}
 
           {isLoggedIn && (
@@ -411,7 +418,7 @@ const Layout = () => {
                     >{c.label}</Link>
                   ))}
                   <div className="border-t border-neutral-200 my-2" />
-                  <Link to={isLoggedIn ? "/connections" : "/profile"} onClick={closeMobile} className="block px-4 py-3 text-sm text-neutral-700 hover:bg-neutral-50">Find a Pro</Link>
+                  <Link to="/pros" onClick={closeMobile} className="block px-4 py-3 text-sm text-neutral-700 hover:bg-neutral-50">Find a Pro</Link>
                   <Link to="/cart" onClick={closeMobile} className="block px-4 py-3 text-sm text-neutral-700 hover:bg-neutral-50">Your cart</Link>
                   {!isLoggedIn && (
                     <>

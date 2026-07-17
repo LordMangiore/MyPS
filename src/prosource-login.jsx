@@ -700,7 +700,7 @@ const ProSourceLogin = ({ initialPage = 'email', initialMode = 'signin' }) => {
         </Link>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <Link
-            to="/profile"
+            to="/pros"
             className="hidden md:inline"
             style={{ color: colors.gray700, fontSize: 14, fontWeight: 500, textDecoration: 'none' }}
           >Find a Pro</Link>

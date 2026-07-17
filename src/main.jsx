@@ -12,6 +12,7 @@ import ProSourceProjects from './prosource-projects'
 import ProSourceProjectCreate from './prosource-project-create'
 import ProSourceProjectDetail from './prosource-project-detail'
 import ProSourcePublicProfile from './prosource-public-profile_1'
+import ProSourcePros from './prosource-pros'
 import ProSourceSettings from './prosource-settings-v2_2'
 import ProSourceProduct from './prosource-product.jsx'
 import ProSourceShop from './prosource-shop.jsx'
@@ -76,7 +77,16 @@ const AppRouter = () => {
             the shop resolves the legacy id and redirects here. */}
         <Route path="/shop/:sku" element={<ProSourceShop />} />
         <Route path="/cart" element={<ProSourceShop />} />
+        {/* Two different questions, which used to be one route answering both
+            badly. /profile is YOURS: the account menu's "My Profile", editable,
+            read from your own account. /profile/:proId is somebody else's, out
+            of the pro directory, read only. When one route served both, a
+            member browsing pros was shown their own name over a stranger's bio,
+            because there was only ever one set of state to render.
+            See src/pro-directory.js. */}
+        <Route path="/pros" element={<ProSourcePros />} />
         <Route path="/profile" element={<ProSourcePublicProfile />} />
+        <Route path="/profile/:proId" element={<ProSourcePublicProfile />} />
         <Route path="/carts" element={<ProSourceCarts />} />
 
         {/* Protected routes: only mounted when logged in */}
