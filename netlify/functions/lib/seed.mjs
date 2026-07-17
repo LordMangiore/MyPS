@@ -1507,9 +1507,14 @@ const buildHomeownerAppointments = (now) => {
 // `identityForConnection` in src/twilio-client.js, a connection carrying a
 // `userId` is a real signed-up user and is messaged at that userId. So a thread
 // Tessa opens with Justin here is the same thread Justin sees when he signs in.
-const DEMO_ACCOUNT_USER_ID = {
+//
+// Exported because netlify/functions/twilio-conversations.mjs resolves which
+// world to seed from the userId it is handed, and these are the accounts it has
+// to recognise. One list, so the two files cannot drift.
+export const DEMO_ACCOUNT_USER_ID = {
   tradepro: 'ps-demo-prosource-com',
   homeowner: 'ps-alicia-navarro-email-com',
+  am: 'ps-tessa-brandt-prosource-com',
 };
 
 const buildAmConnections = () => {
@@ -1561,117 +1566,142 @@ const buildAmConnections = () => {
   };
 };
 
-// Threads carry no projectId: the jobs they're about live in her customers'
-// accounts, not hers, so there is no project of Tessa's to link to. Null is the
-// same value the trade pro's threads take when their project can't be resolved,
-// so the client already handles it.
-const buildAmMessages = (now) => {
-  const justin2 = now - minutes(18);
-  const justin1 = now - minutes(95);
-  const alicia2 = now - days(1);
-  const alicia1 = now - days(1) - minutes(40);
-  const kimMsg = now - days(4);
+/**
+ * Who Tessa is to the people she is talking to.
+ *
+ * Needed because her threads are the demo's only genuinely two-sided ones: both
+ * she and her members are real accounts, so a thread has to describe BOTH ends
+ * (see `parties` in twilio-conversations.mjs). Everywhere else one end is a
+ * scripted persona nobody signs in as, so one end was all anyone ever needed.
+ */
+export const AM_SELF = {
+  identity: DEMO_ACCOUNT_USER_ID.am,
+  name: 'Tessa Brandt',
+  initials: 'TB',
+  role: 'Account Manager',
+  type: 'prosource',
+};
 
-  return {
-    threads: [
+/**
+ * An account manager's messages: her MEMBERS, in her own voice.
+ *
+ * Exported because twilio-conversations.mjs seeds these same threads into
+ * Twilio. One script, two transports, so Messages reads the same people saying
+ * the same things whether Twilio is up or the blob is the fallback. These were
+ * written out twice and had drifted badly: the Twilio side had no idea who the
+ * signed-in user was and gave every account, Tessa included, the six
+ * member-facing demo-persona threads.
+ *
+ * Who is here and why:
+ *   Justin, Alicia -> her customers, and REAL demo accounts, so their identity
+ *     is their userId. No AI persona speaks for them: the thread only moves when
+ *     someone is actually signed in as them, which makes it the one thread you
+ *     can demo live from both sides in two browsers.
+ *   Kim -> a showroom colleague and an AI persona, so hers is a `demo-`
+ *     identity and she answers on her own.
+ *
+ * Bubba, Sarah and Ryan are deliberately absent: they are Justin's clients, not
+ * Tessa's, and an account manager reading her customers' customers' mail is the
+ * bug this script exists to fix.
+ *
+ * Threads carry no projectId: the jobs they're about live in her customers'
+ * accounts, not hers, so there is no project of Tessa's to link to. Null is the
+ * same value the trade pro's threads take when their project can't be resolved,
+ * so the client already handles it.
+ *
+ * `agoMs` only drives the blob transport, which builds its own timestamps.
+ * Twilio stamps messages as they are posted, so there the script's ordering
+ * survives and its spacing does not. Oldest first.
+ */
+export const AM_THREAD_SCRIPT = [
+  {
+    identity: DEMO_ACCOUNT_USER_ID.tradepro,
+    name: 'Justin Reyes',
+    initials: 'JR',
+    role: 'General Contractor',
+    type: 'tradepro',
+    unread: true,
+    history: [
       {
-        id: 1,
-        projectId: null,
-        name: 'Justin Reyes',
-        initials: 'JR',
-        type: 'tradepro',
-        role: 'General Contractor',
-        lastMessage:
-          "Quote's with me now. I'll have the cabinet numbers back to you before close today.",
-        timestamp: fmtRelativeTimestamp(justin2),
-        unread: true,
-        updatedAt: justin2,
-        messages: [
-          {
-            id: 1,
-            sender: 'Justin Reyes',
-            isMe: false,
-            text:
-              'Morning Tessa, any movement on the Beans kitchen cabinet quote? Client is asking.',
-            time: fmtTime(justin1),
-            date: fmtDate(justin1),
-            timestamp: justin1,
-          },
-          {
-            id: 2,
-            sender: 'Me',
-            isMe: true,
-            text:
-              "Quote's with me now. I'll have the cabinet numbers back to you before close today.",
-            time: fmtTime(justin2),
-            date: fmtDate(justin2),
-            timestamp: justin2,
-          },
-        ],
+        from: 'them',
+        agoMs: minutes(95),
+        body: 'Morning Tessa, any movement on the Beans kitchen cabinet quote? Client is asking.',
       },
       {
-        id: 2,
-        projectId: null,
-        name: 'Alicia Navarro',
-        initials: 'AN',
-        type: 'client',
-        role: 'Homeowner',
-        lastMessage:
-          "No rush at all. Take the weekend with Heather's layouts and we'll pick it up Monday.",
-        timestamp: fmtRelativeTimestamp(alicia2),
-        unread: false,
-        updatedAt: alicia2,
-        messages: [
-          {
-            id: 1,
-            sender: 'Alicia Navarro',
-            isMe: false,
-            text:
-              "Sorry, I know Kim sent the estimate over. I'm still deciding on the hallway before I sign anything.",
-            time: fmtTime(alicia1),
-            date: fmtDate(alicia1),
-            timestamp: alicia1,
-          },
-          {
-            id: 2,
-            sender: 'Me',
-            isMe: true,
-            text:
-              "No rush at all. Take the weekend with Heather's layouts and we'll pick it up Monday.",
-            time: fmtTime(alicia2),
-            date: fmtDate(alicia2),
-            timestamp: alicia2,
-          },
-        ],
-      },
-      {
-        id: 3,
-        projectId: null,
-        name: 'Kim Marks',
-        initials: 'KM',
-        type: 'prosource',
-        role: 'Account Manager',
-        lastMessage:
-          "Covering your accounts Thursday while you're at the Daltile thing. Anything I should watch?",
-        timestamp: fmtRelativeTimestamp(kimMsg),
-        unread: false,
-        updatedAt: kimMsg,
-        messages: [
-          {
-            id: 1,
-            sender: 'Kim Marks',
-            isMe: false,
-            text:
-              "Covering your accounts Thursday while you're at the Daltile thing. Anything I should watch?",
-            time: fmtTime(kimMsg),
-            date: fmtDate(kimMsg),
-            timestamp: kimMsg,
-          },
-        ],
+        from: 'user',
+        agoMs: minutes(18),
+        body: "Quote's with me now. I'll have the cabinet numbers back to you before close today.",
       },
     ],
-  };
-};
+  },
+  {
+    identity: DEMO_ACCOUNT_USER_ID.homeowner,
+    name: 'Alicia Navarro',
+    initials: 'AN',
+    role: 'Homeowner',
+    type: 'client',
+    unread: false,
+    history: [
+      {
+        from: 'them',
+        agoMs: days(1) + minutes(40),
+        body: "Sorry, I know Kim sent the estimate over. I'm still deciding on the hallway before I sign anything.",
+      },
+      {
+        from: 'user',
+        agoMs: days(1),
+        body: "No rush at all. Take the weekend with Heather's layouts and we'll pick it up Monday.",
+      },
+    ],
+  },
+  {
+    identity: DEMO_IDENTITY_BY_NAME['Kim Marks'],
+    name: 'Kim Marks',
+    initials: 'KM',
+    role: 'Account Manager',
+    type: 'prosource',
+    unread: false,
+    history: [
+      {
+        from: 'them',
+        agoMs: days(4),
+        body: "Covering your accounts Thursday while you're at the Daltile thing. Anything I should watch?",
+      },
+    ],
+  },
+];
+
+const buildAmMessages = (now) => ({
+  threads: AM_THREAD_SCRIPT.map((script, i) => {
+    const messages = script.history.map((h, j) => {
+      const ts = now - h.agoMs;
+      const isMe = h.from === 'user';
+      return {
+        id: j + 1,
+        sender: isMe ? 'Me' : script.name,
+        isMe,
+        text: h.body,
+        time: fmtTime(ts),
+        date: fmtDate(ts),
+        timestamp: ts,
+      };
+    });
+    const last = messages[messages.length - 1];
+    return {
+      id: i + 1,
+      projectId: null,
+      name: script.name,
+      initials: script.initials,
+      type: script.type,
+      role: script.role,
+      lastMessage: last.text,
+      timestamp: fmtRelativeTimestamp(last.timestamp),
+      unread: !!script.unread,
+      updatedAt: last.timestamp,
+      messages,
+    };
+  }),
+});
 
 // A counter appointment with a customer, which is what an AM's day is made of.
 // Different person, time and week again from the other two personas'.

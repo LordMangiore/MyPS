@@ -18,7 +18,7 @@ import {
 } from './twilio-client';
 
 const ProSourceMessages = () => {
-  const { loadUserData, saveUserData, userId } = useAuth();
+  const { loadUserData, saveUserData, userId, homePath } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const [selectedThread, setSelectedThread] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -643,7 +643,7 @@ const ProSourceMessages = () => {
     {/* Keyframes for the init spinner. Inline styles can't express these. */}
     <style>{'@keyframes ps-spin { to { transform: rotate(360deg); } }'}</style>
     <div style={styles.container}>
-      <Link to="/settings" style={styles.backLink}>
+      <Link to={homePath} style={styles.backLink}>
         <ArrowLeft size={18} /> Back to Dashboard
       </Link>
 

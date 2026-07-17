@@ -17,7 +17,7 @@ const Layout = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [hoveredIcon, setHoveredIcon] = useState(null)
   const location = useLocation()
-  const { logout, userId, loadUserData, isLoggedIn, userType } = useAuth()
+  const { logout, userId, loadUserData, isLoggedIn, userType, homePath } = useAuth()
 
   /**
    * Staff, not a shopper.
@@ -315,7 +315,7 @@ const Layout = () => {
                   </>
                 ) : (
                   <>
-                    <Link to="/settings" style={menuItemStyle} onClick={() => setAccountMenuOpen(false)}>Dashboard</Link>
+                    <Link to={homePath} style={menuItemStyle} onClick={() => setAccountMenuOpen(false)}>Dashboard</Link>
                     <Link to="/projects" style={menuItemStyle} onClick={() => setAccountMenuOpen(false)}>My Projects</Link>
                     <Link to="/settings?section=referrals" style={menuItemStyle} onClick={() => setAccountMenuOpen(false)}>Referral Bonus</Link>
                     <Link to="/orders" style={menuItemStyle} onClick={() => setAccountMenuOpen(false)}>Estimates & Orders</Link>

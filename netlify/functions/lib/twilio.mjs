@@ -74,6 +74,48 @@ export const mintAccessToken = (identity, ttlSeconds = 3600) => {
  * For the ProSource demo a "conversation" maps 1:1 to a thread between the
  * trade pro and one of: AM, client, or another trade pro.
  */
+const parseAttributes = (raw) => {
+  try {
+    const parsed = JSON.parse(raw || "{}");
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+};
+
+/**
+ * Bring an existing conversation's copy up to date.
+ *
+ * Attributes and friendlyName used to be written once, at creation, and never
+ * revisited: an existing conversation was only fetched. That means a conversation
+ * created before a copy change keeps the old wording forever, in Twilio, where no
+ * amount of editing this repo can reach it. That is not hypothetical: names and
+ * roles are rendered straight into the thread list, so the live demo was still
+ * showing text that had already been rewritten here.
+ *
+ * Merges rather than replaces: keys the caller does not mention are left alone,
+ * so anything written by another flow (a `connectionId` on a thread started by
+ * hand, say) survives. Writes only when something actually changed, so the common
+ * case stays a single fetch.
+ */
+const refreshConversationCopy = async (client, convo, uniqueName, friendlyName, attributes) => {
+  const current = parseAttributes(convo.attributes);
+  const merged = { ...current, ...(attributes || {}) };
+  const attrsChanged = JSON.stringify(merged) !== JSON.stringify(current);
+  const nameChanged = !!friendlyName && convo.friendlyName !== friendlyName;
+  if (!attrsChanged && !nameChanged) return convo;
+  try {
+    return await client.conversations.v1.conversations(uniqueName).update({
+      ...(nameChanged ? { friendlyName } : {}),
+      ...(attrsChanged ? { attributes: JSON.stringify(merged) } : {}),
+    });
+  } catch (err) {
+    // Stale copy is better than no conversation.
+    console.warn(`Could not refresh conversation ${uniqueName}:`, err.message);
+    return convo;
+  }
+};
+
 export const ensureConversation = async ({
   uniqueName,
   friendlyName,
@@ -95,6 +137,7 @@ export const ensureConversation = async ({
   } catch (err) {
     if (err?.code === 50307 || /already exists/i.test(err?.message || "")) {
       convo = await client.conversations.v1.conversations(uniqueName).fetch();
+      convo = await refreshConversationCopy(client, convo, uniqueName, friendlyName, attributes);
     } else {
       throw err;
     }

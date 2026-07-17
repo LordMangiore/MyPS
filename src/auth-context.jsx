@@ -123,6 +123,20 @@ export const AuthProvider = ({ children }) => {
   const [profileLoading, setProfileLoading] = useState(false);
 
   /**
+   * Where "home" is for this account.
+   *
+   * Not everyone's home is the member dashboard. Showroom staff have no
+   * projects, carts or orders of their own, so sending them there lands them in
+   * an empty copy of somebody else's app. Pages hardcoded `/settings` in their
+   * back link, which is right for a member and wrong for an account manager, so
+   * the answer lives here rather than in nine components.
+   */
+  const homePath = useMemo(
+    () => (userType === 'accountmanager' ? '/am' : '/settings'),
+    [userType]
+  );
+
+  /**
    * All showrooms the account works with, primary first. Additive: `showroom`
    * and `accountManager` keep meaning exactly what they mean today (the
    * primary's), so nothing reading the singular fields changes.
@@ -448,6 +462,7 @@ export const AuthProvider = ({ children }) => {
         userType,
         showroom,
         showrooms,
+        homePath,
         accountManager,
         profile,
         profileLoading,

@@ -12,7 +12,7 @@ import {
 import { useAuth } from './auth-context';
 
 const ProSourceNotifications = () => {
-  const { userId, loadUserData, saveUserData } = useAuth();
+  const { userId, loadUserData, saveUserData, homePath } = useAuth();
   const [activeFilter, setActiveFilter] = useState('all');
   const [projectList, setProjectList] = useState([]);
   const [messageThreads, setMessageThreads] = useState([]);
@@ -441,7 +441,7 @@ const ProSourceNotifications = () => {
   return (
     <div style={styles.wrapper}>
     <div style={styles.container}>
-      <Link to="/settings" style={styles.backLink}>
+      <Link to={homePath} style={styles.backLink}>
         <ArrowLeft size={18} /> Back to Dashboard
       </Link>
 

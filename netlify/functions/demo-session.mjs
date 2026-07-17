@@ -296,6 +296,13 @@ const PERSONAS = {
     showrooms: ST_LOUIS_ONLY,
     profile: AM_PROFILE,
     seed: "am",
+    // An account manager is only meaningful next to the members she serves: her
+    // whole screen is their outstanding work. Seeding her alone leaves the work
+    // queue empty, because the queue is filled when a MEMBER's account is
+    // seeded, and nothing says the trade pro was ever signed into first. So
+    // seeding her seeds her members too. All of it is idempotent, so this
+    // costs a couple of no-op reads when they already exist.
+    alsoSeed: ["tradepro", "homeowner"],
   },
   homeowner: {
     email: HOMEOWNER_EMAIL,
@@ -430,6 +437,20 @@ export default async function handler(req) {
     // this fills in whatever is missing (first ever click, or a half-created
     // account from a failed seed) and never touches data that's already there.
     await seedNewUser(userId, persona.seed);
+
+    // Seed the personas this one is meaningless without (see `alsoSeed`).
+    // Best effort: this persona's own sign-in must not fail because a related
+    // demo account could not be set up.
+    for (const other of persona.alsoSeed || []) {
+      const spec = PERSONAS[other];
+      if (!spec) continue;
+      try {
+        await seedNewUser(userIdForEmail(spec.email), spec.seed);
+      } catch (err) {
+        console.warn(`alsoSeed ${other} failed:`, err.message);
+      }
+    }
+
     const profile = await ensureDemoProfile(userId, persona);
 
     // No Firebase for the demo accounts, so mint the same style of opaque

@@ -88,12 +88,26 @@ const fetchTokenInfo = async (userId) => {
   }
 };
 
-const seedDemoConversations = async (userId, projectIds = {}) => {
+/**
+ * Ask the server for this user's demo conversations.
+ *
+ * `userType` says which world to seed: a member (trade pro, homeowner) gets the
+ * six demo personas, an account manager gets her own members. It is optional and
+ * omitted when unknown, because the server resolves it from the userId anyway
+ * and its answer is the better one: the session only carries a copy of what the
+ * server already knows. Passing it is for the caller that has it to hand.
+ */
+const seedDemoConversations = async (userId, projectIds = {}, userType) => {
   try {
     const res = await fetch('/api/twilio-conversations', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'seed', userId, projectIds }),
+      body: JSON.stringify({
+        action: 'seed',
+        userId,
+        projectIds,
+        ...(userType ? { userType } : {}),
+      }),
     });
     return await res.json();
   } catch (err) {
@@ -188,12 +202,43 @@ const counterpartyIdentityOf = (conv, userId, attrs) => {
   return null;
 };
 
+/**
+ * Who is on the other side of this conversation, FROM THIS USER'S SIDE?
+ *
+ * The flat `counterparty*` attributes name one fixed side, decided by whoever
+ * seeded the conversation. That is right for a member's threads with the demo
+ * personas, where nobody else is ever subscribed, and wrong for a thread between
+ * two real accounts: the account manager's seed describes Justin, so Justin
+ * signing in would find a thread called "Justin Reyes" with his own name printed
+ * over Tessa's messages.
+ *
+ * `parties` is a per-identity map, so each side resolves the other from the same
+ * attributes. Conversations without one (every member thread, and anything
+ * seeded before this) fall through to the flat fields and are unchanged.
+ */
+const counterpartyOf = (conv, userId, attrs) => {
+  const parties = attrs?.parties;
+  if (parties && typeof parties === 'object') {
+    const identity = Object.keys(parties).find((id) => id !== userId);
+    if (identity) return { identity, ...parties[identity] };
+  }
+  return {
+    identity: counterpartyIdentityOf(conv, userId, attrs),
+    name: attrs?.counterpartyName,
+    initials: attrs?.counterpartyInitials,
+    role: attrs?.counterpartyRole,
+    type: attrs?.counterpartyType,
+  };
+};
+
 const conversationToThread = async (conv, userId) => {
   // Pull attributes (we set these server-side in seed).
   let attrs = {};
   try {
     attrs = (await conv.getAttributes()) || {};
   } catch {}
+
+  const other = counterpartyOf(conv, userId, attrs);
 
   // Pull recent messages.
   let messages = [];
@@ -204,7 +249,7 @@ const conversationToThread = async (conv, userId) => {
       const isMe = m.author === userId;
       return {
         id: idx + 1,
-        sender: isMe ? 'Me' : (attrs.counterpartyName || m.author),
+        sender: isMe ? 'Me' : (other.name || m.author),
         isMe,
         text: m.body || '',
         time: fmtTime(ts),
@@ -223,18 +268,16 @@ const conversationToThread = async (conv, userId) => {
     unread = (u || 0) > 0;
   } catch {}
 
-  const counterpartyIdentity = counterpartyIdentityOf(conv, userId, attrs);
-
   return {
     id: conv.sid,
     sid: conv.sid,
     projectId: attrs.projectId || null,
-    counterpartyIdentity,
+    counterpartyIdentity: other.identity,
     connectionId: attrs.connectionId ?? null,
-    name: attrs.counterpartyName || conv.friendlyName || conv.sid,
-    initials: attrs.counterpartyInitials || (attrs.counterpartyName || '??').split(' ').map(s => s[0]).join('').slice(0, 2),
-    type: attrs.counterpartyType || 'tradepro',
-    role: attrs.counterpartyRole || '',
+    name: other.name || conv.friendlyName || conv.sid,
+    initials: other.initials || (other.name || '??').split(' ').map(s => s[0]).join('').slice(0, 2),
+    type: other.type || 'tradepro',
+    role: other.role || '',
     lastMessage: last?.text || '',
     timestamp: fmtPreviewTimestamp(lastTs),
     unread,
@@ -251,6 +294,10 @@ const conversationToThread = async (conv, userId) => {
 export async function initTwilioClient({
   userId,
   projectIds = {},
+  // Optional. See seedDemoConversations: the server resolves this from the
+  // userId when it isn't supplied, so a caller that doesn't have it to hand
+  // still gets the right world seeded.
+  userType,
   onThreadsChanged,
   onDemoTyping,
 }) {
@@ -262,7 +309,7 @@ export async function initTwilioClient({
   // Make sure the demo conversations exist (idempotent server-side). If the
   // underlying Twilio account can't host Conversations (e.g. test creds),
   // bail out before connecting the SDK so we cleanly fall back to blob mode.
-  const seedResult = await seedDemoConversations(userId, projectIds);
+  const seedResult = await seedDemoConversations(userId, projectIds, userType);
   if (seedResult.enabled === false) {
     return { enabled: false, reason: seedResult.reason };
   }

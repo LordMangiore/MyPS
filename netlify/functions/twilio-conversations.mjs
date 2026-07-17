@@ -3,6 +3,11 @@ import {
   getRestClient,
   ensureConversation,
 } from "./lib/twilio.mjs";
+import {
+  AM_SELF,
+  AM_THREAD_SCRIPT,
+  DEMO_ACCOUNT_USER_ID,
+} from "./lib/seed.mjs";
 
 /**
  * Server-side Twilio Conversations operations.
@@ -11,9 +16,10 @@ import {
  *   → list this user's conversations from Twilio (live data, no blob)
  *
  * POST /api/twilio-conversations
- *   body: { action: "seed", userId, projectIds? }
- *     → idempotently create the demo conversations between this user and the
- *       seeded teammates (Kim Marks, Bubba Beans, etc.)
+ *   body: { action: "seed", userId, userType?, projectIds? }
+ *     → idempotently create the demo conversations this user should actually
+ *       have. A member (trade pro, homeowner) gets the six demo personas; an
+ *       account manager gets her own members. See resolveUserType.
  *
  *   body: { action: "create", userId, otherIdentity, friendlyName?, attributes? }
  *     → create / find a 1:1 conversation between two identities
@@ -155,6 +161,190 @@ const DEMO_DETAILS = {
 const uniqueNameFor = (userId, otherIdentity) =>
   `ps-${userId}__${otherIdentity}`;
 
+// ---------------------------------------------------------------------------
+// Who is being seeded?
+//
+// `userType` is the parameter, and it is the same vocabulary the session and the
+// profile already speak (auth-context's `userType`, PERSONAS[*].profile.userType
+// in demo-session.mjs). Reusing that string means no third naming scheme and no
+// translation table. It is an enum rather than an `isAccountManager` flag so a
+// fourth kind of account is a new case here, not a new boolean at every call
+// site.
+//
+// It is optional, and absent it is resolved from the userId. That matters:
+// seeding is decided by WHOSE conversations these are, the server knows the demo
+// accounts by their deterministic userIds, and the only caller
+// (src/prosource-messages.jsx) does not currently hand its userType down to
+// twilio-client. So the fallback is what fixes the live account manager rather
+// than a change nobody made yet, and an explicit `userType` still wins for any
+// caller that does know.
+//
+// Anything unrecognised is a member, which is exactly what every caller got
+// before this parameter existed: the trade pro and homeowner paths are byte for
+// byte the seed they already had.
+const USER_TYPE_BY_USER_ID = {
+  [DEMO_ACCOUNT_USER_ID.tradepro]: "tradepro",
+  [DEMO_ACCOUNT_USER_ID.homeowner]: "homeowner",
+  [DEMO_ACCOUNT_USER_ID.am]: "accountmanager",
+};
+
+const DEFAULT_USER_TYPE = "tradepro";
+
+const resolveUserType = (claimed, userId) =>
+  (typeof claimed === "string" && claimed) ||
+  USER_TYPE_BY_USER_ID[userId] ||
+  DEFAULT_USER_TYPE;
+
+/**
+ * Marks a conversation as written by the current account-manager script.
+ *
+ * Tessa's threads already exist in the live demo under the old scheme (six
+ * member-facing personas), and her Kim thread has the wrong words in it. The
+ * marker is how the seed tells "I already fixed this one" from "this predates
+ * the fix", so the repair happens exactly once instead of wiping her real
+ * conversation with Kim on every page load.
+ */
+const AM_SEED_MARKER = "am";
+
+const attributesOf = (convo) => {
+  try {
+    return JSON.parse(convo?.attributes || "{}") || {};
+  } catch {
+    return {};
+  }
+};
+
+/**
+ * A member's world: the six demo personas, every one of them a scripted contact
+ * with an AI voice. Unchanged from before this endpoint knew about personas.
+ */
+const memberSeedPlan = (projectIds) =>
+  Object.entries(DEMO_DETAILS).map(([identity, details]) => ({
+    identity,
+    friendlyName: details.name,
+    attributes: {
+      counterpartyName: details.name,
+      counterpartyInitials: details.initials,
+      counterpartyRole: details.role,
+      counterpartyType: details.type,
+      // The client reads this to decide whether the other side is a
+      // scripted demo contact or a real signed-in user.
+      counterpartyIdentity: identity,
+      projectId: projectIds[PROJECT_KEY_BY_PARTICIPANT[identity]] || null,
+    },
+    history: details.history,
+  }));
+
+/**
+ * An account manager's world: her members, from lib/seed.mjs's shared script.
+ *
+ * `parties` is the addition. The flat `counterparty*` attributes describe one
+ * fixed side of a conversation, which is fine when the other side is a persona
+ * nobody can sign in as, and wrong here: Tessa's thread with Justin has two real
+ * people in it, and Justin signing in must see Tessa, not himself. A per-identity
+ * map lets each side resolve the other from the same attributes. The flat fields
+ * stay alongside it, describing Tessa's view, so anything still reading them
+ * (and any conversation seeded before this) keeps working.
+ */
+const amSeedPlan = (userId) =>
+  AM_THREAD_SCRIPT.map((script) => ({
+    identity: script.identity,
+    friendlyName: script.name,
+    attributes: {
+      counterpartyName: script.name,
+      counterpartyInitials: script.initials,
+      counterpartyRole: script.role,
+      counterpartyType: script.type,
+      counterpartyIdentity: script.identity,
+      // Her threads are about her members' jobs, which are not her projects.
+      projectId: null,
+      seedScript: AM_SEED_MARKER,
+      parties: {
+        [userId]: {
+          name: AM_SELF.name,
+          initials: AM_SELF.initials,
+          role: AM_SELF.role,
+          type: AM_SELF.type,
+        },
+        [script.identity]: {
+          name: script.name,
+          initials: script.initials,
+          role: script.role,
+          type: script.type,
+        },
+      },
+    },
+    // Same contract as DEMO_DETAILS: "user" is authored as the signed-in user,
+    // anything else as the counterparty.
+    history: script.history,
+  }));
+
+/**
+ * Undo the old seeding scheme for one account manager. Runs before her real
+ * threads are seeded, and is a no-op from the second call onwards.
+ *
+ * The old seed handed EVERY account the six demo personas, so the live demo has
+ * Tessa holding threads that are somebody else's: Bubba asking to come to the
+ * showroom Saturday, Sarah thanking her for a patio. Those cannot simply be left
+ * alone. Seeding is idempotent by uniqueName and skips a conversation that
+ * already has messages, so without this her wrong threads would survive the fix
+ * and stay in her list (the client renders every conversation she is subscribed
+ * to, not just the ones the plan names), and her Kim thread would keep its
+ * member-facing sales copy forever.
+ *
+ * Deleting rather than un-subscribing her: `ps-${userId}__${identity}` is
+ * per-user, so these conversations are hers alone and nobody else's list can
+ * lose anything. Justin's own Kim thread is `ps-ps-demo-prosource-com__...` and
+ * is untouched. Removing just her participant would leave a conversation with
+ * nothing but a persona in it: orphaned, which is the thing we were told to
+ * avoid.
+ *
+ * Two rules, both narrow on purpose:
+ *   • not in her plan (Bubba, Sarah, Ryan, Heather, Denise) -> should never have
+ *     existed for her; delete it.
+ *   • in her plan (Kim) -> delete ONLY while it lacks the current marker, so the
+ *     wrong words are replaced exactly once and every later seed leaves the real
+ *     conversation she has been having alone.
+ *
+ * A conversation carrying a `connectionId` is spared either way: that is one she
+ * opened herself from Connections, not one the seed wrote, and it is not ours to
+ * throw away.
+ */
+const retireLegacyAmConversations = async (client, userId, plan) => {
+  const planned = new Map(plan.map((entry) => [entry.identity, entry]));
+  // Only ever considers the seeded personas. Her real member threads are keyed
+  // by userId and can never match, so they are out of reach of this sweep.
+  const candidates = new Set([
+    ...Object.values(DEMO_PARTICIPANTS),
+    ...plan.map((entry) => entry.identity),
+  ]);
+
+  for (const identity of candidates) {
+    const uniqueName = uniqueNameFor(userId, identity);
+    let convo;
+    try {
+      convo = await client.conversations.v1.conversations(uniqueName).fetch();
+    } catch {
+      continue; // nothing there: already retired, or never existed
+    }
+
+    const attrs = attributesOf(convo);
+    if (attrs.connectionId) continue; // hers, started by hand
+    if (planned.has(identity) && attrs.seedScript === AM_SEED_MARKER) {
+      continue; // already reseeded under the current script
+    }
+
+    try {
+      await client.conversations.v1.conversations(convo.sid).remove();
+      console.log(`Retired legacy AM conversation ${uniqueName}`);
+    } catch (err) {
+      // Best effort. A conversation we cannot remove is a stale thread in her
+      // list, not a failed sign-in.
+      console.warn(`Failed to retire ${uniqueName}:`, err.message);
+    }
+  }
+};
+
 export default async function handler(req) {
   if (!TWILIO_ENABLED) {
     return Response.json(
@@ -190,29 +380,30 @@ export default async function handler(req) {
     const { action } = body;
 
     if (action === "seed") {
-      const { userId, projectIds = {} } = body;
+      const { userId, userType, projectIds = {} } = body;
       if (!userId) {
         return Response.json({ error: "userId required" }, { status: 400 });
       }
 
+      const resolvedType = resolveUserType(userType, userId);
+      const isAccountManager = resolvedType === "accountmanager";
+      const plan = isAccountManager
+        ? amSeedPlan(userId)
+        : memberSeedPlan(projectIds);
+
+      // Retire whatever the old scheme left behind before seeding the real
+      // threads, so she isn't holding both.
+      if (isAccountManager) {
+        await retireLegacyAmConversations(client, userId, plan);
+      }
+
       const created = [];
-      for (const [identity, details] of Object.entries(DEMO_DETAILS)) {
-        const projectKey = PROJECT_KEY_BY_PARTICIPANT[identity];
-        const attrs = {
-          counterpartyName: details.name,
-          counterpartyInitials: details.initials,
-          counterpartyRole: details.role,
-          counterpartyType: details.type,
-          // The client reads this to decide whether the other side is a
-          // scripted demo contact or a real signed-in user.
-          counterpartyIdentity: identity,
-          projectId: projectIds[projectKey] || null,
-        };
+      for (const entry of plan) {
         const convo = await ensureConversation({
-          uniqueName: uniqueNameFor(userId, identity),
-          friendlyName: details.name,
-          attributes: attrs,
-          participants: [userId, identity],
+          uniqueName: uniqueNameFor(userId, entry.identity),
+          friendlyName: entry.friendlyName,
+          attributes: entry.attributes,
+          participants: [userId, entry.identity],
         });
 
         // Post seeded history (only if the conversation has zero messages).
@@ -225,8 +416,8 @@ export default async function handler(req) {
         } catch {}
 
         if (existingCount === 0) {
-          for (const h of details.history) {
-            const author = h.from === "user" ? userId : identity;
+          for (const h of entry.history) {
+            const author = h.from === "user" ? userId : entry.identity;
             try {
               await client.conversations.v1
                 .conversations(convo.sid)
@@ -240,10 +431,18 @@ export default async function handler(req) {
           }
         }
 
-        created.push({ sid: convo.sid, identity, name: details.name });
+        created.push({
+          sid: convo.sid,
+          identity: entry.identity,
+          name: entry.friendlyName,
+        });
       }
 
-      return Response.json({ enabled: true, conversations: created });
+      return Response.json({
+        enabled: true,
+        userType: resolvedType,
+        conversations: created,
+      });
     }
 
     if (action === "create") {
