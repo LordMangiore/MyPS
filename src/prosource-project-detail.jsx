@@ -508,6 +508,24 @@ export default function ProjectDetailPage() {
       : null;
   }, [team, projectShowroom]);
 
+  /**
+   * When this project was last touched, formatted for the header.
+   *
+   * Read from the record's real `updatedAt`, which the app writes on every save
+   * (seed and persistProjectFields both stamp it). The header used to print a
+   * hardcoded "Last updated Dec 18, 2025" on every project regardless. Null for a
+   * record old enough to have no timestamp, and the line is dropped rather than
+   * guessed, the same way the activity feed skips an event it cannot date.
+   */
+  const projectUpdatedLabel = useMemo(() => {
+    const rec = projectId ? projectList.find((p) => p.id === projectId) : null;
+    if (rec?.updatedAt == null) return null;
+    const d = new Date(rec.updatedAt);
+    return Number.isNaN(d.getTime())
+      ? null
+      : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  }, [projectId, projectList]);
+
   // Hydrate team from the currently-loaded project record. For brand-new
   // projects, default to the ProSource showroom contacts already in the user's
   // connections list (Account Manager + Designer) so the team isn't blank.
@@ -1946,9 +1964,11 @@ export default function ProjectDetailPage() {
                     {projectAccountManager.title ? `, ${projectAccountManager.title}` : ''}
                   </div>
                 )}
-                <div style={styles.metaItem}>
-                  <Calendar size={14} /> Last updated Dec 18, 2025
-                </div>
+                {projectUpdatedLabel && (
+                  <div style={styles.metaItem}>
+                    <Calendar size={14} /> Last updated {projectUpdatedLabel}
+                  </div>
+                )}
               </div>
             </div>
             {/* The status button is a content edit, so the owner AND the account
