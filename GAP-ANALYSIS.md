@@ -359,3 +359,81 @@ break a live walkthrough.
    false-success bugs (consultation "success" on server failure, invite
    "Invitation sent" when nothing sent, quote wizard's blank success screen).
 6. **WP13** — deferred indefinitely (see above). Not scheduled.
+
+---
+
+# Handoff, 2026-07-16 (end of session 1)
+
+## Where things stand
+
+Everything below WP1 through WP14 in this document has shipped and is deployed
+except the deferred security work (WP13). The live demo is
+https://myprosource.netlify.app, `main` auto-deploys, and the repo is public
+(github.com/LordMangiore/MyPS). `.env` is correctly gitignored: no credential has
+ever been committed, and a scan runs before each push.
+
+## The three demo accounts
+
+The landing page has three demo sign-in buttons. Each is a real, persistent
+account with a deterministic userId (`"ps-" + email.replace(/[^a-z0-9]/g,'-')`):
+
+| Button | Person | userId | userType |
+|---|---|---|---|
+| Demo: Skip Signup | Justin Reyes | ps-demo-prosource-com | tradepro |
+| Account manager | Tessa Brandt | ps-tessa-brandt-prosource-com | accountmanager |
+| Homeowner | Alicia Navarro | ps-alicia-navarro-email-com | homeowner |
+
+## Rules that are load-bearing. Break these and the demo breaks subtly
+
+1. **Nothing you can sign in AS may be an AI persona.** The six personas (Kim
+   Marks, Denise Okafor, Heather Yager, Bubba Beans, Sarah Chen, Ryan O'Toole)
+   are answered by the model in their own voice. If an account you sign into is
+   also a persona, the bot answers as her while you type as her. `twilio-client`
+   matches demo contacts BY NAME, so a name collision alone triggers it.
+2. **Bump `TWILIO_SEED_VERSION` whenever demo conversation copy changes.**
+   Seeding is version-gated now, and skipping the seed also skips the
+   conversation copy refresh, so a copy change silently never reaches Twilio.
+   This has already burned us once: em dashes removed from this repo stayed live
+   in Twilio because attributes were frozen at creation.
+3. **Seed markers are versioned, not booleans, and are checked against reality.**
+   Re-seeding used to be self-healing; a naive flag throws that away. The blob
+   marker is checked against the keys that exist; the Twilio marker is checked by
+   the client against the identities that actually arrived, and forces a real
+   seed when the marker is lying.
+4. **An account manager is a default owner on member ACCOUNTS, not projects.**
+   Her projects view must never filter by project `team`: the seeded teams carry
+   Kim Marks (a persona), not Tessa, so a team filter renders nothing.
+5. **Money: null means "not priced yet", 0 means "free".** An unpriced quote
+   renders "To be quoted", never "$0.00".
+6. **Tailwind's preflight sets `svg { display: block }`,** so `textAlign:
+   'center'` cannot centre an icon. Flex-centre the container. This has caused
+   three separate bugs.
+7. **RESEND_API_KEY is live** and `netlify dev` injects it from the Netlify site
+   settings even though `.env` comments it out. Any "test" invite or OTP emails a
+   real person. The OTP dev bypass is NOT active.
+
+## Known seams, accepted deliberately
+
+- The members' assigned account manager is Kim Marks (a persona, so their
+  conversations get AI replies), while the account manager you sign in as is
+  Tessa (a human account). Both facts are load-bearing; do not "reconcile" them.
+- An account manager still sees some member chrome after sign-in (the app is
+  member-shaped). Her real surfaces are /am and /projects.
+- Whole-blob read-modify-write races (WP14) remain. This is the one thing a real
+  database would fix; Railway/Postgres was discussed for exactly this.
+
+## In flight at handoff
+
+One agent is building an AI cast per demo account: AI members for Tessa (a
+`demoIdentity` so they talk back, plus a real seeded `userId` so they have
+projects she can open), and a homeowner-appropriate cast for Alicia (her AM,
+designer, installer, rather than the other homeowners she has today). Justin's
+six threads must be unchanged: that is the regression that matters.
+
+## Still open
+
+WP11 (per-user public profiles; connection cards have no per-user profile to link
+to), WP12 (consultation wizard reports success even when the server rejects; the
+appointment modal is fully mocked and notifies nobody), WP6 leftovers
+(Inspiration Board, Attach File, Quick Actions are inert placeholders), WP13
+(security, deferred by decision).
