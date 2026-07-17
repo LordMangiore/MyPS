@@ -96,8 +96,15 @@ const fetchTokenInfo = async (userId) => {
  * omitted when unknown, because the server resolves it from the userId anyway
  * and its answer is the better one: the session only carries a copy of what the
  * server already knows. Passing it is for the caller that has it to hand.
+ *
+ * `force` tells the server to ignore its seed marker and do the work. Only sent
+ * from the drift check in initTwilioClient, which is the one place that can see
+ * the marker is wrong.
+ *
+ * Returns the server's reply, which carries `skipped: true` when the marker
+ * answered and nothing was actually verified against Twilio.
  */
-const seedDemoConversations = async (userId, projectIds = {}, userType) => {
+const seedDemoConversations = async (userId, projectIds = {}, userType, force = false) => {
   try {
     const res = await fetch('/api/twilio-conversations', {
       method: 'POST',
@@ -107,6 +114,7 @@ const seedDemoConversations = async (userId, projectIds = {}, userType) => {
         userId,
         projectIds,
         ...(userType ? { userType } : {}),
+        ...(force ? { force: true } : {}),
       }),
     });
     return await res.json();
@@ -350,15 +358,72 @@ export async function initTwilioClient({
     return threads;
   };
 
-  let threads = await loadAllThreads();
+  // Which conversations the server says this user's seed created. On the skip
+  // path the server replays these from its marker without looking at Twilio, so
+  // this is precisely the claim the marker is making and the claim we are about
+  // to check for free.
+  const seededIdentities = (seedResult.conversations || [])
+    .map((c) => c?.identity)
+    .filter(Boolean);
 
-  // The client can report an empty conversation list for a beat after
-  // 'initialized' while the initial sync is still landing. Observed live: the
-  // page rendered a false "No conversations yet" on a fast reload. Retry
-  // briefly before believing that the account really has no threads.
-  for (let attempt = 0; attempt < 6 && threads.length === 0; attempt++) {
-    await new Promise((r) => setTimeout(r, 400));
-    threads = await loadAllThreads();
+  /**
+   * How many of the seeded conversations we are not actually subscribed to.
+   * Zero is the healthy answer.
+   *
+   * By identity rather than by count: a thread the user started by hand from
+   * Connections is a real conversation and pads the count, so counting alone
+   * would let a missing seeded thread hide behind one the user opened
+   * themselves. Comparing identities cannot be fooled that way, and a user with
+   * MORE threads than the seed made is simply healthy.
+   *
+   * When the server told us nothing about what it seeded (a marker written
+   * before this field existed), fall back to the emptiness check this replaced.
+   */
+  const missingSeededCount = (loaded) => {
+    if (!seededIdentities.length) return loaded.length ? 0 : 1;
+    const have = new Set(loaded.map((t) => t.counterpartyIdentity).filter(Boolean));
+    return seededIdentities.filter((id) => !have.has(id)).length;
+  };
+
+  const loadThreadsSettled = async () => {
+    let loaded = await loadAllThreads();
+    // The client can report an empty or partial conversation list for a beat
+    // after 'initialized' while the initial sync is still landing. Observed
+    // live: the page rendered a false "No conversations yet" on a fast reload.
+    // Retry briefly before believing what we see. Costs nothing once everything
+    // has arrived, because then there is nothing missing to wait for.
+    for (let attempt = 0; attempt < 6 && missingSeededCount(loaded); attempt++) {
+      await new Promise((r) => setTimeout(r, 400));
+      loaded = await loadAllThreads();
+    }
+    return loaded;
+  };
+
+  let threads = await loadThreadsSettled();
+
+  // The way back from a lying marker.
+  //
+  // The server skips its seed on a version marker, which it has to trust blind:
+  // checking it against Twilio would cost exactly the round trips the marker
+  // exists to save. Here it is free. We are subscribed to this user's
+  // conversations already, so we can just look, and a seeded conversation that
+  // is not among them, against a marker swearing it was created, is drift: the
+  // blob survived something the conversations did not (deleted in the Twilio
+  // console, a different Conversations service, an account swap). Left alone it
+  // is a Messages page missing threads that no amount of reloading repairs,
+  // which is exactly the trap the old re-seed-every-time was paying to avoid.
+  //
+  // Gated on `skipped` on purpose. If the server really did do the work and a
+  // conversation still is not here, seeding harder will not help: that is Twilio
+  // failing, not a stale marker, and the honest fallback is what we have rather
+  // than a loop.
+  const missing = missingSeededCount(threads);
+  if (missing && seedResult.skipped) {
+    console.warn(
+      `Twilio seed marker claims ${seededIdentities.length} conversation(s), ${missing} did not arrive: reseeding.`
+    );
+    const forced = await seedDemoConversations(userId, projectIds, userType, true);
+    if (forced.enabled !== false) threads = await loadThreadsSettled();
   }
 
   const refresh = async () => {

@@ -1,3 +1,4 @@
+import { getStore } from "@netlify/blobs";
 import {
   TWILIO_ENABLED,
   getRestClient,
@@ -7,6 +8,8 @@ import {
   AM_SELF,
   AM_THREAD_SCRIPT,
   DEMO_ACCOUNT_USER_ID,
+  TWILIO_SEED_VERSION,
+  twilioSeedMarkerKey,
 } from "./lib/seed.mjs";
 
 /**
@@ -16,10 +19,15 @@ import {
  *   → list this user's conversations from Twilio (live data, no blob)
  *
  * POST /api/twilio-conversations
- *   body: { action: "seed", userId, userType?, projectIds? }
+ *   body: { action: "seed", userId, userType?, projectIds?, force? }
  *     → idempotently create the demo conversations this user should actually
  *       have. A member (trade pro, homeowner) gets the six demo personas; an
  *       account manager gets her own members. See resolveUserType.
+ *       Runs on every Messages init and blocks before the SDK connects, so it
+ *       skips out at a version marker once it has nothing left to do. `force`
+ *       ignores the marker: the client sends it when it can SEE the marker is
+ *       lying, because a conversation the marker claims to have created is not
+ *       among the ones it is subscribed to. See TWILIO_SEED_VERSION.
  *
  *   body: { action: "create", userId, otherIdentity, friendlyName?, attributes? }
  *     → create / find a 1:1 conversation between two identities
@@ -206,6 +214,41 @@ const resolveUserType = (claimed, userId) =>
  */
 const AM_SEED_MARKER = "am";
 
+/**
+ * Where the "I have already seeded this user's conversations" marker lives.
+ *
+ * In blobs rather than in Twilio, because the whole point is to answer without
+ * talking to Twilio: a marker kept in conversation attributes would cost the
+ * fetch it exists to avoid. Same store and key convention as the rest of the
+ * demo's per-user data, so demo-session.mjs's ?reset=1 clears it alongside
+ * everything else (see seedMarkerKeys in lib/seed.mjs).
+ */
+const markerStore = () => getStore({ name: "ps-user-data", consistency: "strong" });
+
+/**
+ * What the seed plan depends on besides its own script, as one comparable string.
+ *
+ * A member's conversation attributes carry the projectId of the job each thread
+ * is about, and those ids are minted by lib/seed.mjs when the projects blob is
+ * written, so they change if that blob is ever re-seeded. A marker that only knew
+ * the version would then keep the old ids stamped on the conversations and leave
+ * every thread pointing at a project that no longer exists. Recording what the
+ * plan was built from closes that: different ids, different fingerprint, real
+ * seed, and refreshConversationCopy writes the new ones.
+ *
+ * Taken from the plan rather than from the request, because an account manager's
+ * plan reads no project ids at all: her threads are about her members' jobs, not
+ * hers, and amSeedPlan stamps projectId: null on every one. Fingerprinting the
+ * ids she happened to be handed would re-seed her whenever a project blob she
+ * does not use changed, which is a needless round trip to Twilio and a claim
+ * that her conversations depend on something they do not.
+ */
+const planFingerprint = (plan) =>
+  plan
+    .map((entry) => `${entry.identity}=${entry.attributes?.projectId ?? ""}`)
+    .sort()
+    .join("|");
+
 const attributesOf = (convo) => {
   try {
     return JSON.parse(convo?.attributes || "{}") || {};
@@ -380,16 +423,54 @@ export default async function handler(req) {
     const { action } = body;
 
     if (action === "seed") {
-      const { userId, userType, projectIds = {} } = body;
+      const { userId, userType, projectIds = {}, force = false } = body;
       if (!userId) {
         return Response.json({ error: "userId required" }, { status: 400 });
       }
 
       const resolvedType = resolveUserType(userType, userId);
       const isAccountManager = resolvedType === "accountmanager";
+      // Built before the marker is consulted because the fingerprint is taken
+      // from it. Costs nothing: building a plan is pure, it is the Twilio calls
+      // further down that are worth skipping.
       const plan = isAccountManager
         ? amSeedPlan(userId)
         : memberSeedPlan(projectIds);
+      const store = markerStore();
+      const markerKey = twilioSeedMarkerKey(userId);
+      const fingerprint = planFingerprint(plan);
+
+      // Everything below is REST calls to Twilio re-verifying conversations that
+      // already exist, on every single open of the Messages page, in front of a
+      // user watching a spinner. One blob read answers "already done" instead.
+      //
+      // The marker is trusted here and nowhere else: this endpoint cannot check
+      // it against reality without the fetches it is trying to skip. The client
+      // does that check instead, for free, because it subscribes to these
+      // conversations anyway and can see which ones actually arrived. That is why
+      // `conversations` is echoed back even on this path: it is the claim the
+      // client checks. Anything the marker names and the client cannot see is
+      // drift, and it comes straight back with force. See initTwilioClient in
+      // src/twilio-client.js.
+      if (!force) {
+        const marker = await store.get(markerKey, { type: "json" }).catch(() => null);
+        if (
+          marker &&
+          marker.version === TWILIO_SEED_VERSION &&
+          marker.userType === resolvedType &&
+          marker.plan === fingerprint
+        ) {
+          return Response.json({
+            enabled: true,
+            userType: resolvedType,
+            skipped: true,
+            version: TWILIO_SEED_VERSION,
+            // What the last real seed created, replayed from the marker rather
+            // than read back from Twilio: not reading Twilio is the point.
+            conversations: marker.conversations || [],
+          });
+        }
+      }
 
       // Retire whatever the old scheme left behind before seeding the real
       // threads, so she isn't holding both.
@@ -447,9 +528,22 @@ export default async function handler(req) {
         })
       );
 
+      // Only once the conversations are actually there. A throw on the way here
+      // skips this, leaving the account unmarked and the next open seeding it
+      // again, which is the direction to fail in.
+      await store.setJSON(markerKey, {
+        version: TWILIO_SEED_VERSION,
+        userType: resolvedType,
+        plan: fingerprint,
+        conversations: created,
+        seededAt: Date.now(),
+      });
+
       return Response.json({
         enabled: true,
         userType: resolvedType,
+        skipped: false,
+        version: TWILIO_SEED_VERSION,
         conversations: created,
       });
     }

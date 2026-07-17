@@ -4,6 +4,11 @@ import { getStore } from "@netlify/blobs";
  * Seed a brand-new user's blob with sample data so the demo looks populated
  * the moment they finish signup. Safe to call multiple times: only writes if
  * the key is empty.
+ *
+ * Called on every sign-in, so from the second call onwards it usually stops
+ * early: a version marker records what was already seeded, and a cheap check
+ * against reality decides whether to trust it. See SEED_VERSION and
+ * seededContentIsIntact.
  */
 
 const days = (n) => 24 * 60 * 60 * 1000 * n;
@@ -636,6 +641,28 @@ const buildRequestedQuote = (now, displayName, showroom) => ({
   ],
 });
 
+// The showroom whose queue the seeded quote lands on. One constant because two
+// things now depend on the same answer: the enqueue below, and the check that
+// decides whether a marked-as-seeded account can skip it.
+const SEED_QUEUE_SHOWROOM = "st-louis";
+
+/**
+ * Read the showroom's work queue, or null if it cannot be read.
+ *
+ * Null is deliberately distinct from an empty queue: empty means "no work is
+ * outstanding", null means "we do not know", and only one of those is safe to
+ * treat as a reason to skip seeding.
+ */
+const readSeedQueue = async () => {
+  try {
+    const { readQueueFor } = await import("../am-queue.mjs");
+    return await readQueueFor(SEED_QUEUE_SHOWROOM);
+  } catch (err) {
+    console.warn("readSeedQueue failed:", err.message);
+    return null;
+  }
+};
+
 /**
  * Put any seeded unpriced quote on the showroom's work queue.
  *
@@ -649,22 +676,33 @@ const buildRequestedQuote = (now, displayName, showroom) => ({
  * and a duplicate row for the same quote would be a bug the AM would see.
  * Best-effort: a queue failure must never take seeding down, because the member's
  * own data is the more important half.
+ *
+ * Returns the doc ids that are confirmed on the queue afterwards, or null if the
+ * queue could not be reached. The caller records the ids on the seed marker and
+ * writes no marker at all on null, so a queue this failed to populate is retried
+ * on the next sign-in rather than skipped forever. An empty array is a real
+ * answer: nothing was pending, which is what an account looks like once the
+ * account manager has priced the quote.
  */
 const enqueueSeededQuotes = async (userId, orders, now, memberName) => {
-  try {
-    const { enqueueItem, readQueueFor } = await import("../am-queue.mjs");
-    const pending = (orders?.list || []).filter((d) => d?.status === "requested");
-    if (!pending.length) return;
+  const pending = (orders?.list || []).filter((d) => d?.status === "requested");
+  if (!pending.length) return [];
 
-    const showroomId = "st-louis";
-    const existing = await readQueueFor(showroomId).catch(() => []);
+  try {
+    const { enqueueItem } = await import("../am-queue.mjs");
+    const existing = await readSeedQueue();
+    if (!existing) return null;
     const already = new Set(existing.map((i) => i?.docId).filter(Boolean));
 
+    const confirmed = [];
     for (const doc of pending) {
-      if (already.has(doc.id)) continue;
+      if (already.has(doc.id)) {
+        confirmed.push(doc.id);
+        continue;
+      }
       await enqueueItem({
         type: "quote",
-        showroomId,
+        showroomId: SEED_QUEUE_SHOWROOM,
         memberUserId: userId,
         // The account manager needs a person's name here. The document's own
         // `soldTo` is written from the member's point of view ("YOU"), which is
@@ -677,9 +715,12 @@ const enqueueSeededQuotes = async (userId, orders, now, memberName) => {
         itemCount: (doc.lineItems || []).length || null,
         submittedAt: doc.submittedAt || doc.orderDateTs || now,
       });
+      confirmed.push(doc.id);
     }
+    return confirmed;
   } catch (err) {
     console.warn("enqueueSeededQuotes failed:", err.message);
+    return null;
   }
 };
 
@@ -1778,6 +1819,137 @@ const DEFAULT_PERSONA = 'tradepro';
 
 const blobKey = (userId, key) => `${userId}::${key}`;
 
+// ===========================================================================
+// Seed markers: how a re-seed knows it has nothing left to do
+// ===========================================================================
+
+/**
+ * The version of the content THIS FILE seeds into per-user blobs.
+ *
+ * BUMP THIS whenever the seeded data changes in a way an already-seeded account
+ * should pick up: a new key, a new document in a persona's orders, a new seeded
+ * thread, a new persona world. The marker records the version that produced an
+ * account's data, so a bump makes the next sign-in run the seed again instead of
+ * believing the marker.
+ *
+ * What a bump does NOT do: rewrite a key that already has data in it. The seed's
+ * rule has always been "write a key only when it is empty", because everything
+ * the demo has been clicked into lives in those same keys, and that rule is
+ * older than this marker and unchanged by it. A bump re-runs the repair passes
+ * (fill any key that is missing, replace a legacy orders blob,
+ * ensureRequestedQuote, the work queue) and fills keys that did not exist
+ * before. Rewording copy inside a key that is already populated is still only
+ * reachable by ?reset=1, exactly as it was before the marker existed.
+ */
+export const SEED_VERSION = 1;
+
+/**
+ * The version of the demo conversations seeded into TWILIO.
+ *
+ * Separate from SEED_VERSION because it versions a different store with a
+ * different repair story, and it is load-bearing in a way SEED_VERSION is not.
+ * twilio-conversations.mjs skips its seed when this marker is current, and that
+ * seed is the only thing that runs `ensureConversation` ->
+ * `refreshConversationCopy`, which is the one path in this codebase that can
+ * update the friendlyName and attributes of a conversation already live in
+ * Twilio.
+ *
+ * So: BUMP THIS whenever the conversation copy changes. That means DEMO_DETAILS
+ * in twilio-conversations.mjs, AM_THREAD_SCRIPT in this file, or any of the
+ * names, roles, or attributes either of them writes. Skip the bump and the
+ * refresh never runs for accounts that already exist, the rewritten copy never
+ * reaches the live demo, and we are back in exactly the trap
+ * refreshConversationCopy was added to escape.
+ */
+export const TWILIO_SEED_VERSION = 1;
+
+/**
+ * Where the markers live: the same per-user store and the same `${userId}::`
+ * convention as the data they describe, so one `list` of that prefix sees both
+ * the marker and the keys it vouches for.
+ *
+ * Deliberately not in user-data.mjs's ALLOWED_KEYS: these are the server's own
+ * bookkeeping, and a client that could write them could tell the seed to skip.
+ */
+export const seedMarkerKey = (userId) => blobKey(userId, "seed-marker");
+export const twilioSeedMarkerKey = (userId) => blobKey(userId, "twilio-seed-marker");
+
+/**
+ * Both markers, for ?reset=1 to clear. A reset that left a marker behind would
+ * leave it swearing an account is seeded that has just been wiped, which is the
+ * exact drift this whole design exists to avoid.
+ */
+export const seedMarkerKeys = (userId) => [
+  seedMarkerKey(userId),
+  twilioSeedMarkerKey(userId),
+];
+
+// Every key a world can seed. The marker records which of these an account was
+// actually given (a persona with a null builder owns nothing under that key), so
+// a missing one can be spotted without reading any of them.
+const SEEDED_KEYS = [
+  "projects",
+  "messages",
+  "carts",
+  "appointments",
+  "orders",
+  "connections",
+];
+
+const keysForWorld = (world) => SEEDED_KEYS.filter((key) => !!world[key]);
+
+/**
+ * Is this account already seeded with the current content, and is that content
+ * still actually there?
+ *
+ * The marker alone is not enough to answer that. A marker that says "done" while
+ * the data has been wiped pins the demo to an empty app forever, and no amount
+ * of signing in repairs it. Re-seeding every time was slow precisely because it
+ * was self-healing, and that property is worth keeping. So the marker is checked
+ * against reality, cheaply:
+ *
+ *   • one `list` of the user's own key prefix. It returns key names and etags,
+ *     never payloads, so it costs one request instead of six reads of the
+ *     largest JSON documents in the account.
+ *   • the account manager's work queue lives in a different store and cannot be
+ *     seen from that list, so it is read directly, and only when the marker says
+ *     this account put something on it. An empty work queue was a real reported
+ *     bug and is not something to leave to a flag.
+ *
+ * Anything that cannot be proved is treated as not seeded. The cost of a
+ * needless seed is a slow sign-in; the cost of a wrong skip is a broken demo.
+ */
+const seededContentIsIntact = async (store, userId, personaKey, expectedKeys) => {
+  const [marker, listing] = await Promise.all([
+    store.get(seedMarkerKey(userId), { type: "json" }).catch(() => null),
+    store.list({ prefix: `${userId}::` }).catch(() => null),
+  ]);
+
+  if (!marker) return false;
+  if (marker.version !== SEED_VERSION) return false;
+  // A marker written by a different world describes different keys, so it cannot
+  // vouch for this one.
+  if (marker.persona !== personaKey) return false;
+  // Could not see reality: do not guess, seed.
+  if (!listing) return false;
+
+  const present = new Set((listing.blobs || []).map((b) => b.key));
+  if (!expectedKeys.every((key) => present.has(blobKey(userId, key)))) return false;
+
+  const queuedDocIds = Array.isArray(marker.queuedDocIds) ? marker.queuedDocIds : [];
+  if (queuedDocIds.length) {
+    const queue = await readSeedQueue();
+    if (!queue) return false;
+    // By document id and not by status, matching enqueueSeededQuotes: a quote the
+    // account manager has since priced is still on the queue as handled, and is
+    // not work that went missing.
+    const onQueue = new Set(queue.map((item) => item?.docId).filter(Boolean));
+    if (!queuedDocIds.every((id) => onQueue.has(id))) return false;
+  }
+
+  return true;
+};
+
 /**
  * Seed a new user. Writes each key only if it is currently empty so re-running
  * doesn't clobber edits.
@@ -1785,13 +1957,30 @@ const blobKey = (userId, key) => `${userId}::${key}`;
  * `persona` picks which world to seed. It defaults to 'tradepro', which is the
  * only world that existed before and is what otp-verify.mjs still asks for by
  * calling this with one argument.
+ *
+ * `force` skips the marker and goes and looks. It means "do not trust the
+ * bookkeeping", not "rebuild": the write-only-if-empty rule still holds, so a
+ * forced seed fills what is missing and leaves what is there. Throwing data away
+ * is ?reset=1's job and only ?reset=1's job.
+ *
+ * Returns { seeded, skipped } so a caller can tell a real seed from a marker
+ * hit. Never throws: a demo sign-in must not fail because seeding did.
  */
-export async function seedNewUser(userId, persona = DEFAULT_PERSONA) {
-  if (!userId) return;
+export async function seedNewUser(userId, persona = DEFAULT_PERSONA, { force = false } = {}) {
+  if (!userId) return { seeded: false, skipped: false };
   try {
-    const world = WORLD_BY_PERSONA[persona] || WORLD_BY_PERSONA[DEFAULT_PERSONA];
+    const personaKey = WORLD_BY_PERSONA[persona] ? persona : DEFAULT_PERSONA;
+    const world = WORLD_BY_PERSONA[personaKey];
     const store = getStore({ name: "ps-user-data", consistency: "strong" });
     const now = Date.now();
+    const expectedKeys = keysForWorld(world);
+
+    // The whole point of the marker: on an account that has signed in before,
+    // this is two cheap requests and we are done, instead of six reads of every
+    // seeded blob plus a queue round trip.
+    if (!force && (await seededContentIsIntact(store, userId, personaKey, expectedKeys))) {
+      return { seeded: false, skipped: true, version: SEED_VERSION };
+    }
 
     const projectsKey = blobKey(userId, "projects");
     const messagesKey = blobKey(userId, "messages");
@@ -1874,6 +2063,11 @@ export async function seedNewUser(userId, persona = DEFAULT_PERSONA) {
     // the user's approvals and payments live in it and we never touch it again.
     const ordersAreLegacy =
       existingOrders && existingOrders?.value?.schemaVersion !== ORDERS_SCHEMA_VERSION;
+    // What the marker will claim this account has put on the work queue, and
+    // whether the queue could be reached at all. Recorded so a later sign-in can
+    // check the queue is genuinely still populated before skipping the enqueue.
+    let queuedDocIds = [];
+    let queueReached = true;
     if (world.orders) {
       let orders;
       if (!existingOrders || ordersAreLegacy) {
@@ -1891,14 +2085,35 @@ export async function seedNewUser(userId, persona = DEFAULT_PERSONA) {
       // Outside the seeding branch on purpose: the queue lives in its own store,
       // so an account seeded before the queue existed still needs its pending
       // work put in front of an account manager. Idempotent by document id.
-      await enqueueSeededQuotes(userId, orders, now, world.displayName);
+      const confirmed = await enqueueSeededQuotes(userId, orders, now, world.displayName);
+      if (confirmed === null) queueReached = false;
+      else queuedDocIds = confirmed;
     }
 
     if (!existingConns && world.connections) {
       const conns = world.connections(projectList);
       await store.setJSON(connectionsKey, { value: conns, updatedAt: now });
     }
+
+    // Last, and only once everything above has actually landed. Anything that
+    // threw on the way here skips this, so the account stays unmarked and the
+    // next sign-in seeds it again: a half-seeded account with no marker is
+    // repairable, a half-seeded account with one is not.
+    if (queueReached) {
+      await store.setJSON(seedMarkerKey(userId), {
+        version: SEED_VERSION,
+        persona: personaKey,
+        // Not the key list: the version already pins which world wrote this, so
+        // the reader recomputes the expected keys from that world rather than
+        // trusting a list the marker carries about itself.
+        queuedDocIds,
+        seededAt: now,
+      });
+    }
+
+    return { seeded: true, skipped: false, version: SEED_VERSION };
   } catch (err) {
     console.warn("seedNewUser failed:", err.message);
+    return { seeded: false, skipped: false, error: err.message };
   }
 }

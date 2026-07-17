@@ -1,5 +1,5 @@
 import { getStore } from "@netlify/blobs";
-import { seedNewUser } from "./lib/seed.mjs";
+import { seedNewUser, seedMarkerKeys } from "./lib/seed.mjs";
 
 /**
  * Sign in to one of the pre-seeded demo accounts. This is the backend for the
@@ -9,6 +9,7 @@ import { seedNewUser } from "./lib/seed.mjs";
  * POST /api/demo-session { persona: 'am' }        → the account manager's account
  * POST /api/demo-session { persona: 'homeowner' } → the homeowner's account
  * POST /api/demo-session?reset=1                  → wipe that persona's data first, then reseed
+ * POST /api/demo-session?force=1                  → reseed without trusting the seed marker
  *
  * Three personas, so the same app can be shown from all three sides of a job:
  *
@@ -44,6 +45,14 @@ import { seedNewUser } from "./lib/seed.mjs";
  * Persistence is the whole point: an account is seeded only where a blob key is
  * still empty (seedNewUser's contract), so a scenario set up on one click is
  * still there on the next. Only ?reset=1 throws data away.
+ *
+ * And because the accounts persist, seeding them again on every click was work
+ * with nothing to show for it. seedNewUser now marks an account once it has
+ * seeded it and checks that marker against reality on the way in, so the common
+ * case (an account that already exists and is intact) costs two cheap requests
+ * instead of reading every seeded blob. ?force=1 seeds without trusting the
+ * marker; ?reset=1 wipes the data AND the marker, so the reseed after it is a
+ * genuine first seed.
  *
  * Demo only. No auth check.
  */
@@ -320,12 +329,22 @@ const resolvePersona = (key) => PERSONAS[key] || PERSONAS[DEFAULT_PERSONA];
 
 const blobKey = (userId, key) => `${userId}::${key}`;
 
-/** Throw away everything one demo account owns so the next seed is pristine. */
+/**
+ * Throw away everything one demo account owns so the next seed is pristine.
+ *
+ * The seed markers go with the data they describe. They are listed separately
+ * from DEMO_DATA_KEYS on purpose: that list mirrors user-data.mjs's ALLOWED_KEYS
+ * and is the data the app itself reads and writes, whereas the markers are the
+ * seed's own bookkeeping and no client can touch them. Miss them here and a
+ * reset would hand back a wiped account with a marker still swearing it was
+ * seeded, which is the one state this whole design is built to prevent.
+ */
 const wipeDemoAccount = async (userId) => {
   const data = getStore({ name: "ps-user-data", consistency: "strong" });
-  await Promise.all(
-    DEMO_DATA_KEYS.map((key) => data.delete(blobKey(userId, key)).catch(() => {}))
-  );
+  await Promise.all([
+    ...DEMO_DATA_KEYS.map((key) => data.delete(blobKey(userId, key)).catch(() => {})),
+    ...seedMarkerKeys(userId).map((key) => data.delete(key).catch(() => {})),
+  ]);
   const users = getStore({ name: "ps-users", consistency: "strong" });
   await users.delete(userId).catch(() => {});
 };
@@ -397,8 +416,16 @@ export default async function handler(req) {
 
   try {
     const url = new URL(req.url);
-    const resetParam = url.searchParams.get("reset");
-    const reset = resetParam === "1" || resetParam === "true";
+    const flag = (name) => {
+      const raw = url.searchParams.get(name);
+      return raw === "1" || raw === "true";
+    };
+    const reset = flag("reset");
+    // "Do not trust the seed marker, go and look." The way back if a marker ever
+    // disagrees with reality in a way the seed's own check does not catch. Reset
+    // implies it: the wipe takes the marker with it, so the seed that follows has
+    // nothing to trust anyway.
+    const force = flag("force");
 
     // GET has no body, and a body-less POST is the original call: both land on
     // the default persona.
@@ -436,16 +463,24 @@ export default async function handler(req) {
     // Idempotent by design: seedNewUser writes a key only when it's empty, so
     // this fills in whatever is missing (first ever click, or a half-created
     // account from a failed seed) and never touches data that's already there.
-    await seedNewUser(userId, persona.seed);
+    // On an account that already exists it stops at its marker, so the cost of
+    // asking is two cheap requests rather than a re-read of the whole world.
+    await seedNewUser(userId, persona.seed, { force });
 
     // Seed the personas this one is meaningless without (see `alsoSeed`).
     // Best effort: this persona's own sign-in must not fail because a related
     // demo account could not be set up.
+    //
+    // Still one at a time, now that each one is cheap. They look independent,
+    // but a world carrying an unpriced quote enqueues onto ONE shared blob
+    // (`queue/st-louis`) with a read-modify-write, and only the trade pro
+    // carries one today. Running them together would buy a few tens of
+    // milliseconds and leave a race for whoever adds a second such world.
     for (const other of persona.alsoSeed || []) {
       const spec = PERSONAS[other];
       if (!spec) continue;
       try {
-        await seedNewUser(userIdForEmail(spec.email), spec.seed);
+        await seedNewUser(userIdForEmail(spec.email), spec.seed, { force });
       } catch (err) {
         console.warn(`alsoSeed ${other} failed:`, err.message);
       }
@@ -463,6 +498,7 @@ export default async function handler(req) {
       success: true,
       demo: true,
       reset,
+      force,
       // Echoed back so the caller can tell which account it actually got when
       // it asked for a persona this endpoint does not know.
       persona: personaKey in PERSONAS ? personaKey : DEFAULT_PERSONA,
