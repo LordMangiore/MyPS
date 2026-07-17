@@ -29,7 +29,9 @@ import {
   Edit2,
   Trash2,
   ArrowRight,
-  User
+  User,
+  Eye,
+  AlertCircle
 } from 'lucide-react';
 import {
   DEFAULT_PROJECT,
@@ -47,6 +49,7 @@ import {
   removeProductAt,
   countProductsInRoom,
 } from './project-model';
+import { readUserBlob, loadMemberProjects } from './member-access';
 import { customerStatusLabel, statusTone, statusIcon } from './order-status';
 import {
   useOrders,
@@ -209,7 +212,7 @@ const pickResponder = (message, candidates, preferredName = null) => {
 };
 
 export default function ProjectDetailPage() {
-  const { loadUserData, saveUserData, userId, userName, accountManager, showrooms } = useAuth();
+  const { loadUserData, saveUserData, userId, userName, userType, accountManager, showrooms } = useAuth();
   // Estimates & Orders tab. Reads the same `orders` blob as /orders. Seeded
   // documents already carry a projectId, it just had nothing reading it.
   const {
@@ -221,6 +224,34 @@ export default function ProjectDetailPage() {
   // ?tab=products lets the shop's save-to-project flow land on the right tab.
   const [searchParams] = useSearchParams();
   const requestedTab = searchParams.get('tab');
+
+  // -------- Whose project is this --------
+
+  /**
+   * A project id does not say whose it is.
+   *
+   * Ids are unique within an account, not across the app, and the record lives
+   * in one account's blob (`${userId}::projects`). For everyone who has ever
+   * opened this page that owner was implicitly the signed-in user, which is why
+   * `loadUserData` was enough. An account manager breaks that assumption: she
+   * owns no projects, and the ones she needs to read belong to her members.
+   *
+   * So the owner rides in the URL as `?owner=<userId>`, and the account manager's
+   * list is the only thing that produces such a link. No param means the old
+   * meaning exactly: this is mine. That keeps every member URL, bookmark and
+   * redirect working unchanged, and it survives a refresh, which a bit of
+   * router state handed over on navigation would not.
+   */
+  const ownerParam = searchParams.get('owner');
+  const ownerId = ownerParam || userId;
+  /**
+   * Viewing someone else's project. Note this is derived from the data, not from
+   * the role: an owner param naming yourself is still your own project, so a
+   * stray `?owner=` on a member's own URL cannot lock them out of their work.
+   */
+  const isGuest = !!ownerId && !!userId && ownerId !== userId;
+  const canEdit = !isGuest;
+  const isAccountManager = userType === 'accountmanager';
   const [activeTab, setActiveTab] = useState(
     TAB_IDS.includes(requestedTab) ? requestedTab : 'overview'
   );
@@ -241,25 +272,37 @@ export default function ProjectDetailPage() {
   // For new projects, jump straight into the rename flow so the user's first
   // action is giving the project a real name.
   useEffect(() => {
-    if (routeId === 'new') {
+    if (routeId === 'new' && canEdit) {
       setEditingTitle(true);
       setIsEditingDetails(true);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [routeId]);
+  }, [routeId, canEdit]);
 
   const [projectData, setProjectData] = useState(DEFAULT_PROJECT);
   const [projectList, setProjectList] = useState([]); // full collection
   const [loadedProject, setLoadedProject] = useState(false);
+
+  // A guest's read can genuinely fail (it is a bare fetch at another account's
+  // blob), and a failure is not an empty project. The member path cannot reach
+  // these: loadUserData swallows its own errors and always resolves.
+  const [loadError, setLoadError] = useState('');
+  const [notFound, setNotFound] = useState(false);
 
   // Load persisted projects on mount, hydrate the one matching the URL :id.
   // For /projects/new (or no id) we stay on defaults until first save.
   useEffect(() => {
     if (!userId) return;
     let cancelled = false;
-    loadUserData('projects', null).then((stored) => {
+    setLoadError('');
+    setNotFound(false);
+    // The owner's blob, which for everyone but a guest is the signed-in user's,
+    // read through the same helper it always was.
+    const read = isGuest
+      ? loadMemberProjects(ownerId)
+      : loadUserData('projects', null).then(normalizeStored);
+    read.then((list) => {
       if (cancelled) return;
-      const list = normalizeStored(stored);
       setProjectList(list);
       if (projectId) {
         const match = list.find((p) => p.id === projectId);
@@ -272,16 +315,27 @@ export default function ProjectDetailPage() {
           // status-effect run sees no diff and doesn't re-save with stale state
           // (which used to wipe out team[] before the team effect could hydrate).
           lastPersistedStatus.current = { status: status || 'working', archived: !!arch };
+        } else if (isGuest || isAccountManager) {
+          // "Not found" is the honest answer here, and the only safe one. The
+          // member fallback below turns an unresolved id into a brand-new draft,
+          // which for an account manager would offer to create a project on an
+          // account that holds none: an empty form where a colleague's job
+          // should be. She reads projects, she does not start them.
+          setNotFound(true);
         } else {
           // Bad id, so fall back to "new" behavior
           setProjectId(null);
         }
       }
       setLoadedProject(true);
+    }).catch((err) => {
+      if (cancelled) return;
+      setLoadError(err.message || 'Could not load this project');
+      setLoadedProject(true);
     });
     return () => { cancelled = true; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userId, projectId]);
+  }, [userId, projectId, ownerId, isGuest]);
 
   // -------- Showroom --------
 
@@ -327,8 +381,19 @@ export default function ProjectDetailPage() {
     return { id, updatedList };
   };
 
+  /**
+   * Every write below refuses when the viewer is a guest.
+   *
+   * The affordances that call them are already hidden, so these guards should be
+   * unreachable. They are here because "should be" is doing a lot of work in
+   * that sentence: these functions write a whole `{ list }` blob back to an
+   * account, and a guest reaching one would not fail, it would succeed, and
+   * overwrite a member's projects with what a colleague happened to have on
+   * screen. The cost of being wrong is asymmetric, so the check sits at the
+   * write and not only at the button.
+   */
   const persistProject = async (next = projectData) => {
-    if (!userId) return;
+    if (!userId || !canEdit) return;
     setSaving(true);
     try {
       const { id, updatedList } = buildUpsertedList(next);
@@ -351,7 +416,7 @@ export default function ProjectDetailPage() {
   // so we don't echo the loaded values back as a save.
   const lastPersistedStatus = useRef({ status: null, archived: null });
   useEffect(() => {
-    if (!userId || !loadedProject) return;
+    if (!userId || !loadedProject || !canEdit) return;
     if (!projectId) return; // brand-new draft, let the explicit save handle it
     if (
       lastPersistedStatus.current.status === projectStatus &&
@@ -366,6 +431,7 @@ export default function ProjectDetailPage() {
   }, [projectStatus, archived, loadedProject]);
 
   const deleteProject = async () => {
+    if (!canEdit) return;
     if (!userId || !projectId) {
       navigate('/projects');
       return;
@@ -426,7 +492,33 @@ export default function ProjectDetailPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId]);
 
+  /**
+   * Who this project belongs to, resolved from the viewer's own connections:
+   * the owner param is a userId, and a connection carrying that userId is the
+   * name attached to it. A guest reaches this project through her connections
+   * in the first place, so the answer is already loaded.
+   */
+  const ownerConnection = useMemo(
+    () => connections.find((c) => c.userId && c.userId === ownerId) || null,
+    [connections, ownerId]
+  );
+
+  /**
+   * The name to put on this project's history and posts.
+   *
+   * Everything on this page that is not a persona was written by the person
+   * whose account holds the record, and the page used to be able to assume that
+   * was the reader ("You"). For a guest it is not: crediting a member's rooms,
+   * products and posts to the account manager reading them would be inventing a
+   * history that never happened. Falls back to a neutral label rather than a
+   * guess when the connection cannot be resolved.
+   */
+  const ownerName = isGuest
+    ? (ownerConnection?.name || 'This member')
+    : (userName || 'You');
+
   const persistTeam = async (nextTeam) => {
+    if (!canEdit) return;
     if (!userId || !projectId) {
       // No project saved yet, so keep changes local; first project save will
       // include the team via persistProject below.
@@ -501,14 +593,21 @@ export default function ProjectDetailPage() {
   useEffect(() => {
     if (!userId || !projectId) return;
     let cancelled = false;
-    loadUserData('discussions', null).then((stored) => {
+    // The thread belongs to the project, so it comes out of the project owner's
+    // blob. Reading the signed-in account's would show a guest her own empty
+    // discussions under someone else's project and call it "no comments yet",
+    // which is not a smaller truth, it is a false one.
+    const read = isGuest
+      ? readUserBlob(ownerId, 'discussions').catch(() => null)
+      : loadUserData('discussions', null);
+    read.then((stored) => {
       if (cancelled) return;
       const all = (stored && typeof stored === 'object') ? stored : {};
       setComments(Array.isArray(all[projectId]) ? all[projectId] : []);
     });
     return () => { cancelled = true; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userId, projectId]);
+  }, [userId, projectId, ownerId, isGuest]);
 
   // Switching projects (or leaving) invalidates any reply still in flight.
   useEffect(() => () => {
@@ -614,7 +713,7 @@ export default function ProjectDetailPage() {
 
   const postComment = async () => {
     const text = commentText.trim();
-    if (!text || !projectId) return;
+    if (!text || !projectId || !canEdit) return;
     setPostingComment(true);
     const isPrivate = commentIsPrivate;
     let posted = null;
@@ -665,6 +764,7 @@ export default function ProjectDetailPage() {
    * never been saved (no projectId) stay local, and persistProject picks them up.
    */
   const persistProjectFields = async (fields) => {
+    if (!canEdit) return;
     setProjectData((current) => ({ ...current, ...fields }));
     if (!userId || !projectId) return;
     try {
@@ -737,9 +837,11 @@ export default function ProjectDetailPage() {
    */
   const activity = useMemo(() => {
     const record = projectId ? projectList.find((p) => p.id === projectId) : null;
+    // The project owner, who is the reader unless they are a guest. Every event
+    // below is something the owner's account did.
     const me = {
-      name: userName || 'You',
-      initials: (userName || 'You').slice(0, 2).toUpperCase(),
+      name: ownerName,
+      initials: ownerName.slice(0, 2).toUpperCase(),
       type: 'tradepro',
     };
     const events = [];
@@ -797,7 +899,7 @@ export default function ProjectDetailPage() {
     }
 
     return events.filter((e) => e.ts).sort((a, b) => b.ts - a.ts);
-  }, [projectId, projectList, projectData, team, comments, userName]);
+  }, [projectId, projectList, projectData, team, comments, ownerName]);
 
   // Unread = activity since the last time this project's Activity tab was open.
   // (Previously a hardcoded literal 3, which was true of no project.)
@@ -822,14 +924,32 @@ export default function ProjectDetailPage() {
     return () => clearTimeout(t);
   }, [activeTab, activity, activitySeenAt, activitySeenKey]);
 
+  /**
+   * Estimates & Orders is dropped for a guest.
+   *
+   * Not because she should not see them (they are her job), but because this tab
+   * cannot show them: `useOrders` reads the SIGNED-IN account's orders blob, and
+   * an account manager's is empty. It would render "No Estimates or Orders Yet"
+   * over a project that may well have both, and then tell her to message her
+   * account manager, which is herself. A tab that is not there is a gap; a tab
+   * confidently reporting nothing is a lie. Pointing it at the owner's orders is
+   * a real feature (and the work queue is where that job already lives), so it
+   * is left out rather than half-built.
+   */
   const tabs = [
     { id: 'overview', label: 'Overview', icon: FileText },
     { id: 'products', label: 'Products', icon: ShoppingCart, count: products.length || null },
     { id: 'designs', label: 'Designs', icon: Palette },
     { id: 'photos', label: 'Photos', icon: Camera },
-    { id: 'estimates', label: 'Estimates & Orders', icon: FileText },
+    ...(isGuest ? [] : [{ id: 'estimates', label: 'Estimates & Orders', icon: FileText }]),
     { id: 'activity', label: 'Activity', icon: Bell, count: unreadActivity || null },
   ];
+
+  // ?tab=estimates is a real link the app sends itself. For a guest that tab
+  // does not exist, so land on Overview rather than on a page with no body.
+  useEffect(() => {
+    if (isGuest && activeTab === 'estimates') setActiveTab('overview');
+  }, [isGuest, activeTab]);
 
   const styles = {
     wrapper: {
@@ -855,6 +975,33 @@ export default function ProjectDetailPage() {
       alignItems: 'flex-start',
       flexWrap: 'wrap',
       gap: 12,
+    },
+    /** Whose project this is and what the reader may do with it, said up front. */
+    guestBanner: {
+      display: 'flex',
+      alignItems: 'flex-start',
+      gap: 10,
+      margin: '0 0 16px',
+      padding: '12px 14px',
+      background: '#e8effb',
+      border: `1px solid ${colors.darkBlue}`,
+      borderRadius: 6,
+      fontSize: 13,
+      color: colors.darkBlue,
+      lineHeight: 1.5,
+    },
+    readOnlyNote: {
+      display: 'flex',
+      alignItems: 'flex-start',
+      gap: 10,
+      marginBottom: 24,
+      padding: '12px 14px',
+      background: colors.gray100,
+      border: `1px solid ${colors.gray200}`,
+      borderRadius: 6,
+      fontSize: 13,
+      color: colors.gray700,
+      lineHeight: 1.5,
     },
     breadcrumb: {
       fontSize: 13,
@@ -1412,53 +1559,119 @@ export default function ProjectDetailPage() {
               : 'To be quoted'}
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, margin: '12px 0 10px' }}>
-          <button
-            style={styles.qtyBtn}
-            title="Decrease quantity"
-            onClick={() => changeProductQty(index, -1)}
-          ><Minus size={13} /></button>
-          <span style={{ minWidth: 28, textAlign: 'center', fontSize: 13, fontWeight: 600, color: colors.gray900 }}>
-            {product.qty || 1}
-          </span>
-          <button
-            style={styles.qtyBtn}
-            title="Increase quantity"
-            onClick={() => changeProductQty(index, 1)}
-          ><Plus size={13} /></button>
-          <button
-            style={{ ...styles.qtyBtn, marginLeft: 'auto', borderColor: colors.red, color: colors.red }}
-            title={`Remove ${product.name} from this project`}
-            onClick={() => removeProduct(index)}
-          ><Trash2 size={13} /></button>
-        </div>
+        {/* A guest reads the same two facts (how many, which room) as plain
+            text. The stepper, the bin and the room picker are writes, and a
+            write here would land in the member's blob. */}
+        {canEdit ? (
+          <>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, margin: '12px 0 10px' }}>
+              <button
+                style={styles.qtyBtn}
+                title="Decrease quantity"
+                onClick={() => changeProductQty(index, -1)}
+              ><Minus size={13} /></button>
+              <span style={{ minWidth: 28, textAlign: 'center', fontSize: 13, fontWeight: 600, color: colors.gray900 }}>
+                {product.qty || 1}
+              </span>
+              <button
+                style={styles.qtyBtn}
+                title="Increase quantity"
+                onClick={() => changeProductQty(index, 1)}
+              ><Plus size={13} /></button>
+              <button
+                style={{ ...styles.qtyBtn, marginLeft: 'auto', borderColor: colors.red, color: colors.red }}
+                title={`Remove ${product.name} from this project`}
+                onClick={() => removeProduct(index)}
+              ><Trash2 size={13} /></button>
+            </div>
 
-        <select
-          style={styles.productSelect}
-          value={product.roomId || ''}
-          onChange={(e) => moveProduct(index, e.target.value)}
-          title="Move to a room"
-        >
-          <option value="">Unassigned</option>
-          {rooms.map((room) => (
-            <option key={room.id} value={room.id}>{room.name}</option>
-          ))}
-        </select>
+            <select
+              style={styles.productSelect}
+              value={product.roomId || ''}
+              onChange={(e) => moveProduct(index, e.target.value)}
+              title="Move to a room"
+            >
+              <option value="">Unassigned</option>
+              {rooms.map((room) => (
+                <option key={room.id} value={room.id}>{room.name}</option>
+              ))}
+            </select>
+          </>
+        ) : (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '12px 0 2px', fontSize: 13, color: colors.gray700 }}>
+            <span style={{ fontWeight: 600 }}>Qty {product.qty || 1}</span>
+            <span style={{ color: colors.gray500 }}>·</span>
+            <span style={{ color: colors.gray500 }}>{roomLabel(rooms, product.roomId)}</span>
+          </div>
+        )}
       </div>
     </div>
   );
+
+  const backLink = (
+    <Link to="/projects" style={styles.breadcrumbLink}>
+      ← Back to {isAccountManager ? 'Member Projects' : 'My Projects'}
+    </Link>
+  );
+
+  /**
+   * A guest's read can fail or come up empty, and both are dead ends worth
+   * saying out loud. A member never reaches either: their read cannot throw, and
+   * an id they cannot resolve still falls through to the draft behaviour it
+   * always did.
+   */
+  if (loadError || notFound) {
+    return (
+      <div style={styles.wrapper}>
+        <div style={styles.container}>
+          <div style={styles.breadcrumb}>{backLink}</div>
+          <div style={styles.emptyState}>
+            <div style={styles.emptyIcon}>
+              <AlertCircle size={40} color={loadError ? colors.red : colors.gray300} />
+            </div>
+            <h3 style={styles.emptyTitle}>
+              {loadError ? "We couldn't load this project" : 'Project not found'}
+            </h3>
+            <p style={styles.emptyText}>
+              {loadError || (
+                isGuest
+                  ? `${ownerName} has no project with this id. It may have been deleted since you opened the list.`
+                  : 'This project does not exist, or it belongs to another account.'
+              )}
+            </p>
+            <Link to="/projects" style={{ ...styles.btnPrimary, textDecoration: 'none' }}>
+              Back to projects
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div style={styles.wrapper}>
       <div style={styles.container}>
         {/* Project Header */}
         <div style={styles.projectHeader}>
+          {/* Says whose project this is and that it stays theirs, before any of
+              it is read. The absence of edit buttons is not a message: it looks
+              the same as a page that is broken or still loading. */}
+          {isGuest && (
+            <div style={styles.guestBanner}>
+              <Eye size={16} style={{ flexShrink: 0, marginTop: 2 }} />
+              <div>
+                <strong>{ownerName}'s project.</strong> You have it open as their account
+                manager, so it is read only: nothing here can be renamed, archived, deleted, or
+                changed. To make a change, ask {ownerName.split(' ')[0]}.
+              </div>
+            </div>
+          )}
           <div style={styles.headerTop}>
             <div>
-              <div style={styles.breadcrumb}>
-                <Link to="/projects" style={styles.breadcrumbLink}>← Back to My Projects</Link>
-              </div>
-              {editingTitle ? (
+              <div style={styles.breadcrumb}>{backLink}</div>
+              {isGuest ? (
+                <h1 style={styles.projectTitle}>{projectData.name}</h1>
+              ) : editingTitle ? (
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }}>
                   <input
                     autoFocus
@@ -1526,6 +1739,11 @@ export default function ProjectDetailPage() {
                 </div>
               </div>
             </div>
+            {/* The whole action cluster (status lifecycle, archive, delete)
+                belongs to whoever owns the project. A guest gets none of it: not
+                greyed out, gone. A disabled Delete still says "you could delete
+                this", and she cannot. */}
+            {canEdit && (
             <div style={styles.headerActions}>
               {/* Contextual Status Button */}
               {projectStatus === 'working' && (
@@ -1583,6 +1801,7 @@ export default function ProjectDetailPage() {
                 )}
               </div>
             </div>
+            )}
           </div>
         </div>
 
@@ -1609,7 +1828,7 @@ export default function ProjectDetailPage() {
               <div style={{ ...styles.card, marginBottom: 24 }}>
                 <div style={styles.cardHeader}>
                   <h3 style={styles.cardTitle}>Project Details</h3>
-                  {!isEditingDetails ? (
+                  {isGuest ? null : !isEditingDetails ? (
                     <button
                       style={{ ...styles.btnOutline, ...styles.btnSmall }}
                       onClick={() => { setSnapshot(projectData); setIsEditingDetails(true); }}
@@ -1830,7 +2049,9 @@ export default function ProjectDetailPage() {
                 <div style={styles.cardBody}>
                   {rooms.length === 0 ? (
                     <p style={{ fontSize: 14, color: colors.gray500, fontStyle: 'italic', margin: '0 0 16px' }}>
-                      No rooms yet. Add the spaces you're working on to organize products by room.
+                      {isGuest
+                        ? `${ownerName} has not added any rooms to this project yet.`
+                        : "No rooms yet. Add the spaces you're working on to organize products by room."}
                     </p>
                   ) : (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }}>
@@ -1866,20 +2087,24 @@ export default function ProjectDetailPage() {
                                     ? `${attached} product${attached !== 1 ? 's' : ''}`
                                     : 'No products'}
                                 </span>
-                                <button
-                                  title={`Rename ${room.name}`}
-                                  onClick={() => { setRenamingRoomId(room.id); setRenameDraft(room.name); }}
-                                  style={styles.roomIconBtn}
-                                >
-                                  <Pencil size={14} />
-                                </button>
-                                <button
-                                  title={`Remove ${room.name}`}
-                                  onClick={() => removeRoom(room)}
-                                  style={{ ...styles.roomIconBtn, color: colors.red }}
-                                >
-                                  <X size={15} />
-                                </button>
+                                {canEdit && (
+                                  <>
+                                    <button
+                                      title={`Rename ${room.name}`}
+                                      onClick={() => { setRenamingRoomId(room.id); setRenameDraft(room.name); }}
+                                      style={styles.roomIconBtn}
+                                    >
+                                      <Pencil size={14} />
+                                    </button>
+                                    <button
+                                      title={`Remove ${room.name}`}
+                                      onClick={() => removeRoom(room)}
+                                      style={{ ...styles.roomIconBtn, color: colors.red }}
+                                    >
+                                      <X size={15} />
+                                    </button>
+                                  </>
+                                )}
                               </>
                             )}
                           </div>
@@ -1888,6 +2113,7 @@ export default function ProjectDetailPage() {
                     </div>
                   )}
 
+                  {canEdit && (
                   <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
                     <input
                       type="text"
@@ -1910,8 +2136,9 @@ export default function ProjectDetailPage() {
                       <Plus size={14} /> Add Room
                     </button>
                   </div>
+                  )}
 
-                  {ROOM_OPTIONS.some((o) => !rooms.some((r) => r.name.toLowerCase() === o.toLowerCase())) && (
+                  {canEdit && ROOM_OPTIONS.some((o) => !rooms.some((r) => r.name.toLowerCase() === o.toLowerCase())) && (
                     <>
                       <div style={{ fontSize: 12, fontWeight: 600, color: colors.gray500, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 8 }}>
                         Quick add
@@ -1945,6 +2172,33 @@ export default function ProjectDetailPage() {
                   </span>
                 </div>
                 <div style={styles.cardBody}>
+                  {/* The discussion is READ ONLY for a guest, and that is a
+                      decision, not an oversight.
+
+                      Posting here as herself is arguably her job, and she can
+                      read every word of it above. But the composer writes to the
+                      SIGNED-IN account's `discussions` blob, and stamps the post
+                      `author: 'Me'` with no identity on it, which the reader
+                      then renders as whoever is looking. Pointed at a member's
+                      project, that is two bugs at once: her reply lands in her
+                      own blob where the member will never see it, and if it did
+                      land in theirs it would render to them as words they said
+                      themselves. Fixing it properly means an authored-post shape
+                      plus a matching branch in the member's feed, which is a
+                      change to how members read their own discussions, and this
+                      task is not allowed to touch that. Messages is the door
+                      that already works for her. */}
+                  {isGuest ? (
+                    <div style={styles.readOnlyNote}>
+                      <MessageCircle size={15} style={{ flexShrink: 0, marginTop: 2 }} />
+                      <div>
+                        You can read this discussion, but not post to it: this thread belongs to{' '}
+                        {ownerName}'s project team. To reply to {ownerName.split(' ')[0]}, use{' '}
+                        <Link to="/messages" style={{ color: colors.darkBlue, fontWeight: 600 }}>Messages</Link>.
+                      </div>
+                    </div>
+                  ) : (
+                  <>
                   {/* New comment input */}
                   <textarea
                     style={{ ...styles.commentBox, width: '100%', marginBottom: 12 }}
@@ -1978,6 +2232,8 @@ export default function ProjectDetailPage() {
                       </button>
                     </div>
                   </div>
+                  </>
+                  )}
 
                   {/* Live thread: the member's posts and their team's replies. */}
                   {(comments.length > 0 || typingResponder) && (
@@ -2008,10 +2264,10 @@ export default function ProjectDetailPage() {
                         </div>
                       )}
                       {comments.slice().reverse().map((c) => {
-                        // No authorIdentity => the member's own post. Stored
-                        // comments predate personas and land here too.
+                        // No authorIdentity => the project owner's own post.
+                        // Stored comments predate personas and land here too.
                         const isPersona = !!c.authorIdentity;
-                        const name = isPersona ? c.author : (userName || 'You');
+                        const name = isPersona ? c.author : ownerName;
                         const badge = memberBadgeStyle(isPersona ? c.authorRole : 'tradepro');
                         return (
                         <div key={c.id} style={{
@@ -2068,7 +2324,9 @@ export default function ProjectDetailPage() {
                       paddingTop: 32, paddingBottom: 16,
                       textAlign: 'center', color: colors.gray500, fontSize: 13,
                     }}>
-                      No comments yet. Start the conversation above.
+                      {isGuest
+                        ? 'No comments on this project yet.'
+                        : 'No comments yet. Start the conversation above.'}
                     </div>
                   )}
 
@@ -2314,22 +2572,26 @@ export default function ProjectDetailPage() {
               <div style={styles.card}>
                 <div style={styles.cardHeader}>
                   <h3 style={styles.cardTitle}>Project Team</h3>
-                  <button
-                    className="whitespace-nowrap"
-                    onClick={() => setAddTeamOpen(true)}
-                    style={{
-                      background: 'none', border: 'none', padding: 0,
-                      color: colors.darkBlue, fontSize: 13, fontWeight: 500,
-                      cursor: 'pointer', fontFamily: 'inherit',
-                    }}
-                  >
-                    + Add
-                  </button>
+                  {canEdit && (
+                    <button
+                      className="whitespace-nowrap"
+                      onClick={() => setAddTeamOpen(true)}
+                      style={{
+                        background: 'none', border: 'none', padding: 0,
+                        color: colors.darkBlue, fontSize: 13, fontWeight: 500,
+                        cursor: 'pointer', fontFamily: 'inherit',
+                      }}
+                    >
+                      + Add
+                    </button>
+                  )}
                 </div>
                 <div style={styles.cardBody}>
                   {team.length === 0 ? (
                     <div style={{ fontSize: 13, color: colors.gray500, textAlign: 'center', padding: '12px 0' }}>
-                      No team members yet. Click + Add to bring people in.
+                      {isGuest
+                        ? 'Nobody has been added to this project team yet.'
+                        : 'No team members yet. Click + Add to bring people in.'}
                     </div>
                   ) : (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -2353,17 +2615,19 @@ export default function ProjectDetailPage() {
                               </div>
                               <div style={styles.memberRole}>{m.role}</div>
                             </div>
-                            <button
-                              onClick={() => removeTeamMember(m.connectionId)}
-                              title="Remove from team"
-                              className="opacity-0 group-hover:opacity-100 transition-opacity"
-                              style={{
-                                background: 'none', border: 'none', cursor: 'pointer',
-                                color: colors.gray500, padding: 4,
-                              }}
-                            >
-                              <X size={16} />
-                            </button>
+                            {canEdit && (
+                              <button
+                                onClick={() => removeTeamMember(m.connectionId)}
+                                title="Remove from team"
+                                className="opacity-0 group-hover:opacity-100 transition-opacity"
+                                style={{
+                                  background: 'none', border: 'none', cursor: 'pointer',
+                                  color: colors.gray500, padding: 4,
+                                }}
+                              >
+                                <X size={16} />
+                              </button>
+                            )}
                           </div>
                         );
                       })}
@@ -2423,7 +2687,12 @@ export default function ProjectDetailPage() {
                 </div>
               </div>
 
-              {/* Quick Actions */}
+              {/* Quick Actions. Every one of these is a member asking the
+                  showroom for something, so for the account manager reading her
+                  own member's project they invert: "Request an Estimate" would
+                  be her asking herself. Hidden for a guest rather than reworded,
+                  because the actions themselves are the member's to take. */}
+              {canEdit && (
               <div style={styles.card}>
                 <div style={styles.cardHeader}>
                   <h3 style={styles.cardTitle}>Quick Actions</h3>
@@ -2442,6 +2711,7 @@ export default function ProjectDetailPage() {
                   </div>
                 </div>
               </div>
+              )}
             </div>
           </div>
         )}
@@ -2453,9 +2723,12 @@ export default function ProjectDetailPage() {
               <div className="min-w-0">
                 <h2 style={{ fontSize: 20, fontWeight: 600, margin: 0 }}>Project Products</h2>
                 <p style={{ color: colors.gray500, fontSize: 14, margin: '4px 0 0' }}>
-                  Products you're considering for this project
+                  {isGuest
+                    ? `Products ${ownerName} is considering for this project`
+                    : "Products you're considering for this project"}
                 </p>
               </div>
+              {canEdit && (
               <div className="flex flex-wrap gap-2 shrink-0">
                 <button
                   className="whitespace-nowrap"
@@ -2466,6 +2739,7 @@ export default function ProjectDetailPage() {
                 </button>
                 <button className="whitespace-nowrap" style={styles.btnPrimary}>Request Estimate</button>
               </div>
+              )}
             </div>
 
             {products.length === 0 ? (
@@ -2473,12 +2747,15 @@ export default function ProjectDetailPage() {
                 <div style={styles.emptyIcon}><ShoppingCart size={48} color={colors.gray300} /></div>
                 <h3 style={styles.emptyTitle}>No Products Yet</h3>
                 <p style={styles.emptyText}>
-                  Browse the catalog and save products to this project. They'll show up here
-                  grouped by room so you can see exactly what's going where.
+                  {isGuest
+                    ? `${ownerName} has not saved any products to this project yet. When they do, they show up here grouped by room.`
+                    : "Browse the catalog and save products to this project. They'll show up here grouped by room so you can see exactly what's going where."}
                 </p>
-                <button style={styles.btnPrimary} onClick={() => navigate('/shop')}>
-                  Browse Products
-                </button>
+                {canEdit && (
+                  <button style={styles.btnPrimary} onClick={() => navigate('/shop')}>
+                    Browse Products
+                  </button>
+                )}
               </div>
             ) : (
               groupProductsByRoom(projectData).map(({ room, items }) => (
@@ -2546,8 +2823,10 @@ export default function ProjectDetailPage() {
           </div>
         )}
 
-        {/* Estimates & Orders Tab */}
-        {activeTab === 'estimates' && (() => {
+        {/* Estimates & Orders Tab. `!isGuest` as well as the tab check: ?tab=
+            comes from the URL, so the panel has to refuse on its own rather than
+            trust that the tab strip never offered it. */}
+        {activeTab === 'estimates' && !isGuest && (() => {
           const projectDocs = docsForProject(allOrderDocs, projectId).sort(byNewest);
           const estimates = projectDocs.filter(isEstimate);
           const orderDocs = projectDocs.filter((d) => !isEstimate(d));
@@ -2830,8 +3109,10 @@ export default function ProjectDetailPage() {
         );
       })()}
 
-      {/* Archived banner */}
-      {archived && (
+      {/* Archived banner. It exists to undo an archive you just did, so a guest,
+          who cannot archive anything, has nothing to undo. The project's
+          archived state still shows on the card in her list. */}
+      {archived && canEdit && (
         <div
           className="fixed bottom-4 left-1/2 -translate-x-1/2 z-[100] px-4 py-3 rounded-md shadow-xl flex items-center gap-3"
           style={{ background: colors.gray900, color: '#fff', fontSize: 14, maxWidth: 360 }}

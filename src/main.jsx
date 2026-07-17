@@ -93,8 +93,21 @@ const AppRouter = () => {
               element={isAccountManager ? <Navigate to="/am" replace /> : <ProSourceSettings />}
             />
             <Route path="/connections" element={<ProSourceConnections />} />
+            {/* /projects is shared on purpose: it answers "the projects I came
+                here to look at", which for a member is their own and for an
+                account manager is her members'. ProSourceProjects picks the
+                reader. /projects/:id is shared for the same reason, resolving
+                whose blob to read from ?owner=. */}
             <Route path="/projects" element={<ProSourceProjects />} />
-            <Route path="/projects/new" element={<ProSourceProjectCreate />} />
+            {/* An account manager creates nothing here: a project belongs to the
+                member whose account holds it, and she has no account to put one
+                in. The route still has to exist, or /projects/new would fall
+                through to /projects/:id and be read as a project with the id
+                "new". Redirect rather than unmount. */}
+            <Route
+              path="/projects/new"
+              element={isAccountManager ? <Navigate to="/projects" replace /> : <ProSourceProjectCreate />}
+            />
             <Route path="/projects/:id" element={<ProSourceProjectDetail />} />
             <Route path="/project" element={<Navigate to="/projects" replace />} />
             <Route path="/settings" element={<ProSourceSettings />} />

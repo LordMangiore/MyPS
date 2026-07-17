@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react'
 import { Link, Outlet, useLocation } from 'react-router-dom'
-import { Bell, MessageCircle, Menu, X, ShoppingCart, ClipboardList } from 'lucide-react'
+import { Bell, MessageCircle, Menu, X, ShoppingCart, ClipboardList, FolderOpen } from 'lucide-react'
 import { useAuth } from './auth-context'
 import { guestCartCount, subscribeGuestCart, syncActiveCartToAccount } from './guest-cart'
 
@@ -10,6 +10,20 @@ const categories = [
   { label: 'Countertops', dept: 'Countertops' },
   { label: 'Kitchen', dept: 'Kitchen' },
   { label: 'Bath', dept: 'Bath' },
+]
+
+/**
+ * What showroom staff actually navigate between. The member's category nav is a
+ * shopping aisle; this is the two halves of an account manager's job. Both
+ * entries are shared by the desktop header and the mobile drawer so the two can
+ * never drift apart.
+ */
+const staffNav = [
+  { to: '/am', label: 'Work Queue', menuLabel: 'Work Queue', Icon: ClipboardList },
+  // "Member Projects" wherever there is room for it: she owns none of these, and
+  // a menu reading "My Projects" next to somebody else's work would say she does.
+  // The top nav is tight, so it gets the short form.
+  { to: '/projects', label: 'Projects', menuLabel: 'Member Projects', Icon: FolderOpen },
 ]
 
 const Layout = () => {
@@ -148,17 +162,29 @@ const Layout = () => {
 
           <nav className="hidden md:flex gap-6 flex-1 justify-center">
             {isAccountManager ? (
-              <Link
-                to="/am"
-                style={{
-                  display: 'inline-flex', alignItems: 'center', gap: 6,
-                  color: location.pathname === '/am' ? '#003087' : '#525252',
-                  fontSize: 14, fontWeight: location.pathname === '/am' ? 600 : 400,
-                  textDecoration: 'none',
-                }}
-              >
-                <ClipboardList size={16} /> Work Queue
-              </Link>
+              /* Two things, because she does two things: work arrives in the
+                 queue, and the projects that work belongs to are her members'.
+                 Projects were reachable at /projects all along, but nothing in
+                 her chrome said so, and what she found there was an empty copy
+                 of a member's own list. */
+              staffNav.map((item) => {
+                const isActive = location.pathname === item.to ||
+                  location.pathname.startsWith(`${item.to}/`)
+                return (
+                  <Link
+                    key={item.to}
+                    to={item.to}
+                    style={{
+                      display: 'inline-flex', alignItems: 'center', gap: 6,
+                      color: isActive ? '#003087' : '#525252',
+                      fontSize: 14, fontWeight: isActive ? 600 : 400,
+                      textDecoration: 'none',
+                    }}
+                  >
+                    <item.Icon size={16} /> {item.label}
+                  </Link>
+                )
+              })
             ) : (
               categories.map(c => (
                 <Link
@@ -306,6 +332,9 @@ const Layout = () => {
                 {isAccountManager ? (
                   <>
                     <Link to="/am" style={menuItemStyle} onClick={() => setAccountMenuOpen(false)}>Work Queue</Link>
+                    {/* "Member Projects", not "My Projects": she owns none of
+                        them, and the menu should not imply otherwise. */}
+                    <Link to="/projects" style={menuItemStyle} onClick={() => setAccountMenuOpen(false)}>Member Projects</Link>
                     <div style={{ borderTop: '1px solid #e5e5e5', margin: '8px 0' }} />
                     <Link to="/connections" style={menuItemStyle} onClick={() => setAccountMenuOpen(false)}>Connections</Link>
                     <Link to="/messages" style={menuItemStyle} onClick={() => setAccountMenuOpen(false)}>Messages</Link>
@@ -357,7 +386,14 @@ const Layout = () => {
               {isAccountManager ? (
                 <>
                   <div className="px-4 py-2 text-xs uppercase tracking-wider text-neutral-500">Showroom</div>
-                  <Link to="/am" onClick={closeMobile} className="block px-4 py-3 text-sm text-neutral-700 hover:bg-neutral-50">Work Queue</Link>
+                  {staffNav.map((item) => (
+                    <Link
+                      key={item.to}
+                      to={item.to}
+                      onClick={closeMobile}
+                      className="block px-4 py-3 text-sm text-neutral-700 hover:bg-neutral-50"
+                    >{item.menuLabel}</Link>
+                  ))}
                   <div className="border-t border-neutral-200 my-2" />
                   <Link to="/connections" onClick={closeMobile} className="block px-4 py-3 text-sm text-neutral-700 hover:bg-neutral-50">Connections</Link>
                   <Link to="/messages" onClick={closeMobile} className="block px-4 py-3 text-sm text-neutral-700 hover:bg-neutral-50">Messages</Link>
