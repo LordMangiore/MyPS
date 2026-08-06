@@ -1462,10 +1462,6 @@ const ProSourceLogin = ({ initialPage = 'email', initialMode = 'signin' }) => {
         <div style={s.stepLine(current > 2)} />
         <div style={s.stepDot(current === 3 ? 'active' : current > 3 ? 'done' : 'pending')}>3</div>
       </div>
-      <div style={{ fontSize: 14, fontWeight: 600, color: colors.gray900, marginBottom: 4 }}>
-        {current === 1 ? 'About you' : current === 2 ? 'Your project' : 'How we can help'}
-      </div>
-      <div style={{ fontSize: 12, color: colors.gray500 }}>Step {current} of 3</div>
     </div>
   );
 
@@ -1687,8 +1683,6 @@ const ProSourceLogin = ({ initialPage = 'email', initialMode = 'signin' }) => {
           <div style={s.stepLine(false)} />
           <div style={s.stepDot('pending')}>4</div>
         </div>
-        <div style={{ fontSize: 14, fontWeight: 600, color: colors.gray900, marginBottom: 4 }}>About you</div>
-        <div style={{ fontSize: 12, color: colors.gray500 }}>Step 1 of 4</div>
       </div>
 
       <div style={s.onboardingCard} className="p-6 md:p-10">
@@ -1774,8 +1768,6 @@ const ProSourceLogin = ({ initialPage = 'email', initialMode = 'signin' }) => {
           <div style={s.stepLine(false)} />
           <div style={s.stepDot('pending')}>4</div>
         </div>
-        <div style={{ fontSize: 14, fontWeight: 600, color: colors.gray900, marginBottom: 4 }}>Your business</div>
-        <div style={{ fontSize: 12, color: colors.gray500 }}>Step 2 of 4</div>
       </div>
 
       <div style={s.onboardingCard} className="p-6 md:p-10">
@@ -1900,8 +1892,6 @@ const ProSourceLogin = ({ initialPage = 'email', initialMode = 'signin' }) => {
           <div style={s.stepLine(false)} />
           <div style={s.stepDot('pending')}>4</div>
         </div>
-        <div style={{ fontSize: 14, fontWeight: 600, color: colors.gray900, marginBottom: 4 }}>How you'll work with us</div>
-        <div style={{ fontSize: 12, color: colors.gray500 }}>Step 3 of 4</div>
       </div>
 
       <div style={s.onboardingCard} className="p-6 md:p-10">
@@ -2008,8 +1998,6 @@ const ProSourceLogin = ({ initialPage = 'email', initialMode = 'signin' }) => {
           <div style={s.stepLine(true)} />
           <div style={s.stepDot('active')}>4</div>
         </div>
-        <div style={{ fontSize: 14, fontWeight: 600, color: colors.gray900, marginBottom: 4 }}>Review & agree</div>
-        <div style={{ fontSize: 12, color: colors.gray500 }}>Step 4 of 4</div>
       </div>
 
       <div style={s.onboardingCard} className="p-6 md:p-10">
