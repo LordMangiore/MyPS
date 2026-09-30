@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { ChevronDown, Check } from 'lucide-react'
-import { core } from '../theme';
+import { core, gray } from '../theme';
 
 const BRAND_BLUE = core.blue
 
@@ -67,7 +67,7 @@ export default function Select({
                 aria-selected={isSelected}
                 onClick={() => { onChange(opt.value); setOpen(false) }}
                 className={`w-full flex items-center justify-between gap-3 px-3.5 py-2.5 text-[15px] text-left hover:bg-neutral-100 transition-colors ${isSelected ? 'bg-blue-50' : ''}`}
-                style={isSelected ? { color: BRAND_BLUE, fontWeight: 600 } : { color: '#404040' }}
+                style={isSelected ? { color: BRAND_BLUE, fontWeight: 600 } : { color: gray.gray700 }}
               >
                 <span className="truncate">{opt.label}</span>
                 {isSelected && <Check size={16} style={{ color: BRAND_BLUE }} className="shrink-0" />}

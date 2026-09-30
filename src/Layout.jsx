@@ -3,7 +3,7 @@ import { Link, Outlet, useLocation } from 'react-router-dom'
 import { Bell, MessageCircle, Menu, X, ShoppingCart, ClipboardList, FolderOpen } from 'lucide-react'
 import { useAuth } from './auth-context'
 import { guestCartCount, subscribeGuestCart, syncActiveCartToAccount } from './guest-cart'
-import { core, grays } from './theme';
+import { core, gray } from './theme';
 import Logo from './components/Logo';
 
 const categories = [
@@ -176,7 +176,7 @@ const Layout = () => {
                     to={item.to}
                     style={{
                       display: 'inline-flex', alignItems: 'center', gap: 6,
-                      color: isActive ? core.blue : grays.neutral.gray600,
+                      color: isActive ? core.blue : gray.gray600,
                       fontSize: 14, fontWeight: isActive ? 600 : 400,
                       textDecoration: 'none',
                     }}
@@ -190,7 +190,7 @@ const Layout = () => {
                 <Link
                   key={c.label}
                   to={`/shop?dept=${c.dept}`}
-                  style={{ color: grays.neutral.gray600, fontSize: 14, textDecoration: 'none' }}
+                  style={{ color: gray.gray600, fontSize: 14, textDecoration: 'none' }}
                 >{c.label}</Link>
               ))
             )}
@@ -208,7 +208,7 @@ const Layout = () => {
               errand. /connections is still in the account menu, where it
               belongs. */}
           {!isAccountManager && (
-            <Link to="/pros" className="hidden md:inline" style={{ color: grays.neutral.gray600, textDecoration: 'none' }}>Find a Pro</Link>
+            <Link to="/pros" className="hidden md:inline" style={{ color: gray.gray600, textDecoration: 'none' }}>Find a Pro</Link>
           )}
 
           {isLoggedIn && (
@@ -218,7 +218,7 @@ const Layout = () => {
             onMouseLeave={() => setHoveredIcon(null)}
             style={{
               position: 'relative',
-              color: isMessagesActive || hoveredIcon === 'messages' ? core.blue : grays.neutral.gray600,
+              color: isMessagesActive || hoveredIcon === 'messages' ? core.blue : gray.gray600,
               display: 'flex',
               alignItems: 'center',
               transition: 'color 0.15s ease',
@@ -243,7 +243,7 @@ const Layout = () => {
             onMouseLeave={() => setHoveredIcon(null)}
             style={{
               position: 'relative',
-              color: location.pathname === '/cart' || location.pathname === '/carts' || hoveredIcon === 'cart' ? core.blue : grays.neutral.gray600,
+              color: location.pathname === '/cart' || location.pathname === '/carts' || hoveredIcon === 'cart' ? core.blue : gray.gray600,
               display: 'flex',
               alignItems: 'center',
               transition: 'color 0.15s ease',
@@ -270,7 +270,7 @@ const Layout = () => {
             onMouseLeave={() => setHoveredIcon(null)}
             style={{
               position: 'relative',
-              color: isNotificationsActive || hoveredIcon === 'notifications' ? core.blue : grays.neutral.gray600,
+              color: isNotificationsActive || hoveredIcon === 'notifications' ? core.blue : gray.gray600,
               display: 'flex',
               alignItems: 'center',
               transition: 'color 0.15s ease',
@@ -342,11 +342,11 @@ const Layout = () => {
                     {/* "Member Projects", not "My Projects": she owns none of
                         them, and the menu should not imply otherwise. */}
                     <Link to="/projects" style={menuItemStyle} onClick={() => setAccountMenuOpen(false)}>Member Projects</Link>
-                    <div style={{ borderTop: '1px solid #e5e5e5', margin: '8px 0' }} />
+                    <div style={{ borderTop: `1px solid ${gray.gray200}`, margin: '8px 0' }} />
                     <Link to="/connections" style={menuItemStyle} onClick={() => setAccountMenuOpen(false)}>Connections</Link>
                     <Link to="/messages" style={menuItemStyle} onClick={() => setAccountMenuOpen(false)}>Messages</Link>
                     <Link to="/notifications" style={menuItemStyle} onClick={() => setAccountMenuOpen(false)}>Notifications</Link>
-                    <div style={{ borderTop: '1px solid #e5e5e5', margin: '8px 0' }} />
+                    <div style={{ borderTop: `1px solid ${gray.gray200}`, margin: '8px 0' }} />
                     <Link to="/settings?section=account" style={menuItemStyle} onClick={() => setAccountMenuOpen(false)}>Account Settings</Link>
                   </>
                 ) : (
@@ -355,18 +355,18 @@ const Layout = () => {
                     <Link to="/projects" style={menuItemStyle} onClick={() => setAccountMenuOpen(false)}>My Projects</Link>
                     <Link to="/settings?section=referrals" style={menuItemStyle} onClick={() => setAccountMenuOpen(false)}>Referral Bonus</Link>
                     <Link to="/orders" style={menuItemStyle} onClick={() => setAccountMenuOpen(false)}>Estimates & Orders</Link>
-                    <div style={{ borderTop: '1px solid #e5e5e5', margin: '8px 0' }} />
+                    <div style={{ borderTop: `1px solid ${gray.gray200}`, margin: '8px 0' }} />
                     <Link to="/carts" style={menuItemStyle} onClick={() => setAccountMenuOpen(false)}>Saved Carts</Link>
                     <Link to="/connections" style={menuItemStyle} onClick={() => setAccountMenuOpen(false)}>Connections</Link>
                     <Link to="/messages" style={menuItemStyle} onClick={() => setAccountMenuOpen(false)}>Messages</Link>
                     <Link to="/notifications" style={menuItemStyle} onClick={() => setAccountMenuOpen(false)}>Notifications</Link>
                     <Link to="/profile?own=1" style={menuItemStyle} onClick={() => setAccountMenuOpen(false)}>My Profile</Link>
-                    <div style={{ borderTop: '1px solid #e5e5e5', margin: '8px 0' }} />
+                    <div style={{ borderTop: `1px solid ${gray.gray200}`, margin: '8px 0' }} />
                     <Link to="/settings?section=account" style={menuItemStyle} onClick={() => setAccountMenuOpen(false)}>Account Settings</Link>
                     <Link to="/settings?section=team" style={menuItemStyle} onClick={() => setAccountMenuOpen(false)}>Manage Users</Link>
                   </>
                 )}
-                <div style={{ borderTop: '1px solid #e5e5e5', margin: '8px 0' }} />
+                <div style={{ borderTop: `1px solid ${gray.gray200}`, margin: '8px 0' }} />
                 <button style={{ ...menuItemStyle, width: '100%', textAlign: 'left', background: 'none', border: 'none', color: core.red, cursor: 'pointer' }} onClick={() => { setAccountMenuOpen(false); logout(); }}>Sign Out</button>
               </div>
             )}
@@ -440,7 +440,7 @@ const Layout = () => {
 const menuItemStyle = {
   display: 'block',
   padding: '12px 16px',
-  color: '#404040',
+  color: gray.gray700,
   textDecoration: 'none',
   fontSize: 14
 }

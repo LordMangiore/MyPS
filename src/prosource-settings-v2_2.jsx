@@ -23,10 +23,10 @@ import {
 import AppointmentModal from './prosource-appointment-modal';
 import Select from './components/Select';
 import { normalizeStored } from './project-model';
-import { core, coreColors, grays } from './theme';
+import { core, coreColors, gray, surface } from './theme';
 
 // ProSource Brand Colors from source
-const colors = { ...coreColors, ...grays.cool, redHover: core.redHover };
+const colors = { ...coreColors, ...gray, redHover: core.redHover };
 
 /**
  * What a profile that has never touched notification settings means.
@@ -899,7 +899,7 @@ export default function ProSourceSettingsRedesign() {
     // Outer wrapper - full width background if needed
     wrapper: {
       fontFamily: "'Open Sans', -apple-system, BlinkMacSystemFont, sans-serif",
-      background: '#fafafa',
+      background: surface.page,
       minHeight: '100vh',
     },
     // Inner container - constrained width with padding (matches prod layout)

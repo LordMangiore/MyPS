@@ -10,7 +10,7 @@ import {
   CheckCircle,
 } from 'lucide-react';
 import { useAuth } from './auth-context';
-import { coreColors, grays, statusColors } from './theme';
+import { coreColors, statusColors, gray, surface } from './theme';
 
 const ProSourceNotifications = () => {
   const { userId, loadUserData, saveUserData, homePath } = useAuth();
@@ -45,11 +45,11 @@ const ProSourceNotifications = () => {
       .catch((err) => console.warn('Notifications save failed:', err.message));
   };
 
-  const colors = { ...coreColors, ...grays.neutral, orange: statusColors.orange };
+  const colors = { ...coreColors, ...gray, orange: statusColors.orange };
 
   const styles = {
     wrapper: {
-      background: '#fafafa',
+      background: surface.page,
       minHeight: '100vh',
       fontFamily: "'Open Sans', -apple-system, BlinkMacSystemFont, sans-serif",
     },
@@ -180,7 +180,7 @@ const ProSourceNotifications = () => {
     },
     notifTime: {
       fontSize: 12,
-      color: colors.gray400,
+      color: colors.gray500,
       whiteSpace: 'nowrap',
     },
     unreadDot: {
@@ -192,7 +192,7 @@ const ProSourceNotifications = () => {
     emptyState: {
       padding: 64,
       textAlign: 'center',
-      color: colors.gray400,
+      color: colors.gray500,
     },
   };
 

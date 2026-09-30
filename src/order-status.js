@@ -22,7 +22,7 @@ import {
   Truck,
   XCircle,
 } from 'lucide-react';
-import { core } from './theme';
+import { core, gray } from './theme';
 
 // Internal RFMS status keys → customer-facing badge label.
 export const customerStatusLabel = (status) => {
@@ -91,14 +91,14 @@ const TONE = {
   pickup: { bg: '#ffedd5', fg: '#ea580c' },
   complete: { bg: '#dcfce7', fg: core.green },
   // Line-item states
-  pending: { bg: '#f5f5f5', fg: '#404040' },
+  pending: { bg: gray.gray100, fg: gray.gray700 },
   'on-order': { bg: '#dbeafe', fg: core.blue },
   received: { bg: '#dbeafe', fg: core.blue },
   'ready-for-pickup': { bg: '#ffedd5', fg: '#ea580c' },
   delivered: { bg: '#dcfce7', fg: core.green },
 };
 
-export const statusTone = (status) => TONE[status] || { bg: '#f5f5f5', fg: '#404040' };
+export const statusTone = (status) => TONE[status] || { bg: gray.gray100, fg: gray.gray700 };
 
 /**
  * The lucide icon component for a status, or null if it doesn't have one.

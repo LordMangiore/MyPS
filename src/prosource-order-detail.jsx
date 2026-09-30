@@ -24,7 +24,7 @@ import {
   RotateCw,
   SearchX,
 } from 'lucide-react';
-import { coreColors, grays, statusColors } from './theme';
+import { coreColors, statusColors, gray, surface } from './theme';
 
 const ProSourceOrderDetail = () => {
   const { orderId } = useParams();
@@ -33,11 +33,11 @@ const ProSourceOrderDetail = () => {
   // line items), and nothing linked the two datasets together.
   const { orders, status: loadStatus, error: loadError, reload, runAction } = useOrders();
 
-  const colors = { ...coreColors, ...grays.neutral, orange: statusColors.orange, amber: statusColors.amber };
+  const colors = { ...coreColors, ...gray, orange: statusColors.orange, amber: statusColors.amber };
 
   const styles = {
     wrapper: {
-      background: '#fafafa',
+      background: surface.page,
       minHeight: '100vh',
       fontFamily: "'Open Sans', -apple-system, BlinkMacSystemFont, sans-serif",
     },
@@ -436,7 +436,7 @@ const ProSourceOrderDetail = () => {
           textAlign: 'center',
           background: colors.gray100,
           borderRadius: 12,
-          color: colors.gray400,
+          color: colors.gray500,
         }}>
           <Package size={40} style={{ marginBottom: 12 }} />
           <div style={{ fontSize: 16, fontWeight: 500, marginBottom: 4 }}>No line items</div>

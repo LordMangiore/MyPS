@@ -15,7 +15,7 @@ import {
   DollarSign,
   MapPin,
 } from 'lucide-react';
-import { coreColors, grays, statusColors } from './theme';
+import { coreColors, statusColors, gray, surface } from './theme';
 
 /**
  * The account manager's console: the other side of the glass.
@@ -34,11 +34,11 @@ import { coreColors, grays, statusColors } from './theme';
  * here, because nothing in this codebase has one.
  */
 
-const colors = { ...coreColors, ...grays.neutral, amber: statusColors.amber, amberBg: statusColors.amberBg, blueBg: statusColors.blueBg, greenBg: statusColors.greenBg, redBg: statusColors.redBg };
+const colors = { ...coreColors, ...gray, amber: statusColors.amber, amberBg: statusColors.amberBg, blueBg: statusColors.blueBg, greenBg: statusColors.greenBg, redBg: statusColors.redBg };
 
 const styles = {
   wrapper: {
-    background: '#fafafa',
+    background: surface.page,
     minHeight: '100vh',
     fontFamily: "'Open Sans', -apple-system, BlinkMacSystemFont, sans-serif",
   },

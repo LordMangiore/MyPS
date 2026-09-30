@@ -32,7 +32,7 @@ import {
   AlertCircle,
   RotateCw,
 } from 'lucide-react';
-import { coreColors, grays, statusColors } from './theme';
+import { coreColors, statusColors, gray, surface } from './theme';
 
 // Chip-group for Sort/Filter modals
 const ChipGroup = ({ options, value, onChange, colors }) => (
@@ -164,11 +164,11 @@ const ProSourceOrders = () => {
   const activeFilterCount = (filterTime !== DEFAULT_TIME_RANGE ? 1 : 0) + (filterShowroom !== 'all' ? 1 : 0) + (filterStatus !== 'all' ? 1 : 0);
   const sortLabel = SORT_OPTIONS.find(o => o.value === sortField)?.label || 'Sort';
 
-  const colors = { ...coreColors, ...grays.neutral, orange: statusColors.orange, amber: statusColors.amber };
+  const colors = { ...coreColors, ...gray, orange: statusColors.orange, amber: statusColors.amber };
 
   const styles = {
     wrapper: {
-      background: '#fafafa',
+      background: surface.page,
       minHeight: '100vh',
       fontFamily: "'Open Sans', -apple-system, BlinkMacSystemFont, sans-serif",
     },

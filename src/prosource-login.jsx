@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { ShoppingBag, Headset, Home } from 'lucide-react';
 import { useAuth } from './auth-context';
 import AddressAutocomplete from './components/AddressAutocomplete';
-import { core, grays, statusColors } from './theme';
+import { core, statusColors, gray } from './theme';
 import Logo from './components/Logo';
 
 /**
@@ -257,7 +257,7 @@ const ProSourceLogin = ({ initialPage = 'email', initialMode = 'signin' }) => {
     setInterests(prev => ({ ...prev, [key]: !prev[key] }));
   };
 
-  const colors = { red: core.red, blue: core.blue, blueLight: core.blueMid, bluePale: core.bluePale, ...grays.warm, green: core.green, greenPale: statusColors.greenPale, white: '#ffffff' };
+  const colors = { red: core.red, blue: core.blue, blueLight: core.blueMid, bluePale: core.bluePale, ...gray, green: core.green, greenPale: statusColors.greenPale, white: '#ffffff' };
 
   const s = {
     nav: {

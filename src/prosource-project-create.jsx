@@ -11,9 +11,9 @@ import {
   normalizeStored,
 } from './project-model';
 import { iconForProjectType } from './project-type-icons';
-import { coreColors, grays, statusColors } from './theme';
+import { coreColors, statusColors, gray, surface } from './theme';
 
-const colors = { ...coreColors, ...grays.cool, amber: statusColors.amberDark };
+const colors = { ...coreColors, ...gray, amber: statusColors.amberDark };
 
 const STATES = ['MO', 'IL', 'TX', 'CA', 'FL', 'NY', 'NC', 'OH', 'PA', 'GA', 'WA', 'CO'];
 
@@ -856,7 +856,7 @@ function ReviewRow({ label, value }) {
 const styles = {
   wrapper: {
     fontFamily: "'Open Sans', -apple-system, BlinkMacSystemFont, sans-serif",
-    background: '#fafafa',
+    background: surface.page,
     minHeight: '100vh',
   },
   container: {

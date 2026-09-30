@@ -60,10 +60,10 @@ import {
   byNewest,
   money,
 } from './order-model';
-import { coreColors, grays } from './theme';
+import { coreColors, gray, surface } from './theme';
 
 // ProSource Brand Colors
-const colors = { ...coreColors, ...grays.cool };
+const colors = { ...coreColors, ...gray };
 
 const TAB_IDS = ['overview', 'products', 'designs', 'photos', 'estimates', 'activity'];
 
@@ -1178,7 +1178,7 @@ export default function ProjectDetailPage() {
   const styles = {
     wrapper: {
       fontFamily: "'Open Sans', -apple-system, BlinkMacSystemFont, sans-serif",
-      background: '#fafafa',
+      background: surface.page,
       minHeight: '100vh',
     },
     container: {

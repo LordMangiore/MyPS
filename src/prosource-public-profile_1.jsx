@@ -39,7 +39,7 @@ import {
   Trash2,
   ArrowLeft
 } from 'lucide-react';
-import { coreColors, grays, statusColors } from './theme';
+import { coreColors, statusColors, gray, surface } from './theme';
 
 const ProSourcePublicProfile = () => {
   const { profile, saveProfile: persistProfile, userId, showrooms } = useAuth();
@@ -236,11 +236,11 @@ const ProSourcePublicProfile = () => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profile]);
 
-  const colors = { ...coreColors, ...grays.neutral, gold: statusColors.gold };
+  const colors = { ...coreColors, ...gray, gold: statusColors.gold };
 
   const styles = {
     wrapper: {
-      background: '#fafafa',
+      background: surface.page,
       minHeight: '100vh',
       fontFamily: "'Open Sans', -apple-system, BlinkMacSystemFont, sans-serif",
     },

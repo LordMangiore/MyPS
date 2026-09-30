@@ -4,9 +4,9 @@ import { X, CheckCircle, Mail } from 'lucide-react';
 import { iconForProjectType } from './project-type-icons';
 import { useAuth } from './auth-context';
 import { clearGuestCart } from './guest-cart';
-import { coreColors, grays } from './theme';
+import { coreColors, gray } from './theme';
 
-const colors = { ...coreColors, ...grays.cool };
+const colors = { ...coreColors, ...gray };
 
 const AUDIENCE_OPTIONS = [
   { value: 'tradepro', label: 'Trade pro', body: 'Contractor, designer, or builder buying for clients.' },

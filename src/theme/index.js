@@ -5,7 +5,8 @@
 import tokens from './tokens.json'
 
 export const core = tokens.core
-export const grays = tokens.grays
+export const gray = tokens.gray
+export const surface = tokens.surface
 export const statusColors = tokens.status
 export const brandGuide = tokens.brandGuide2026
 export const fonts = tokens.fonts

@@ -24,7 +24,7 @@ import {
   Check,
   X,
 } from 'lucide-react';
-import { coreColors, grays } from './theme';
+import { coreColors, gray, surface } from './theme';
 
 const ProSourceCarts = () => {
   const { userId, userName, loadUserData, saveUserData } = useAuth();
@@ -38,11 +38,11 @@ const ProSourceCarts = () => {
   const [busy, setBusy] = useState(false);
   const [flash, setFlash] = useState('');
 
-  const colors = { ...coreColors, ...grays.neutral };
+  const colors = { ...coreColors, ...gray };
 
   const styles = {
     wrapper: {
-      background: '#fafafa',
+      background: surface.page,
       minHeight: '100vh',
       fontFamily: "'Open Sans', -apple-system, BlinkMacSystemFont, sans-serif",
     },

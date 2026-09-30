@@ -2,9 +2,9 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { X, CheckCircle, AlertCircle } from 'lucide-react';
 import { useAuth } from './auth-context';
-import { coreColors, grays, statusColors } from './theme';
+import { coreColors, statusColors, gray } from './theme';
 
-const colors = { ...coreColors, ...grays.cool, amber: statusColors.amber };
+const colors = { ...coreColors, ...gray, amber: statusColors.amber };
 
 const HELP_OPTIONS = [
   { value: 'plan', label: 'Plan a remodel', body: 'Walk through ideas and get pointed to the right products.' },

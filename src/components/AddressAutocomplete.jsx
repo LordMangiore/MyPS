@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { gray } from '../theme';
 
 /**
  * Lightweight address autocomplete using komoot's Photon API.
@@ -161,7 +162,7 @@ export default function AddressAutocomplete({
             right: 0,
             marginTop: 4,
             background: '#fff',
-            border: '1px solid #e5e5e5',
+            border: `1px solid ${gray.gray200}`,
             borderRadius: 6,
             boxShadow: '0 8px 24px rgba(0,0,0,0.08)',
             zIndex: 100,
@@ -183,15 +184,15 @@ export default function AddressAutocomplete({
                 border: 'none',
                 cursor: 'pointer',
                 fontSize: 14,
-                color: '#171717',
+                color: gray.gray900,
                 fontFamily: 'inherit',
-                borderBottom: i < suggestions.length - 1 ? '1px solid #f5f5f5' : 'none',
+                borderBottom: i < suggestions.length - 1 ? `1px solid ${gray.gray100}` : 'none',
               }}
             >
               {buildLabel(feat.properties)}
             </button>
           ))}
-          <div style={{ padding: '6px 14px', fontSize: 11, color: '#a3a3a3', borderTop: '1px solid #f5f5f5' }}>
+          <div style={{ padding: '6px 14px', fontSize: 11, color: gray.gray400, borderTop: `1px solid ${gray.gray100}` }}>
             Powered by OpenStreetMap
           </div>
         </div>

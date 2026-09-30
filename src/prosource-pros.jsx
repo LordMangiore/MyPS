@@ -8,9 +8,9 @@ import {
   ratingOf,
   reviewCountOf,
 } from './pro-directory';
-import { core, coreColors, grays } from './theme';
+import { core, coreColors, gray } from './theme';
 
-const colors = { ...coreColors, ...grays.cool };
+const colors = { ...coreColors, ...gray };
 
 const AVATAR_TONES = [core.blue, core.green, core.red, core.blueLight, '#6b21a8'];
 

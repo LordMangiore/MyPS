@@ -2,9 +2,9 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { X, CheckCircle, Mail } from 'lucide-react';
 import { iconForProjectType } from './project-type-icons';
 import { useAuth } from './auth-context';
-import { coreColors, grays } from './theme';
+import { coreColors, gray } from './theme';
 
-const colors = { ...coreColors, ...grays.cool };
+const colors = { ...coreColors, ...gray };
 
 // Icons come from project-type-icons.js, keyed by label.
 const PROJECT_TYPES = [
