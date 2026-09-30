@@ -19,7 +19,7 @@ import {
   Send,
   AlertCircle,
 } from 'lucide-react';
-import { coreColors, gray, surface, fonts } from './theme';
+import { coreColors, gray, surface, fonts, layout } from './theme';
 
 /**
  * Identity contract (shared across WP9/WP7, do not diverge):
@@ -317,7 +317,7 @@ const ProSourceConnections = () => {
       fontFamily: fonts.sans,
     },
     container: {
-      maxWidth: 1140,
+      maxWidth: layout.page,
       margin: '0 auto',
       padding: '32px 24px',
     },

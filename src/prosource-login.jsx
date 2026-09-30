@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { ShoppingBag, Headset, Home } from 'lucide-react';
 import { useAuth } from './auth-context';
 import AddressAutocomplete from './components/AddressAutocomplete';
-import { core, statusColors, gray, fonts } from './theme';
+import { core, statusColors, gray, fonts, layout } from './theme';
 import Logo from './components/Logo';
 
 /**
@@ -526,7 +526,7 @@ const ProSourceLogin = ({ initialPage = 'email', initialMode = 'signin' }) => {
       border: `1px solid ${colors.gray200}`,
       boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
       width: '100%',
-      maxWidth: 600,
+      maxWidth: layout.onboarding,
     },
     onboardingCardTitle: {
       fontSize: 22,
@@ -1037,7 +1037,7 @@ const ProSourceLogin = ({ initialPage = 'email', initialMode = 'signin' }) => {
           <div style={s.authEyebrow}>Trade Pro Membership</div>
           <h1
             className={s.authHeadlineClass}
-            style={{ ...s.authHeadline, maxWidth: 640 }}
+            style={{ ...s.authHeadline, maxWidth: layout.onboarding }}
             dangerouslySetInnerHTML={{ __html: 'Your showroom.<br/>Your business.<br/>Your ProSource.' }}
           />
           <p style={{ ...s.authBody, maxWidth: 560, marginBottom: 32 }}>
@@ -1393,7 +1393,7 @@ const ProSourceLogin = ({ initialPage = 'email', initialMode = 'signin' }) => {
     ];
     return (
       <div style={s.onboardingLayout}>
-        <div style={{ width: '100%', maxWidth: 640, textAlign: 'center', marginBottom: 24 }}>
+        <div style={{ width: '100%', maxWidth: layout.onboarding, textAlign: 'center', marginBottom: 24 }}>
           <div style={{ fontSize: 12, fontWeight: 600, letterSpacing: 1.5, textTransform: 'uppercase', color: colors.red, marginBottom: 8 }}>Welcome</div>
           <div style={{ fontFamily: fonts.display, fontSize: 32, color: colors.gray900, lineHeight: 1.15 }}>
             Tell us a bit about yourself.
@@ -1403,7 +1403,7 @@ const ProSourceLogin = ({ initialPage = 'email', initialMode = 'signin' }) => {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4" style={{ width: '100%', maxWidth: 640 }}>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4" style={{ width: '100%', maxWidth: layout.onboarding }}>
           {options.map(opt => {
             const isActive = userType === opt.value;
             return (
@@ -1430,7 +1430,7 @@ const ProSourceLogin = ({ initialPage = 'email', initialMode = 'signin' }) => {
           })}
         </div>
 
-        <div style={{ marginTop: 24, width: '100%', maxWidth: 640 }}>
+        <div style={{ marginTop: 24, width: '100%', maxWidth: layout.onboarding }}>
           <button
             style={{ ...s.btnPrimary, width: '100%' }}
             onClick={() => setPage(userType === 'homeowner' ? 'hoStep1' : 'step1')}
@@ -1473,7 +1473,7 @@ const ProSourceLogin = ({ initialPage = 'email', initialMode = 'signin' }) => {
 
   // ---------- Step indicator (homeowner) ----------
   const renderHoStepIndicator = (current) => (
-    <div style={{ width: '100%', maxWidth: 600, marginBottom: 32, textAlign: 'center' }}>
+    <div style={{ width: '100%', maxWidth: layout.onboarding, marginBottom: 32, textAlign: 'center' }}>
       <div style={s.stepIndicator}>
         <div style={s.stepDot(current === 1 ? 'active' : current > 1 ? 'done' : 'pending')}>1</div>
         <div style={s.stepLine(current > 1)} />
@@ -1692,7 +1692,7 @@ const ProSourceLogin = ({ initialPage = 'email', initialMode = 'signin' }) => {
       && businessStreet.trim() && businessCity.trim() && businessZip.trim();
     return (
     <div style={s.onboardingLayout}>
-      <div style={{ width: '100%', maxWidth: 600, marginBottom: 32, textAlign: 'center' }}>
+      <div style={{ width: '100%', maxWidth: layout.onboarding, marginBottom: 32, textAlign: 'center' }}>
         <div style={s.stepIndicator}>
           <div style={s.stepDot('active')}>1</div>
           <div style={s.stepLine(false)} />
@@ -1777,7 +1777,7 @@ const ProSourceLogin = ({ initialPage = 'email', initialMode = 'signin' }) => {
     const ready = businessName.trim() && tradeType && businessType;
     return (
     <div style={s.onboardingLayout}>
-      <div style={{ width: '100%', maxWidth: 600, marginBottom: 32, textAlign: 'center' }}>
+      <div style={{ width: '100%', maxWidth: layout.onboarding, marginBottom: 32, textAlign: 'center' }}>
         <div style={s.stepIndicator}>
           <div style={s.stepDot('done')}>&#10003;</div>
           <div style={s.stepLine(true)} />
@@ -1901,7 +1901,7 @@ const ProSourceLogin = ({ initialPage = 'email', initialMode = 'signin' }) => {
   // ==================== PAGE: STEP 3 (How You'll Work With Us) ====================
   const renderStep3 = () => (
     <div style={s.onboardingLayout}>
-      <div style={{ width: '100%', maxWidth: 600, marginBottom: 32, textAlign: 'center' }}>
+      <div style={{ width: '100%', maxWidth: layout.onboarding, marginBottom: 32, textAlign: 'center' }}>
         <div style={s.stepIndicator}>
           <div style={s.stepDot('done')}>&#10003;</div>
           <div style={s.stepLine(true)} />
@@ -2007,7 +2007,7 @@ const ProSourceLogin = ({ initialPage = 'email', initialMode = 'signin' }) => {
   // ==================== PAGE: STEP 4 (Review & Agree) ====================
   const renderStep4 = () => (
     <div style={s.onboardingLayout}>
-      <div style={{ width: '100%', maxWidth: 600, marginBottom: 32, textAlign: 'center' }}>
+      <div style={{ width: '100%', maxWidth: layout.onboarding, marginBottom: 32, textAlign: 'center' }}>
         <div style={s.stepIndicator}>
           <div style={s.stepDot('done')}>&#10003;</div>
           <div style={s.stepLine(true)} />

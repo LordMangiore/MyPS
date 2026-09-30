@@ -18,7 +18,7 @@ import {
   fetchCatalog, CATEGORIES, DEPARTMENTS, categoryLabel, resolveProduct, migrateItemKeys,
   colorVariants,
 } from './shop-catalog';
-import { coreColors, gray, surface, fonts } from './theme';
+import { coreColors, gray, surface, fonts, layout } from './theme';
 
 const colors = { ...coreColors, ...gray, gray50: gray.gray50 };
 
@@ -531,7 +531,7 @@ export default function ProSourceShop() {
 
   const s = {
     wrapper: { background: surface.page, minHeight: '100vh', fontFamily: fonts.sans },
-    container: { maxWidth: 1140, margin: '0 auto', padding: '0 16px' },
+    container: { maxWidth: layout.page, margin: '0 auto', padding: `0 ${layout.gutter}px` },
     // Breadcrumb
     breadcrumb: { display: 'flex', alignItems: 'center', gap: 8, padding: '16px 0', fontSize: 13, color: colors.gray500 },
     breadcrumbLink: { color: colors.darkBlue, textDecoration: 'none', fontWeight: 500, cursor: 'pointer' },

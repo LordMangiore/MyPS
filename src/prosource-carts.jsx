@@ -24,7 +24,7 @@ import {
   Check,
   X,
 } from 'lucide-react';
-import { coreColors, gray, surface, fonts } from './theme';
+import { coreColors, gray, surface, fonts, layout } from './theme';
 import { categoryLabel } from './shop-catalog';
 
 const ProSourceCarts = () => {
@@ -48,7 +48,7 @@ const ProSourceCarts = () => {
       fontFamily: fonts.sans,
     },
     container: {
-      maxWidth: 1140,
+      maxWidth: layout.page,
       margin: '0 auto',
       padding: '32px 24px',
     },

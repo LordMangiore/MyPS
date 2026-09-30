@@ -39,7 +39,7 @@ import {
   Trash2,
   ArrowLeft
 } from 'lucide-react';
-import { coreColors, statusColors, gray, surface, fonts } from './theme';
+import { coreColors, statusColors, gray, surface, fonts, layout } from './theme';
 
 const ProSourcePublicProfile = () => {
   const { profile, saveProfile: persistProfile, userId, showrooms } = useAuth();
@@ -245,7 +245,7 @@ const ProSourcePublicProfile = () => {
       fontFamily: fonts.sans,
     },
     container: {
-      maxWidth: 1140,
+      maxWidth: layout.page,
       margin: '0 auto',
       padding: '0 24px',
     },
@@ -272,7 +272,7 @@ const ProSourcePublicProfile = () => {
     heroContent: {
       display: 'flex',
       gap: 24,
-      padding: '0 24px 24px',
+      padding: '0 0 24px',
       marginTop: -60,
       position: 'relative',
     },

@@ -60,7 +60,7 @@ import {
   byNewest,
   money,
 } from './order-model';
-import { coreColors, gray, surface, fonts } from './theme';
+import { coreColors, gray, surface, fonts, layout } from './theme';
 import { categoryLabel } from './shop-catalog';
 import { formatTime } from './format';
 
@@ -1184,7 +1184,7 @@ export default function ProjectDetailPage() {
       minHeight: '100vh',
     },
     container: {
-      maxWidth: 1140,
+      maxWidth: layout.page,
       margin: '0 auto',
       padding: '24px 24px 48px',
     },

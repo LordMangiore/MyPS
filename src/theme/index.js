@@ -10,6 +10,7 @@ export const surface = tokens.surface
 export const statusColors = tokens.status
 export const brandGuide = tokens.brandGuide2026
 export const fonts = tokens.fonts
+export const layout = tokens.layout
 
 // The four brand colors every page shares, under the names pages already use.
 export const coreColors = {

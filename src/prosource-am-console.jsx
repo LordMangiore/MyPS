@@ -15,7 +15,7 @@ import {
   DollarSign,
   MapPin,
 } from 'lucide-react';
-import { coreColors, statusColors, gray, surface, fonts } from './theme';
+import { coreColors, statusColors, gray, surface, fonts, layout } from './theme';
 import { formatTime } from './format';
 
 /**
@@ -44,7 +44,7 @@ const styles = {
     fontFamily: fonts.sans,
   },
   container: {
-    maxWidth: 1140,
+    maxWidth: layout.page,
     margin: '0 auto',
     padding: '32px 24px',
   },

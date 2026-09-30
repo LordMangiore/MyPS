@@ -32,7 +32,7 @@ import {
   AlertCircle,
   RotateCw,
 } from 'lucide-react';
-import { coreColors, statusColors, gray, surface, fonts } from './theme';
+import { coreColors, statusColors, gray, surface, fonts, layout } from './theme';
 
 // Chip-group for Sort/Filter modals
 const ChipGroup = ({ options, value, onChange, colors }) => (
@@ -173,7 +173,7 @@ const ProSourceOrders = () => {
       fontFamily: fonts.sans,
     },
     container: {
-      maxWidth: 1140,
+      maxWidth: layout.page,
       margin: '0 auto',
       padding: '32px 24px',
     },

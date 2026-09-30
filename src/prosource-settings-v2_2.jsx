@@ -25,7 +25,7 @@ import {
 import AppointmentModal from './prosource-appointment-modal';
 import Select from './components/Select';
 import { normalizeStored } from './project-model';
-import { core, coreColors, gray, surface, fonts } from './theme';
+import { core, coreColors, gray, surface, fonts, layout } from './theme';
 
 // ProSource Brand Colors from source
 const colors = { ...coreColors, ...gray, redHover: core.redHover };
@@ -925,7 +925,7 @@ export default function ProSourceSettingsRedesign() {
     },
     // Inner container - constrained width with padding (matches prod layout)
     container: {
-      maxWidth: 1140,
+      maxWidth: layout.page,
       margin: '0 auto',
       padding: '24px 24px 48px',
     },

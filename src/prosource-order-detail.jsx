@@ -24,7 +24,7 @@ import {
   RotateCw,
   SearchX,
 } from 'lucide-react';
-import { coreColors, statusColors, gray, surface, fonts } from './theme';
+import { coreColors, statusColors, gray, surface, fonts, layout } from './theme';
 
 const ProSourceOrderDetail = () => {
   const { orderId } = useParams();
@@ -42,7 +42,7 @@ const ProSourceOrderDetail = () => {
       fontFamily: fonts.sans,
     },
     container: {
-      maxWidth: 1140,
+      maxWidth: layout.page,
       margin: '0 auto',
       padding: '32px 24px',
     },
