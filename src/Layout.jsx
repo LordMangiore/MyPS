@@ -365,7 +365,7 @@ const Layout = () => {
                     <Link to="/profile?own=1" style={menuItemStyle} onClick={() => setAccountMenuOpen(false)}>My Profile</Link>
                     <div style={{ borderTop: `1px solid ${gray.gray200}`, margin: '8px 0' }} />
                     <Link to="/settings?section=account" style={menuItemStyle} onClick={() => setAccountMenuOpen(false)}>Account Settings</Link>
-                    <Link to="/settings?section=team" style={menuItemStyle} onClick={() => setAccountMenuOpen(false)}>Manage Users</Link>
+                    <Link to="/settings?section=team" style={menuItemStyle} onClick={() => setAccountMenuOpen(false)}>Team Members</Link>
                   </>
                 )}
                 <div style={{ borderTop: `1px solid ${gray.gray200}`, margin: '8px 0' }} />

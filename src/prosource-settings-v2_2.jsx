@@ -658,15 +658,6 @@ export default function ProSourceSettingsRedesign() {
     return [...byName.values()];
   }, [showrooms, connections]);
 
-  /**
-   * "Your Team Members": the real people you work with, i.e. every connection
-   * who is not ProSource staff (they have their own panel above). Every row
-   * here holds a connection id, so every chat bubble resolves.
-   */
-  const teamMemberConnections = useMemo(
-    () => connections.filter((c) => c.type && c.type !== 'prosource'),
-    [connections]
-  );
 
   // ---- My Projects -------------------------------------------------------
   const [projectQuery, setProjectQuery] = useState('');
@@ -749,7 +740,7 @@ export default function ProSourceSettingsRedesign() {
   const referralYtdYear = referralYears[0] || null;
   const openYear = expandedYear === 'auto' ? referralYtdYear?.year ?? null : expandedYear;
 
-  // ---- Manage Users ------------------------------------------------------
+  // ---- Team Members (Manage Users) --------------------------------------------------
   /** Write the account's user list to the `team` blob and mirror it locally. */
   const persistTeam = async (next) => {
     await saveUserData('team', { list: next });
@@ -1296,7 +1287,7 @@ export default function ProSourceSettingsRedesign() {
              activeSection === 'projects' ? 'My Projects' :
              activeSection === 'referrals' ? 'Referral Bonus'
              : activeSection === 'account' ? 'Account Settings'
-             : activeSection === 'team' ? 'Manage Users'
+             : activeSection === 'team' ? 'Team Members'
              : 'Settings'}
           </h1>
           <p style={styles.pageSubtitle}>
@@ -1888,7 +1879,11 @@ export default function ProSourceSettingsRedesign() {
                   </div>
                 )}
 
-                {/* Your Team Members */}
+                {/* Your Team Members.
+                    The people added to this account (the Team Members page, the `team`
+                    blob): staff who can view orders and estimates. Not
+                    connections. Connections are the clients and trade pros
+                    you work with, and they have their own card and page. */}
                 <div style={{
                   background: '#fff',
                   border: `1px solid ${colors.gray200}`,
@@ -1898,53 +1893,46 @@ export default function ProSourceSettingsRedesign() {
                 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
                     <h3 style={{ fontSize: 16, fontWeight: 600, color: colors.gray900, margin: 0 }}>Your Team Members</h3>
-                    {/* Points at /connections, which is what this panel now lists.
-                        It used to point at Manage Users, a different dataset
-                        entirely (people with a login on your account). That page
-                        is still one click away in the account menu. */}
                     <Link
-                      to="/connections"
+                      to="/settings?section=team"
                       style={{ fontSize: 13, color: colors.darkBlue, textDecoration: 'none', fontWeight: 500 }}
                     >
                       Manage →
                     </Link>
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                    {teamMemberConnections.length === 0 && (
+                    {teamLoading ? (
+                      <div style={{ fontSize: 13, color: colors.gray500 }}>Loading…</div>
+                    ) : teamUsers.length === 0 ? (
                       <div style={{ fontSize: 13, color: colors.gray500 }}>
-                        No connections yet.{' '}
-                        <Link to="/connections" style={{ color: colors.darkBlue, fontWeight: 500 }}>
-                          Add the clients and trade pros you work with
+                        No one else is on your account yet.{' '}
+                        <Link to="/settings?section=team" style={{ color: colors.darkBlue, fontWeight: 500 }}>
+                          Add a team member
                         </Link>
-                        {' '}and they will show up here.
+                        {' '}to let them view your orders and estimates.
                       </div>
-                    )}
-                    {teamMemberConnections.slice(0, 4).map((person) => (
-                      <div key={person.id} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                        <Avatar
-                          name={person.name}
-                          initials={person.initials}
-                          color={person.type === 'client' ? colors.darkBlue : colors.green}
-                        />
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ fontSize: 14, fontWeight: 600, color: colors.gray900 }}>{person.name}</div>
-                          <div style={{ fontSize: 12, color: colors.gray500 }}>
-                            {[person.role, person.location].filter(Boolean).join(' • ')}
+                    ) : (
+                      teamUsers.slice(0, 4).map((u) => (
+                        <div key={u.id} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                          <Avatar name={u.name} initials={u.initials} />
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontSize: 14, fontWeight: 600, color: colors.gray900, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{u.name}</div>
+                            <div style={{ fontSize: 12, color: colors.gray500 }}>
+                              {[u.role, ACCESS_LABEL[u.access] || u.access].filter(Boolean).join(' • ')}
+                            </div>
                           </div>
+                          {u.status === 'invited' && (
+                            <span style={styles.statusBadge(u.status)}>{STATUS_LABEL[u.status]}</span>
+                          )}
                         </div>
-                        {/* ?connection=<id> is the form that actually resolves. */}
-                        <ContactLink
-                          to={`/messages?connection=${person.id}`}
-                          title={`Message ${person.name}`}
-                        />
-                      </div>
-                    ))}
-                    {teamMemberConnections.length > 4 && (
+                      ))
+                    )}
+                    {teamUsers.length > 4 && (
                       <Link
-                        to="/connections"
+                        to="/settings?section=team"
                         style={{ fontSize: 13, color: colors.darkBlue, textDecoration: 'none', fontWeight: 500 }}
                       >
-                        View all {teamMemberConnections.length} connections →
+                        View all {teamUsers.length} team members →
                       </Link>
                     )}
                   </div>
