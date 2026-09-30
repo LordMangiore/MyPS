@@ -19,7 +19,7 @@ import {
   Send,
   AlertCircle,
 } from 'lucide-react';
-import { coreColors, gray, surface, fonts } from './theme';
+import { coreColors, gray, surface, fonts, layout } from './theme';
 
 /**
  * Identity contract (shared across WP9/WP7, do not diverge):
@@ -317,7 +317,7 @@ const ProSourceConnections = () => {
       fontFamily: fonts.sans,
     },
     container: {
-      maxWidth: 1140,
+      maxWidth: layout.page,
       margin: '0 auto',
       padding: '32px 24px',
     },
@@ -411,7 +411,8 @@ const ProSourceConnections = () => {
       whiteSpace: 'nowrap',
     },
     tab: (isActive) => ({
-      padding: '12px 20px',
+      paddingTop: 12,
+      paddingBottom: 12,
       background: 'none',
       border: 'none',
       borderBottom: isActive ? `2px solid ${colors.darkBlue}` : '2px solid transparent',
@@ -757,15 +758,19 @@ const ProSourceConnections = () => {
       )}
 
       {/* Tabs */}
-      <div className="scrollbar-hide" style={styles.tabs}>
+      {/* On phones the strip is tighter (no icons, "All" instead of "All
+          Connections") and fades at the right edge, so it reads as scrollable
+          instead of looking like it only has two tabs. */}
+      <div className="scrollbar-hide tab-strip" style={styles.tabs}>
         {tabs.map(tab => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
+            className="px-3 sm:px-5 shrink-0"
             style={styles.tab(activeTab === tab.id)}
           >
-            <tab.icon size={16} />
-            {tab.label}
+            <tab.icon size={16} className="hidden sm:block" />
+            {tab.id === 'all' ? <><span className="sm:hidden">All</span><span className="hidden sm:inline">{tab.label}</span></> : tab.label}
             <span style={{
               ...styles.tabCount,
               ...(tab.highlight && {

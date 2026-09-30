@@ -32,7 +32,7 @@ import {
   AlertCircle,
   RotateCw,
 } from 'lucide-react';
-import { coreColors, statusColors, gray, surface, fonts } from './theme';
+import { coreColors, statusColors, gray, surface, fonts, layout } from './theme';
 
 // Chip-group for Sort/Filter modals
 const ChipGroup = ({ options, value, onChange, colors }) => (
@@ -173,7 +173,7 @@ const ProSourceOrders = () => {
       fontFamily: fonts.sans,
     },
     container: {
-      maxWidth: 1140,
+      maxWidth: layout.page,
       margin: '0 auto',
       padding: '32px 24px',
     },
@@ -602,19 +602,19 @@ const ProSourceOrders = () => {
           value={searchBy}
           onChange={setSearchBy}
           options={SEARCH_BY_OPTIONS}
-          className="flex-1 min-w-[160px]"
+          className="basis-full sm:flex-1 sm:min-w-[160px]"
           fullWidth
         />
         <button
           onClick={openSort}
-          className="whitespace-nowrap shrink-0 inline-flex items-center gap-1.5 px-3 py-2 text-sm border border-neutral-300 rounded-md bg-white hover:border-neutral-400"
+          className="flex-1 sm:flex-none justify-center whitespace-nowrap shrink-0 inline-flex items-center gap-1.5 px-3 py-2 text-sm border border-neutral-300 rounded-md bg-white hover:border-neutral-400"
           style={{ color: colors.gray700, fontFamily: 'inherit' }}
         >
           <ArrowUpDown size={15} /> Sort
         </button>
         <button
           onClick={openFilter}
-          className="whitespace-nowrap shrink-0 inline-flex items-center gap-1.5 px-3 py-2 text-sm border rounded-md hover:border-neutral-400"
+          className="flex-1 sm:flex-none justify-center whitespace-nowrap shrink-0 inline-flex items-center gap-1.5 px-3 py-2 text-sm border rounded-md hover:border-neutral-400"
           style={{
             color: activeFilterCount > 0 ? '#fff' : colors.gray700,
             background: activeFilterCount > 0 ? colors.darkBlue : '#fff',

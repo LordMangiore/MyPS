@@ -22,7 +22,7 @@ import {
   membersFromConnections,
   memberProjectPath,
 } from './member-access';
-import { coreColors, statusColors, gray, surface, fonts } from './theme';
+import { coreColors, statusColors, gray, surface, fonts, layout } from './theme';
 
 const colors = { ...coreColors, ...gray, amber: statusColors.amberDark };
 
@@ -566,7 +566,7 @@ const styles = {
     minHeight: '100vh',
   },
   container: {
-    maxWidth: 1140,
+    maxWidth: layout.page,
     margin: '0 auto',
     padding: '24px 24px 48px',
   },

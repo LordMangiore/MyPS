@@ -16,7 +16,7 @@ import {
   fmtDate,
   fmtPreviewTimestamp,
 } from './twilio-client';
-import { coreColors, gray, surface, fonts } from './theme';
+import { coreColors, gray, surface, fonts, layout } from './theme';
 import { formatTime } from './format';
 
 const ProSourceMessages = () => {
@@ -47,7 +47,7 @@ const ProSourceMessages = () => {
       fontFamily: fonts.sans,
     },
     container: {
-      maxWidth: 1140,
+      maxWidth: layout.page,
       margin: '0 auto',
       padding: '32px 24px',
     },

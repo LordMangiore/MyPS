@@ -39,7 +39,7 @@ import {
   Trash2,
   ArrowLeft
 } from 'lucide-react';
-import { coreColors, statusColors, gray, surface, fonts } from './theme';
+import { coreColors, statusColors, gray, surface, fonts, layout } from './theme';
 
 const ProSourcePublicProfile = () => {
   const { profile, saveProfile: persistProfile, userId, showrooms } = useAuth();
@@ -245,7 +245,7 @@ const ProSourcePublicProfile = () => {
       fontFamily: fonts.sans,
     },
     container: {
-      maxWidth: 1140,
+      maxWidth: layout.page,
       margin: '0 auto',
       padding: '0 24px',
     },
@@ -272,7 +272,7 @@ const ProSourcePublicProfile = () => {
     heroContent: {
       display: 'flex',
       gap: 24,
-      padding: '0 24px 24px',
+      padding: '0 0 24px',
       marginTop: -60,
       position: 'relative',
     },
@@ -293,9 +293,11 @@ const ProSourcePublicProfile = () => {
       position: 'relative',
       overflow: 'hidden',
     },
+    // Beside the photo on wider screens the text clears the cover (sm:pt-[70px]);
+    // stacked under it on phones it just needs a little room.
     heroInfo: {
       flex: 1,
-      paddingTop: 70,
+      minWidth: 240,
     },
     badges: {
       display: 'flex',
@@ -333,20 +335,24 @@ const ProSourcePublicProfile = () => {
     },
     ratingRow: {
       display: 'flex',
+      flexWrap: 'wrap',
       alignItems: 'center',
-      gap: 12,
+      columnGap: 12,
+      rowGap: 4,
       marginBottom: 12,
     },
     ratingScore: {
       fontSize: 18,
       fontWeight: 700,
       color: colors.gray900,
+      whiteSpace: 'nowrap',
     },
     stars: {
       display: 'flex',
       gap: 2,
     },
     reviewCount: {
+      whiteSpace: 'nowrap',
       fontSize: 14,
       color: colors.darkBlue,
       fontWeight: 500,
@@ -362,7 +368,6 @@ const ProSourcePublicProfile = () => {
     heroActions: {
       display: 'flex',
       gap: 8,
-      paddingTop: 70,
       alignItems: 'flex-start',
       alignSelf: 'flex-start',
     },
@@ -1249,9 +1254,11 @@ const ProSourcePublicProfile = () => {
           your own belongs to your dashboard. This was always the dashboard,
           which on a pro's page sent a signed-out visitor somewhere they cannot
           go. */}
-      <Link to={directoryPro ? '/pros' : '/settings'} style={styles.backLink}>
-        <ArrowLeft size={18} /> {directoryPro ? 'Back to Find a Pro' : 'Back to Dashboard'}
-      </Link>
+      <div style={styles.container}>
+        <Link to={directoryPro ? '/pros' : '/settings'} style={{ ...styles.backLink, padding: '16px 0' }}>
+          <ArrowLeft size={18} /> {directoryPro ? 'Back to Find a Pro' : 'Back to Dashboard'}
+        </Link>
+      </div>
 
       {/* Edit Mode Banner */}
       {isEditing && (
@@ -1288,7 +1295,7 @@ const ProSourcePublicProfile = () => {
             <div style={styles.profilePhoto}>
               {shownInitials}
             </div>
-            <div style={styles.heroInfo}>
+            <div className="pt-2 sm:pt-[70px]" style={styles.heroInfo}>
               {isEditing ? (
                 <div style={{ display: 'flex', gap: 12, marginBottom: 8 }}>
                   <input
@@ -1349,7 +1356,7 @@ const ProSourcePublicProfile = () => {
               )}
             </div>
 
-            <div style={styles.heroActions}>
+            <div className="sm:pt-[70px]" style={styles.heroActions}>
               {!isEditing ? (
                 <>
                   {isOwnProfile && (

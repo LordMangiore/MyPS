@@ -8,7 +8,7 @@ import {
   ratingOf,
   reviewCountOf,
 } from './pro-directory';
-import { core, coreColors, gray } from './theme';
+import { core, coreColors, gray, layout } from './theme';
 
 const colors = { ...coreColors, ...gray };
 
@@ -59,7 +59,7 @@ export default function ProSourcePros() {
 
   return (
     <div style={{ background: colors.gray100, minHeight: '100vh' }}>
-      <div style={{ maxWidth: 1080, margin: '0 auto', padding: '32px 24px 64px' }}>
+      <div style={{ maxWidth: layout.page, margin: '0 auto', padding: `32px ${layout.gutter}px 64px` }}>
         <h1 style={{ fontSize: 28, fontWeight: 700, color: colors.gray900, margin: 0 }}>
           Find a Pro
         </h1>
