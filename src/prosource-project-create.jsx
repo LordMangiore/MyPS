@@ -11,20 +11,9 @@ import {
   normalizeStored,
 } from './project-model';
 import { iconForProjectType } from './project-type-icons';
+import { coreColors, statusColors, gray, surface } from './theme';
 
-const colors = {
-  red: '#BA0C2F',
-  darkBlue: '#003087',
-  lightBlue: '#6CACE4',
-  green: '#07542E',
-  amber: '#856404',
-  gray100: '#f8f9fa',
-  gray200: '#e9ecef',
-  gray300: '#dee2e6',
-  gray500: '#6c757d',
-  gray700: '#495057',
-  gray900: '#212529',
-};
+const colors = { ...coreColors, ...gray, amber: statusColors.amberDark };
 
 const STATES = ['MO', 'IL', 'TX', 'CA', 'FL', 'NY', 'NC', 'OH', 'PA', 'GA', 'WA', 'CO'];
 
@@ -867,7 +856,7 @@ function ReviewRow({ label, value }) {
 const styles = {
   wrapper: {
     fontFamily: "'Open Sans', -apple-system, BlinkMacSystemFont, sans-serif",
-    background: '#fafafa',
+    background: surface.page,
     minHeight: '100vh',
   },
   container: {

@@ -19,6 +19,7 @@ import {
   Send,
   AlertCircle,
 } from 'lucide-react';
+import { coreColors, gray, surface } from './theme';
 
 /**
  * Identity contract (shared across WP9/WP7, do not diverge):
@@ -307,23 +308,11 @@ const ProSourceConnections = () => {
     }
   };
 
-  const colors = {
-    red: '#BA0C2F',
-    darkBlue: '#003087',
-    lightBlue: '#6CACE4',
-    green: '#07542E',
-    gray100: '#f5f5f5',
-    gray200: '#e5e5e5',
-    gray300: '#d4d4d4',
-    gray400: '#a3a3a3',
-    gray500: '#737373',
-    gray700: '#404040',
-    gray900: '#171717',
-  };
+  const colors = { ...coreColors, ...gray };
 
   const styles = {
     wrapper: {
-      background: '#fafafa',
+      background: surface.page,
       minHeight: '100vh',
       fontFamily: "'Open Sans', -apple-system, BlinkMacSystemFont, sans-serif",
     },
@@ -1199,7 +1188,7 @@ const ProSourceConnections = () => {
                     <div style={{ fontSize: 13, color: colors.gray500 }}>
                       {[resolvedUser.role, resolvedUser.businessName].filter(Boolean).join(' · ')}
                     </div>
-                    <div style={{ fontSize: 12, color: colors.gray400, marginTop: 2 }}>{resolvedUser.email}</div>
+                    <div style={{ fontSize: 12, color: colors.gray500, marginTop: 2 }}>{resolvedUser.email}</div>
                   </div>
                 </div>
                 <div style={{ marginBottom: 14 }}>

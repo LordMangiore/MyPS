@@ -22,20 +22,9 @@ import {
   membersFromConnections,
   memberProjectPath,
 } from './member-access';
+import { coreColors, statusColors, gray, surface } from './theme';
 
-const colors = {
-  red: '#BA0C2F',
-  darkBlue: '#003087',
-  lightBlue: '#6CACE4',
-  green: '#07542E',
-  amber: '#856404',
-  gray100: '#f8f9fa',
-  gray200: '#e9ecef',
-  gray300: '#dee2e6',
-  gray500: '#6c757d',
-  gray700: '#495057',
-  gray900: '#212529',
-};
+const colors = { ...coreColors, ...gray, amber: statusColors.amberDark };
 
 const STATUS_META = {
   working: { label: 'Working', bg: '#e3f2fd', fg: colors.darkBlue },
@@ -573,7 +562,7 @@ function AmMemberProjects() {
 const styles = {
   wrapper: {
     fontFamily: "'Open Sans', -apple-system, BlinkMacSystemFont, sans-serif",
-    background: '#fafafa',
+    background: surface.page,
     minHeight: '100vh',
   },
   container: {

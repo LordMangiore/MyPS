@@ -3,6 +3,8 @@ import { Link } from 'react-router-dom';
 import { ShoppingBag, Headset, Home } from 'lucide-react';
 import { useAuth } from './auth-context';
 import AddressAutocomplete from './components/AddressAutocomplete';
+import { core, statusColors, gray } from './theme';
+import Logo from './components/Logo';
 
 /**
  * `initialPage` / `initialMode` let the router mount this straight onto the
@@ -255,22 +257,7 @@ const ProSourceLogin = ({ initialPage = 'email', initialMode = 'signin' }) => {
     setInterests(prev => ({ ...prev, [key]: !prev[key] }));
   };
 
-  const colors = {
-    red: '#BA0C2F',
-    blue: '#003087',
-    blueLight: '#1a4a9e',
-    bluePale: '#e8edf7',
-    gray50: '#f9f9f8',
-    gray100: '#f0eeeb',
-    gray200: '#e2dfda',
-    gray300: '#c8c4bc',
-    gray500: '#8a867e',
-    gray700: '#4a4642',
-    gray900: '#1a1714',
-    green: '#07542E',
-    greenPale: '#e6f2ec',
-    white: '#ffffff',
-  };
+  const colors = { red: core.red, blue: core.blue, blueLight: core.blueMid, bluePale: core.bluePale, ...gray, green: core.green, greenPale: statusColors.greenPale, white: '#ffffff' };
 
   const s = {
     nav: {
@@ -283,21 +270,6 @@ const ProSourceLogin = ({ initialPage = 'email', initialMode = 'signin' }) => {
       position: 'sticky',
       top: 0,
       zIndex: 100,
-    },
-    logoPs: {
-      fontFamily: "'DM Serif Display', 'Georgia', serif",
-      fontSize: 22,
-      color: colors.blue,
-      letterSpacing: -0.5,
-      textDecoration: 'none',
-    },
-    logoWh: {
-      fontSize: 11,
-      fontWeight: 500,
-      color: colors.gray500,
-      letterSpacing: 1.5,
-      textTransform: 'uppercase',
-      marginLeft: 3,
     },
     navLinks: {
       display: 'flex',
@@ -694,9 +666,8 @@ const ProSourceLogin = ({ initialPage = 'email', initialMode = 'signin' }) => {
   const renderNav = () => (
     <nav style={s.nav} className="px-4 md:px-8">
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, width: '100%' }}>
-        <Link to="/" style={{ display: 'flex', alignItems: 'baseline', gap: 3, textDecoration: 'none' }}>
-          <span style={s.logoPs}>ProSource</span>
-          <span style={s.logoWh} className="hidden sm:inline">Wholesale</span>
+        <Link to="/" style={{ display: 'flex', alignItems: 'center', textDecoration: 'none' }}>
+          <Logo height={32} />
         </Link>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <Link

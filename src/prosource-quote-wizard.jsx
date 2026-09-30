@@ -4,19 +4,9 @@ import { X, CheckCircle, Mail } from 'lucide-react';
 import { iconForProjectType } from './project-type-icons';
 import { useAuth } from './auth-context';
 import { clearGuestCart } from './guest-cart';
+import { coreColors, gray } from './theme';
 
-const colors = {
-  red: '#BA0C2F',
-  darkBlue: '#003087',
-  lightBlue: '#6CACE4',
-  green: '#07542E',
-  gray100: '#f8f9fa',
-  gray200: '#e9ecef',
-  gray300: '#dee2e6',
-  gray500: '#6c757d',
-  gray700: '#495057',
-  gray900: '#212529',
-};
+const colors = { ...coreColors, ...gray };
 
 const AUDIENCE_OPTIONS = [
   { value: 'tradepro', label: 'Trade pro', body: 'Contractor, designer, or builder buying for clients.' },

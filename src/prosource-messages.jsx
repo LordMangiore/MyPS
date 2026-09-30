@@ -16,6 +16,7 @@ import {
   fmtDate,
   fmtPreviewTimestamp,
 } from './twilio-client';
+import { coreColors, gray, surface } from './theme';
 
 const ProSourceMessages = () => {
   const { loadUserData, saveUserData, userId, homePath } = useAuth();
@@ -36,23 +37,11 @@ const ProSourceMessages = () => {
   const twilioRef = useRef(null);
   const messagesEndRef = useRef(null);
 
-  const colors = {
-    red: '#BA0C2F',
-    darkBlue: '#003087',
-    lightBlue: '#6CACE4',
-    green: '#07542E',
-    gray100: '#f5f5f5',
-    gray200: '#e5e5e5',
-    gray300: '#d4d4d4',
-    gray400: '#a3a3a3',
-    gray500: '#737373',
-    gray700: '#404040',
-    gray900: '#171717',
-  };
+  const colors = { ...coreColors, ...gray };
 
   const styles = {
     wrapper: {
-      background: '#fafafa',
+      background: surface.page,
       minHeight: '100vh',
       fontFamily: "'Open Sans', -apple-system, BlinkMacSystemFont, sans-serif",
     },
@@ -159,7 +148,7 @@ const ProSourceMessages = () => {
     },
     threadTime: {
       fontSize: 11,
-      color: colors.gray400,
+      color: colors.gray500,
       flexShrink: 0,
     },
     threadRole: {
@@ -213,7 +202,7 @@ const ProSourceMessages = () => {
     dateDivider: {
       textAlign: 'center',
       fontSize: 12,
-      color: colors.gray400,
+      color: colors.gray500,
       margin: '8px 0',
     },
     messageRow: (isMe) => ({
@@ -236,7 +225,7 @@ const ProSourceMessages = () => {
     }),
     messageTime: (isMe) => ({
       fontSize: 11,
-      color: colors.gray400,
+      color: colors.gray500,
       marginTop: 4,
       textAlign: isMe ? 'right' : 'left',
     }),
@@ -296,7 +285,7 @@ const ProSourceMessages = () => {
       flexDirection: 'column',
       alignItems: 'center',
       justifyContent: 'center',
-      color: colors.gray400,
+      color: colors.gray500,
       gap: 12,
     },
   };
@@ -768,7 +757,7 @@ const ProSourceMessages = () => {
 
               <div style={styles.messagesArea}>
                 {(activeThread.messages || []).length === 0 && (
-                  <div style={{ margin: 'auto', textAlign: 'center', color: colors.gray400, fontSize: 13 }}>
+                  <div style={{ margin: 'auto', textAlign: 'center', color: colors.gray500, fontSize: 13 }}>
                     No messages yet. Say hello.
                   </div>
                 )}

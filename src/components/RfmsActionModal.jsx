@@ -1,15 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { X, ExternalLink, CheckCircle, ShieldCheck, AlertCircle } from 'lucide-react';
+import { coreColors, gray } from '../theme';
 
-const colors = {
-  red: '#BA0C2F',
-  darkBlue: '#003087',
-  green: '#07542E',
-  gray200: '#e9ecef',
-  gray500: '#6c757d',
-  gray700: '#495057',
-  gray900: '#212529',
-};
+const colors = { ...coreColors, ...gray };
 
 const COPY = {
   pay: {
@@ -152,7 +145,7 @@ export default function RfmsActionModal({ isOpen, onClose, variant, amount, orde
               </div>
 
               <div style={{
-                background: '#f8f9fa', borderRadius: 8, padding: '12px 14px',
+                background: gray.gray100, borderRadius: 8, padding: '12px 14px',
                 fontSize: 13, color: colors.gray700, marginBottom: 18,
                 display: 'flex', flexDirection: 'column', gap: 6,
               }}>

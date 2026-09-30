@@ -18,22 +18,9 @@ import {
   fetchCatalog, CATEGORIES, DEPARTMENTS, resolveProduct, migrateItemKeys,
   colorVariants,
 } from './shop-catalog';
+import { coreColors, gray, surface } from './theme';
 
-const colors = {
-  red: '#BA0C2F',
-  darkBlue: '#003087',
-  lightBlue: '#6CACE4',
-  green: '#07542E',
-  gray50: '#f9f9f8',
-  gray100: '#f5f5f5',
-  gray200: '#e5e5e5',
-  gray300: '#d4d4d4',
-  gray400: '#a3a3a3',
-  gray500: '#737373',
-  gray600: '#525252',
-  gray700: '#404040',
-  gray900: '#171717',
-};
+const colors = { ...coreColors, ...gray, gray50: gray.gray50 };
 
 // The catalog is served by /api/products and bundled as FALLBACK_PRODUCTS in
 // shop-catalog.js, which also owns SKU resolution for legacy stored cart keys.
@@ -543,7 +530,7 @@ export default function ProSourceShop() {
   const totalItems = quoteCart.reduce((sum, item) => sum + (item.qty || 1), 0);
 
   const s = {
-    wrapper: { background: '#fafafa', minHeight: '100vh', fontFamily: "'Open Sans', -apple-system, sans-serif" },
+    wrapper: { background: surface.page, minHeight: '100vh', fontFamily: "'Open Sans', -apple-system, sans-serif" },
     container: { maxWidth: 1140, margin: '0 auto', padding: '0 16px' },
     // Breadcrumb
     breadcrumb: { display: 'flex', alignItems: 'center', gap: 8, padding: '16px 0', fontSize: 13, color: colors.gray500 },
@@ -598,7 +585,7 @@ export default function ProSourceShop() {
     detailColorName: { fontSize: 14, color: colors.gray500, marginBottom: 4 },
     detailPriceLabel: { fontSize: 12, color: colors.gray500, marginBottom: 2 },
     detailPrice: { fontSize: 32, fontWeight: 700, color: colors.gray900, marginBottom: 4, display: 'flex', alignItems: 'baseline', gap: 4 },
-    detailStrike: { textDecoration: 'line-through', color: colors.gray400 },
+    detailStrike: { textDecoration: 'line-through', color: colors.gray500 },
     detailUnit: { fontSize: 14, fontWeight: 400, color: colors.gray500 },
     // Swatches
     swatchRow: { display: 'flex', gap: 8, marginBottom: 20 },
@@ -792,7 +779,7 @@ export default function ProSourceShop() {
 
             {/* Cart items */}
             {quoteCart.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '48px 24px', color: colors.gray400 }}>
+              <div style={{ textAlign: 'center', padding: '48px 24px', color: colors.gray500 }}>
                 <ShoppingCart size={32} style={{ marginBottom: 12 }} />
                 <div style={{ fontSize: 14 }}>Your cart is empty</div>
                 <button
@@ -1167,7 +1154,7 @@ export default function ProSourceShop() {
                 role="img"
                 aria-label={p.name}
               />
-              <div style={{ textAlign: 'center', fontSize: 12, color: colors.gray400, marginTop: 8 }}>
+              <div style={{ textAlign: 'center', fontSize: 12, color: colors.gray500, marginTop: 8 }}>
                 Hover over image to zoom
               </div>
             </div>
@@ -1575,7 +1562,7 @@ export default function ProSourceShop() {
                 </div>
               </div>
             ) : quoteCart.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '40px 0', color: colors.gray400 }}>
+              <div style={{ textAlign: 'center', padding: '40px 0', color: colors.gray500 }}>
                 <ShoppingCart size={32} style={{ marginBottom: 12 }} />
                 <div style={{ fontSize: 14 }}>Your quote is empty</div>
                 <div style={{ fontSize: 12, marginTop: 4 }}>Add products to request pricing</div>
