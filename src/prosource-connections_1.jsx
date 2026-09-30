@@ -1324,6 +1324,8 @@ const ProSourceConnections = () => {
                       <strong>No email was sent.</strong>{' '}
                       {inviteResult?.reason === 'email-not-configured'
                         ? 'Email delivery is not configured in this environment (no RESEND_API_KEY), so nothing was delivered to '
+                        : inviteResult?.reason === 'recipient-unavailable'
+                        ? 'That person has turned off email from myProSource, so nothing was delivered to '
                         : 'The email failed to send, so nothing was delivered to '}
                       <strong>{addModalEmail}</strong>.
                       <br /><br />

@@ -1,5 +1,6 @@
 import { getStore } from "@netlify/blobs";
 import { seedNewUser } from "./lib/seed.mjs";
+import { getProfile, isDeactivated, setDeactivated } from "./lib/account-status.mjs";
 
 const FIREBASE_API_KEY = process.env.FIREBASE_API_KEY;
 const IDENTITY_URL = "https://identitytoolkit.googleapis.com/v1";
@@ -158,6 +159,19 @@ export default async function handler(req) {
       } catch {}
     }
 
+    // Signing back in reactivates a deactivated account.
+    let reactivated = false;
+    if (!isNewUser) {
+      try {
+        if (isDeactivated(await getProfile(existingUserId))) {
+          await setDeactivated(existingUserId, false);
+          reactivated = true;
+        }
+      } catch (e) {
+        console.warn("reactivate check failed:", e.message);
+      }
+    }
+
     const sessionToken =
       firebaseAuth?.idToken ||
       btoa(`${existingUserId}:${Date.now()}:${Math.random().toString(36).slice(2)}`);
@@ -165,6 +179,7 @@ export default async function handler(req) {
     return Response.json({
       success: true,
       isNewUser,
+      reactivated,
       user: {
         id: existingUserId,
         email: normalizedEmail,

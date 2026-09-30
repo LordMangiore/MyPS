@@ -326,7 +326,32 @@ export default function ProSourceSettingsRedesign() {
     saveProfile,
     loadUserData,
     saveUserData,
+    logout,
   } = useAuth();
+
+  // Account deactivation: 'idle' → 'confirm' → 'working'. Deactivating signs
+  // the member out; signing back in reactivates (see otp-verify).
+  const [deactivateStep, setDeactivateStep] = useState('idle');
+  const [deactivateError, setDeactivateError] = useState(null);
+  const deactivateAccount = async () => {
+    setDeactivateStep('working');
+    setDeactivateError(null);
+    try {
+      const res = await fetch('/api/account-status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, action: 'deactivate' }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.success) throw new Error(data.error || 'Could not deactivate your account');
+      logout();
+      // Land on the public home page, not a sign-in prompt for the page they just left.
+      window.location.replace('/');
+    } catch (err) {
+      setDeactivateError(err.message);
+      setDeactivateStep('confirm');
+    }
+  };
 
   // Personal info editor state: seeded from the saved profile, edits flushed
   // back via saveProfile.
@@ -1248,7 +1273,7 @@ export default function ProSourceSettingsRedesign() {
     dangerTitle: {
       fontSize: 16,
       fontWeight: 600,
-      color: colors.red,
+      color: colors.error,
       marginBottom: 8,
     },
   };
@@ -2525,23 +2550,61 @@ export default function ProSourceSettingsRedesign() {
           </div>
 
           {/* Danger Zone.
-              The button is gone rather than wired. Nothing in this app reads a
-              "deactivated" flag, so a self-serve button could only ever set a
-              field no code enforces: it would report success and leave the
-              account fully working, which is a worse lie than the dead button
-              it replaced. Deactivation is a real support operation, so this
-              points at the person who can actually do it. */}
+              Deactivation is real now: account-status sets `deactivatedAt`,
+              lookup-user hides the account from other members, send-invite
+              stops emailing it, and otp-verify reactivates on sign-in. It is
+              the member's myProSource account only. Their ProSource membership
+              belongs to the showroom, so this says where to go for that. */}
           <div style={styles.dangerZone}>
             <div style={styles.dangerTitle}>Deactivate Account</div>
-            <p style={{ fontSize: 14, color: colors.gray500, margin: 0 }}>
-              Deactivating hides your profile and stops all notifications. Your account manager
-              handles this for you: contact
-              {accountManager?.name ? ` ${accountManager.name}` : ' your account manager'}
-              {accountManager?.email ? (
-                <> at <a href={`mailto:${accountManager.email}?subject=Deactivate%20my%20account`} style={{ color: colors.red, fontWeight: 500 }}>{accountManager.email}</a></>
-              ) : null}
-              {showroom?.phone ? ` or call ${showroom.phone}` : ''} and they will close it.
+            <p style={{ fontSize: 14, color: colors.gray700, margin: '0 0 8px', lineHeight: 1.55 }}>
+              Deactivating hides your profile from other members and stops email notifications
+              from myProSource. You can reactivate anytime by signing back in.
             </p>
+            <p style={{ fontSize: 14, color: colors.gray500, margin: '0 0 16px', lineHeight: 1.55 }}>
+              This doesn't cancel your ProSource membership. To change your membership, contact
+              {showroom?.name ? ` ${showroom.name}` : ' your showroom'}
+              {showroom?.phone ? ` at ${showroom.phone}` : ''}.
+            </p>
+            {deactivateStep === 'idle' ? (
+              <button
+                type="button"
+                onClick={() => setDeactivateStep('confirm')}
+                style={{
+                  background: '#fff', color: colors.error, border: `1px solid ${colors.error}`,
+                  borderRadius: 6, padding: '8px 16px', fontSize: 14, fontWeight: 600,
+                  cursor: 'pointer', fontFamily: 'inherit',
+                }}
+              >Deactivate account</button>
+            ) : (
+              <div role="alertdialog" aria-label="Confirm account deactivation" style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 12 }}>
+                <span style={{ fontSize: 14, fontWeight: 600, color: colors.gray900 }}>
+                  Deactivate your account? You'll be signed out.
+                </span>
+                <button
+                  type="button"
+                  onClick={deactivateAccount}
+                  disabled={deactivateStep === 'working'}
+                  style={{
+                    background: colors.error, color: '#fff', border: `1px solid ${colors.error}`,
+                    borderRadius: 6, padding: '8px 16px', fontSize: 14, fontWeight: 600,
+                    cursor: 'pointer', fontFamily: 'inherit', opacity: deactivateStep === 'working' ? 0.7 : 1,
+                  }}
+                >{deactivateStep === 'working' ? 'Deactivating…' : 'Yes, deactivate'}</button>
+                <button
+                  type="button"
+                  onClick={() => { setDeactivateStep('idle'); setDeactivateError(null); }}
+                  disabled={deactivateStep === 'working'}
+                  style={{
+                    background: 'none', color: colors.gray700, border: 'none', padding: '8px 4px',
+                    fontSize: 14, fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit',
+                  }}
+                >Cancel</button>
+                {deactivateError && (
+                  <div role="alert" style={{ width: '100%', fontSize: 13, color: colors.error }}>{deactivateError}</div>
+                )}
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -2579,6 +2642,8 @@ export default function ProSourceSettingsRedesign() {
                       {inviteResult.token ? ' and a real invite token' : ''}, but no email went out
                       {inviteResult.reason === 'email-not-configured'
                         ? ' because email delivery is not configured in this environment.'
+                        : inviteResult.reason === 'recipient-unavailable'
+                        ? ' because that person has turned off email from myProSource.'
                         : '.'}
                       {inviteResult.error && (
                         <><br /><span style={{ fontSize: 12, color: colors.error }}>{inviteResult.error}</span></>

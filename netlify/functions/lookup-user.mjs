@@ -40,6 +40,11 @@ export default async function handler(req) {
     const userStore = getStore({ name: "ps-users", consistency: "strong" });
     const profile = await userStore.get(mapping.userId, { type: "json" }).catch(() => null);
 
+    // A deactivated account is hidden from other members.
+    if (profile?.deactivatedAt) {
+      return Response.json({ found: false, email: normalized });
+    }
+
     const firstName = profile?.firstName || "";
     const lastName = profile?.lastName || "";
     const name =

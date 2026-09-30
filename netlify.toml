@@ -94,6 +94,11 @@
   status = 200
 
 [[redirects]]
+  from = "/api/account-status"
+  to = "/.netlify/functions/account-status"
+  status = 200
+
+[[redirects]]
   from = "/*"
   to = "/index.html"
   status = 200
