@@ -806,7 +806,7 @@ export default function ProSourceShop() {
                       )}
                       <div style={{ flex: 1 }}>
                         <div style={{ fontSize: 14, fontWeight: 600, color: colors.gray900, lineHeight: 1.4, marginBottom: 2 }}>
-                          {item.isSample ? '🔲 SAMPLE · ' : ''}
+                          {item.isSample ? 'SAMPLE · ' : ''}
                           {/* Names link to the product they came from. Falls back
                               to plain text for a line the catalog no longer has. */}
                           {pdpHref(item) ? (

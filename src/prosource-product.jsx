@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { categoryLabel } from './shop-catalog';
+import { FileSpreadsheet } from 'lucide-react';
 
 /**
  * Admin Product Manager. Reads and writes the real catalog behind
@@ -322,7 +323,7 @@ export default function ProductManager() {
               onClick={() => { setShowUpload(true); setImportResult(null); setImportError(null); }}
               className="bg-blue-700 hover:bg-blue-600 px-4 py-2 rounded flex items-center gap-2"
             >
-              <span>📄</span> Upload CSV
+              <FileSpreadsheet size={16} aria-hidden="true" /> Upload CSV
             </button>
             <button
               onClick={handleAddProduct}
@@ -798,7 +799,7 @@ export default function ProductManager() {
                   dragOver ? 'border-blue-500 bg-blue-50' : ''
                 }`}
               >
-                <div className="text-4xl mb-3">📄</div>
+                <FileSpreadsheet size={40} className="mx-auto mb-3 text-gray-400" aria-hidden="true" />
                 {importing ? (
                   <p className="text-gray-600">Importing…</p>
                 ) : (
