@@ -2554,7 +2554,7 @@ export default function ProSourceSettingsRedesign() {
               lookup-user hides the account from other members, send-invite
               stops emailing it, and otp-verify reactivates on sign-in. It is
               the member's myProSource account only. Their ProSource membership
-              belongs to the showroom, so this says where to go for that. */}
+              belongs to the showroom, so this says it is left alone. */}
           <div style={styles.dangerZone}>
             <div style={styles.dangerTitle}>Deactivate Account</div>
             <p style={{ fontSize: 14, color: colors.gray700, margin: '0 0 8px', lineHeight: 1.55 }}>
@@ -2562,9 +2562,7 @@ export default function ProSourceSettingsRedesign() {
               from myProSource. You can reactivate anytime by signing back in.
             </p>
             <p style={{ fontSize: 14, color: colors.gray500, margin: '0 0 16px', lineHeight: 1.55 }}>
-              This doesn't cancel your ProSource membership. To change your membership, contact
-              {showroom?.name ? ` ${showroom.name}` : ' your showroom'}
-              {showroom?.phone ? ` at ${showroom.phone}` : ''}.
+              This doesn't cancel your ProSource membership.
             </p>
             {deactivateStep === 'idle' ? (
               <button
