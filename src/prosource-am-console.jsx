@@ -15,7 +15,7 @@ import {
   DollarSign,
   MapPin,
 } from 'lucide-react';
-import { coreColors, statusColors, gray, surface } from './theme';
+import { coreColors, statusColors, gray, surface, fonts } from './theme';
 import { formatTime } from './format';
 
 /**
@@ -41,7 +41,7 @@ const styles = {
   wrapper: {
     background: surface.page,
     minHeight: '100vh',
-    fontFamily: "'Open Sans', -apple-system, BlinkMacSystemFont, sans-serif",
+    fontFamily: fonts.sans,
   },
   container: {
     maxWidth: 1140,

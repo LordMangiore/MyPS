@@ -3,7 +3,7 @@ import { Link, Outlet, useLocation } from 'react-router-dom'
 import { Bell, MessageCircle, Menu, X, ShoppingCart, ClipboardList, FolderOpen } from 'lucide-react'
 import { useAuth } from './auth-context'
 import { guestCartCount, subscribeGuestCart, syncActiveCartToAccount } from './guest-cart'
-import { core, gray } from './theme';
+import { core, gray, fonts } from './theme';
 import Logo from './components/Logo';
 
 const categories = [
@@ -133,7 +133,7 @@ const Layout = () => {
       <div className="bg-white border-b border-neutral-200">
       <header
         className="flex justify-between items-center px-4 md:px-6 py-3 max-w-[1140px] mx-auto"
-        style={{ fontFamily: "'Open Sans', -apple-system, BlinkMacSystemFont, sans-serif" }}
+        style={{ fontFamily: fonts.sans }}
       >
         <div className="flex items-center gap-4 md:gap-12 flex-1 min-w-0">
           <button

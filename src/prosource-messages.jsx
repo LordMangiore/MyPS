@@ -16,7 +16,7 @@ import {
   fmtDate,
   fmtPreviewTimestamp,
 } from './twilio-client';
-import { coreColors, gray, surface } from './theme';
+import { coreColors, gray, surface, fonts } from './theme';
 import { formatTime } from './format';
 
 const ProSourceMessages = () => {
@@ -44,7 +44,7 @@ const ProSourceMessages = () => {
     wrapper: {
       background: surface.page,
       minHeight: '100vh',
-      fontFamily: "'Open Sans', -apple-system, BlinkMacSystemFont, sans-serif",
+      fontFamily: fonts.sans,
     },
     container: {
       maxWidth: 1140,

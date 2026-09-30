@@ -23,7 +23,7 @@ import {
 import AppointmentModal from './prosource-appointment-modal';
 import Select from './components/Select';
 import { normalizeStored } from './project-model';
-import { core, coreColors, gray, surface } from './theme';
+import { core, coreColors, gray, surface, fonts } from './theme';
 
 // ProSource Brand Colors from source
 const colors = { ...coreColors, ...gray, redHover: core.redHover };
@@ -898,7 +898,7 @@ export default function ProSourceSettingsRedesign() {
   const styles = {
     // Outer wrapper - full width background if needed
     wrapper: {
-      fontFamily: "'Open Sans', -apple-system, BlinkMacSystemFont, sans-serif",
+      fontFamily: fonts.sans,
       background: surface.page,
       minHeight: '100vh',
     },

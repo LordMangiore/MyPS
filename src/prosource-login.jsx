@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { ShoppingBag, Headset, Home } from 'lucide-react';
 import { useAuth } from './auth-context';
 import AddressAutocomplete from './components/AddressAutocomplete';
-import { core, statusColors, gray } from './theme';
+import { core, statusColors, gray, fonts } from './theme';
 import Logo from './components/Logo';
 
 /**
@@ -306,7 +306,7 @@ const ProSourceLogin = ({ initialPage = 'email', initialMode = 'signin' }) => {
       fontWeight: 500,
     },
     authHeadline: {
-      fontFamily: "'DM Serif Display', 'Georgia', serif",
+      fontFamily: fonts.sans, fontWeight: 700, letterSpacing: '-0.02em',
       color: colors.white,
       lineHeight: 1.15,
       marginBottom: 20,
@@ -379,7 +379,7 @@ const ProSourceLogin = ({ initialPage = 'email', initialMode = 'signin' }) => {
       border: `1.5px solid ${colors.gray200}`,
       borderRadius: 6,
       fontSize: 14,
-      fontFamily: "'DM Sans', sans-serif",
+      fontFamily: fonts.sans,
       color: colors.gray900,
       background: colors.white,
       outline: 'none',
@@ -391,7 +391,7 @@ const ProSourceLogin = ({ initialPage = 'email', initialMode = 'signin' }) => {
       border: `1.5px solid ${colors.gray200}`,
       borderRadius: 6,
       fontSize: 14,
-      fontFamily: "'DM Sans', sans-serif",
+      fontFamily: fonts.sans,
       color: colors.gray900,
       background: colors.white,
       outline: 'none',
@@ -404,7 +404,7 @@ const ProSourceLogin = ({ initialPage = 'email', initialMode = 'signin' }) => {
       border: `1.5px solid ${colors.gray200}`,
       borderRadius: 6,
       fontSize: 14,
-      fontFamily: "'DM Sans', sans-serif",
+      fontFamily: fonts.sans,
       color: colors.gray900,
       background: colors.white,
       outline: 'none',
@@ -418,7 +418,7 @@ const ProSourceLogin = ({ initialPage = 'email', initialMode = 'signin' }) => {
       borderRadius: 6,
       fontSize: 14,
       fontWeight: 600,
-      fontFamily: "'DM Sans', sans-serif",
+      fontFamily: fonts.sans,
       cursor: 'pointer',
       display: 'flex',
       alignItems: 'center',
@@ -435,7 +435,7 @@ const ProSourceLogin = ({ initialPage = 'email', initialMode = 'signin' }) => {
       borderRadius: 6,
       fontSize: 14,
       fontWeight: 600,
-      fontFamily: "'DM Sans', sans-serif",
+      fontFamily: fonts.sans,
       cursor: 'pointer',
       display: 'flex',
       alignItems: 'center',
@@ -1059,7 +1059,7 @@ const ProSourceLogin = ({ initialPage = 'email', initialMode = 'signin' }) => {
           <div style={{ fontSize: 12, letterSpacing: 2, textTransform: 'uppercase', color: colors.red, fontWeight: 600, marginBottom: 12 }}>
             Get started
           </div>
-          <h2 style={{ fontFamily: "'DM Serif Display', 'Georgia', serif", fontSize: 32, color: colors.gray900, lineHeight: 1.2, margin: '0 0 12px' }}>
+          <h2 style={{ fontFamily: fonts.sans, fontWeight: 700, letterSpacing: '-0.02em', fontSize: 32, color: colors.gray900, lineHeight: 1.2, margin: '0 0 12px' }}>
             Sign in or create your account.
           </h2>
           <p style={{ fontSize: 15, color: colors.gray700, lineHeight: 1.6, marginBottom: 24 }}>
@@ -1089,7 +1089,7 @@ const ProSourceLogin = ({ initialPage = 'email', initialMode = 'signin' }) => {
         <div style={{ maxWidth: 1100, margin: '0 auto' }}>
           <div style={{ textAlign: 'center', marginBottom: 48 }}>
             <div style={{ fontSize: 12, letterSpacing: 2, textTransform: 'uppercase', color: colors.red, fontWeight: 600, marginBottom: 12 }}>How it works</div>
-            <h2 style={{ fontFamily: "'DM Serif Display', 'Georgia', serif", fontSize: 36, color: colors.gray900, lineHeight: 1.15, margin: 0 }}>Three steps to wholesale pricing.</h2>
+            <h2 style={{ fontFamily: fonts.sans, fontWeight: 700, letterSpacing: '-0.02em', fontSize: 36, color: colors.gray900, lineHeight: 1.15, margin: 0 }}>Three steps to wholesale pricing.</h2>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             {[
@@ -1117,7 +1117,7 @@ const ProSourceLogin = ({ initialPage = 'email', initialMode = 'signin' }) => {
         <div style={{ maxWidth: 1100, margin: '0 auto' }}>
           <div style={{ textAlign: 'center', marginBottom: 48 }}>
             <div style={{ fontSize: 12, letterSpacing: 2, textTransform: 'uppercase', color: colors.red, fontWeight: 600, marginBottom: 12 }}>What's included</div>
-            <h2 style={{ fontFamily: "'DM Serif Display', 'Georgia', serif", fontSize: 36, color: colors.gray900, lineHeight: 1.15, margin: 0 }}>Built for trade professionals.</h2>
+            <h2 style={{ fontFamily: fonts.sans, fontWeight: 700, letterSpacing: '-0.02em', fontSize: 36, color: colors.gray900, lineHeight: 1.15, margin: 0 }}>Built for trade professionals.</h2>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
             {[
@@ -1347,7 +1347,7 @@ const ProSourceLogin = ({ initialPage = 'email', initialMode = 'signin' }) => {
       <div style={s.onboardingLayout}>
         <div style={{ width: '100%', maxWidth: 640, textAlign: 'center', marginBottom: 24 }}>
           <div style={{ fontSize: 12, fontWeight: 600, letterSpacing: 1.5, textTransform: 'uppercase', color: colors.red, marginBottom: 8 }}>Welcome</div>
-          <div style={{ fontFamily: "'DM Serif Display', 'Georgia', serif", fontSize: 32, color: colors.gray900, lineHeight: 1.15 }}>
+          <div style={{ fontFamily: fonts.flowDisplay, fontSize: 32, color: colors.gray900, lineHeight: 1.15 }}>
             Tell us a bit about yourself.
           </div>
           <div style={{ fontSize: 14, color: colors.gray500, marginTop: 10 }}>
@@ -2053,8 +2053,7 @@ const ProSourceLogin = ({ initialPage = 'email', initialMode = 'signin' }) => {
 
   // ==================== RENDER ====================
   return (
-    <div style={{ fontFamily: "'DM Sans', sans-serif", background: colors.gray50, minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
-      <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Serif+Display&display=swap" rel="stylesheet" />
+    <div style={{ fontFamily: fonts.sans, background: colors.gray50, minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
       {renderNav()}
       {page === 'email' && renderEmailPage()}
       {page === 'auth' && renderAuthPage()}

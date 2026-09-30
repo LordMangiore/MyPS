@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { X, CheckCircle, Mail } from 'lucide-react';
 import { iconForProjectType } from './project-type-icons';
 import { useAuth } from './auth-context';
-import { coreColors, gray } from './theme';
+import { coreColors, gray, fonts } from './theme';
 
 const colors = { ...coreColors, ...gray };
 
@@ -462,7 +462,7 @@ const styles = {
     background: 'rgba(0,0,0,0.5)',
     display: 'flex', alignItems: 'center', justifyContent: 'center',
     padding: 16, zIndex: 1000,
-    fontFamily: "'Open Sans', -apple-system, BlinkMacSystemFont, sans-serif",
+    fontFamily: fonts.sans,
   },
   modal: {
     background: '#fff', borderRadius: 14,
@@ -495,7 +495,7 @@ const styles = {
     flex: 1,
   },
   title: {
-    fontFamily: "'DM Serif Display', Georgia, serif",
+    fontFamily: fonts.flowDisplay,
     fontSize: 22, lineHeight: 1.2,
     color: colors.gray900, margin: 0,
   },

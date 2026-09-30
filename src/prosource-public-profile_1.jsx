@@ -39,7 +39,7 @@ import {
   Trash2,
   ArrowLeft
 } from 'lucide-react';
-import { coreColors, statusColors, gray, surface } from './theme';
+import { coreColors, statusColors, gray, surface, fonts } from './theme';
 
 const ProSourcePublicProfile = () => {
   const { profile, saveProfile: persistProfile, userId, showrooms } = useAuth();
@@ -242,7 +242,7 @@ const ProSourcePublicProfile = () => {
     wrapper: {
       background: surface.page,
       minHeight: '100vh',
-      fontFamily: "'Open Sans', -apple-system, BlinkMacSystemFont, sans-serif",
+      fontFamily: fonts.sans,
     },
     container: {
       maxWidth: 1140,

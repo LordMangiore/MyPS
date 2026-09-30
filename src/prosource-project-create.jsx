@@ -11,7 +11,7 @@ import {
   normalizeStored,
 } from './project-model';
 import { iconForProjectType } from './project-type-icons';
-import { coreColors, statusColors, gray, surface } from './theme';
+import { coreColors, statusColors, gray, surface, fonts } from './theme';
 
 const colors = { ...coreColors, ...gray, amber: statusColors.amberDark };
 
@@ -855,7 +855,7 @@ function ReviewRow({ label, value }) {
 
 const styles = {
   wrapper: {
-    fontFamily: "'Open Sans', -apple-system, BlinkMacSystemFont, sans-serif",
+    fontFamily: fonts.sans,
     background: surface.page,
     minHeight: '100vh',
   },
@@ -901,7 +901,7 @@ const styles = {
     marginBottom: 8,
   },
   title: {
-    fontFamily: "'DM Serif Display', Georgia, serif",
+    fontFamily: fonts.flowDisplay,
     fontSize: 28,
     lineHeight: 1.2,
     color: colors.gray900,

@@ -60,7 +60,7 @@ import {
   byNewest,
   money,
 } from './order-model';
-import { coreColors, gray, surface } from './theme';
+import { coreColors, gray, surface, fonts } from './theme';
 import { categoryLabel } from './shop-catalog';
 import { formatTime } from './format';
 
@@ -1179,7 +1179,7 @@ export default function ProjectDetailPage() {
 
   const styles = {
     wrapper: {
-      fontFamily: "'Open Sans', -apple-system, BlinkMacSystemFont, sans-serif",
+      fontFamily: fonts.sans,
       background: surface.page,
       minHeight: '100vh',
     },

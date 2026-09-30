@@ -22,7 +22,7 @@ import {
   membersFromConnections,
   memberProjectPath,
 } from './member-access';
-import { coreColors, statusColors, gray, surface } from './theme';
+import { coreColors, statusColors, gray, surface, fonts } from './theme';
 
 const colors = { ...coreColors, ...gray, amber: statusColors.amberDark };
 
@@ -561,7 +561,7 @@ function AmMemberProjects() {
 
 const styles = {
   wrapper: {
-    fontFamily: "'Open Sans', -apple-system, BlinkMacSystemFont, sans-serif",
+    fontFamily: fonts.sans,
     background: surface.page,
     minHeight: '100vh',
   },

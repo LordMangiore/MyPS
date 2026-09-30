@@ -18,7 +18,7 @@ import {
   fetchCatalog, CATEGORIES, DEPARTMENTS, categoryLabel, resolveProduct, migrateItemKeys,
   colorVariants,
 } from './shop-catalog';
-import { coreColors, gray, surface } from './theme';
+import { coreColors, gray, surface, fonts } from './theme';
 
 const colors = { ...coreColors, ...gray, gray50: gray.gray50 };
 
@@ -530,7 +530,7 @@ export default function ProSourceShop() {
   const totalItems = quoteCart.reduce((sum, item) => sum + (item.qty || 1), 0);
 
   const s = {
-    wrapper: { background: surface.page, minHeight: '100vh', fontFamily: "'Open Sans', -apple-system, sans-serif" },
+    wrapper: { background: surface.page, minHeight: '100vh', fontFamily: fonts.sans },
     container: { maxWidth: 1140, margin: '0 auto', padding: '0 16px' },
     // Breadcrumb
     breadcrumb: { display: 'flex', alignItems: 'center', gap: 8, padding: '16px 0', fontSize: 13, color: colors.gray500 },

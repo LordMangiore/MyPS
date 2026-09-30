@@ -24,7 +24,7 @@ import {
   Check,
   X,
 } from 'lucide-react';
-import { coreColors, gray, surface } from './theme';
+import { coreColors, gray, surface, fonts } from './theme';
 import { categoryLabel } from './shop-catalog';
 
 const ProSourceCarts = () => {
@@ -45,7 +45,7 @@ const ProSourceCarts = () => {
     wrapper: {
       background: surface.page,
       minHeight: '100vh',
-      fontFamily: "'Open Sans', -apple-system, BlinkMacSystemFont, sans-serif",
+      fontFamily: fonts.sans,
     },
     container: {
       maxWidth: 1140,
