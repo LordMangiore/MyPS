@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { ChevronDown, Check } from 'lucide-react'
+import { core } from '../theme';
 
-const BRAND_BLUE = '#003087'
+const BRAND_BLUE = core.blue
 
 export default function Select({
   value,

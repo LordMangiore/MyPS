@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { ShoppingBag, Headset, Home } from 'lucide-react';
 import { useAuth } from './auth-context';
 import AddressAutocomplete from './components/AddressAutocomplete';
+import { core, grays, statusColors } from './theme';
 
 /**
  * `initialPage` / `initialMode` let the router mount this straight onto the
@@ -255,22 +256,7 @@ const ProSourceLogin = ({ initialPage = 'email', initialMode = 'signin' }) => {
     setInterests(prev => ({ ...prev, [key]: !prev[key] }));
   };
 
-  const colors = {
-    red: '#BA0C2F',
-    blue: '#003087',
-    blueLight: '#1a4a9e',
-    bluePale: '#e8edf7',
-    gray50: '#f9f9f8',
-    gray100: '#f0eeeb',
-    gray200: '#e2dfda',
-    gray300: '#c8c4bc',
-    gray500: '#8a867e',
-    gray700: '#4a4642',
-    gray900: '#1a1714',
-    green: '#07542E',
-    greenPale: '#e6f2ec',
-    white: '#ffffff',
-  };
+  const colors = { red: core.red, blue: core.blue, blueLight: core.blueMid, bluePale: core.bluePale, ...grays.warm, green: core.green, greenPale: statusColors.greenPale, white: '#ffffff' };
 
   const s = {
     nav: {

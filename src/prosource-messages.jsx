@@ -16,6 +16,7 @@ import {
   fmtDate,
   fmtPreviewTimestamp,
 } from './twilio-client';
+import { coreColors, grays } from './theme';
 
 const ProSourceMessages = () => {
   const { loadUserData, saveUserData, userId, homePath } = useAuth();
@@ -36,19 +37,7 @@ const ProSourceMessages = () => {
   const twilioRef = useRef(null);
   const messagesEndRef = useRef(null);
 
-  const colors = {
-    red: '#BA0C2F',
-    darkBlue: '#003087',
-    lightBlue: '#6CACE4',
-    green: '#07542E',
-    gray100: '#f5f5f5',
-    gray200: '#e5e5e5',
-    gray300: '#d4d4d4',
-    gray400: '#a3a3a3',
-    gray500: '#737373',
-    gray700: '#404040',
-    gray900: '#171717',
-  };
+  const colors = { ...coreColors, ...grays.neutral };
 
   const styles = {
     wrapper: {

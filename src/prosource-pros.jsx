@@ -8,20 +8,11 @@ import {
   ratingOf,
   reviewCountOf,
 } from './pro-directory';
+import { core, coreColors, grays } from './theme';
 
-const colors = {
-  red: '#BA0C2F',
-  darkBlue: '#003087',
-  green: '#07542E',
-  gray100: '#f8f9fa',
-  gray200: '#e9ecef',
-  gray300: '#dee2e6',
-  gray500: '#6c757d',
-  gray700: '#495057',
-  gray900: '#212529',
-};
+const colors = { ...coreColors, ...grays.cool };
 
-const AVATAR_TONES = ['#003087', '#07542E', '#BA0C2F', '#1a4eb8', '#6b21a8'];
+const AVATAR_TONES = [core.blue, core.green, core.red, core.blueLight, '#6b21a8'];
 
 /**
  * "Find a Pro".

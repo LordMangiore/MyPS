@@ -23,21 +23,10 @@ import {
 import AppointmentModal from './prosource-appointment-modal';
 import Select from './components/Select';
 import { normalizeStored } from './project-model';
+import { core, coreColors, grays } from './theme';
 
 // ProSource Brand Colors from source
-const colors = {
-  red: '#BA0C2F',
-  redHover: '#9a0a27',
-  darkBlue: '#003087',
-  lightBlue: '#6CACE4',
-  green: '#07542E',
-  gray100: '#f8f9fa',
-  gray200: '#e9ecef',
-  gray300: '#dee2e6',
-  gray500: '#6c757d',
-  gray700: '#495057',
-  gray900: '#212529',
-};
+const colors = { ...coreColors, ...grays.cool, redHover: core.redHover };
 
 /**
  * What a profile that has never touched notification settings means.

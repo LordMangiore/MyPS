@@ -2,20 +2,9 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { X, CheckCircle, AlertCircle } from 'lucide-react';
 import { useAuth } from './auth-context';
+import { coreColors, grays, statusColors } from './theme';
 
-const colors = {
-  red: '#BA0C2F',
-  darkBlue: '#003087',
-  lightBlue: '#6CACE4',
-  green: '#07542E',
-  amber: '#d97706',
-  gray100: '#f8f9fa',
-  gray200: '#e9ecef',
-  gray300: '#dee2e6',
-  gray500: '#6c757d',
-  gray700: '#495057',
-  gray900: '#212529',
-};
+const colors = { ...coreColors, ...grays.cool, amber: statusColors.amber };
 
 const HELP_OPTIONS = [
   { value: 'plan', label: 'Plan a remodel', body: 'Walk through ideas and get pointed to the right products.' },

@@ -1,15 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { X, ExternalLink, CheckCircle, ShieldCheck, AlertCircle } from 'lucide-react';
+import { coreColors, grays } from '../theme';
 
-const colors = {
-  red: '#BA0C2F',
-  darkBlue: '#003087',
-  green: '#07542E',
-  gray200: '#e9ecef',
-  gray500: '#6c757d',
-  gray700: '#495057',
-  gray900: '#212529',
-};
+const colors = { ...coreColors, ...grays.cool };
 
 const COPY = {
   pay: {

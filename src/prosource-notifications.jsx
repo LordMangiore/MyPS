@@ -10,6 +10,7 @@ import {
   CheckCircle,
 } from 'lucide-react';
 import { useAuth } from './auth-context';
+import { coreColors, grays, statusColors } from './theme';
 
 const ProSourceNotifications = () => {
   const { userId, loadUserData, saveUserData, homePath } = useAuth();
@@ -44,20 +45,7 @@ const ProSourceNotifications = () => {
       .catch((err) => console.warn('Notifications save failed:', err.message));
   };
 
-  const colors = {
-    red: '#BA0C2F',
-    darkBlue: '#003087',
-    lightBlue: '#6CACE4',
-    green: '#07542E',
-    gray100: '#f5f5f5',
-    gray200: '#e5e5e5',
-    gray300: '#d4d4d4',
-    gray400: '#a3a3a3',
-    gray500: '#737373',
-    gray700: '#404040',
-    gray900: '#171717',
-    orange: '#ea580c',
-  };
+  const colors = { ...coreColors, ...grays.neutral, orange: statusColors.orange };
 
   const styles = {
     wrapper: {

@@ -22,20 +22,9 @@ import {
   membersFromConnections,
   memberProjectPath,
 } from './member-access';
+import { coreColors, grays, statusColors } from './theme';
 
-const colors = {
-  red: '#BA0C2F',
-  darkBlue: '#003087',
-  lightBlue: '#6CACE4',
-  green: '#07542E',
-  amber: '#856404',
-  gray100: '#f8f9fa',
-  gray200: '#e9ecef',
-  gray300: '#dee2e6',
-  gray500: '#6c757d',
-  gray700: '#495057',
-  gray900: '#212529',
-};
+const colors = { ...coreColors, ...grays.cool, amber: statusColors.amberDark };
 
 const STATUS_META = {
   working: { label: 'Working', bg: '#e3f2fd', fg: colors.darkBlue },

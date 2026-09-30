@@ -3,6 +3,7 @@ import { Link, Outlet, useLocation } from 'react-router-dom'
 import { Bell, MessageCircle, Menu, X, ShoppingCart, ClipboardList, FolderOpen } from 'lucide-react'
 import { useAuth } from './auth-context'
 import { guestCartCount, subscribeGuestCart, syncActiveCartToAccount } from './guest-cart'
+import { core, grays } from './theme';
 
 const categories = [
   { label: 'Flooring', dept: 'Flooring' },
@@ -142,8 +143,8 @@ const Layout = () => {
 
           {/* Home for an account manager is her queue, not the storefront. */}
           <Link to={isAccountManager ? '/am' : '/'} className="no-underline shrink-0 flex items-center gap-2">
-            <span style={{ fontSize: 18, fontWeight: 700, color: '#003087' }}>
-              ProSource<span style={{ fontWeight: 400, fontSize: 12, color: '#003087', marginLeft: 2 }}>WHOLESALE</span>
+            <span style={{ fontSize: 18, fontWeight: 700, color: core.blue }}>
+              ProSource<span style={{ fontWeight: 400, fontSize: 12, color: core.blue, marginLeft: 2 }}>WHOLESALE</span>
             </span>
             {/* Says which side of the glass you are on. The app is otherwise
                 identical after sign-in, so without this the only clue that you
@@ -153,7 +154,7 @@ const Layout = () => {
                 className="hidden sm:inline"
                 style={{
                   fontSize: 10, fontWeight: 700, letterSpacing: 0.4,
-                  textTransform: 'uppercase', color: '#fff', background: '#003087',
+                  textTransform: 'uppercase', color: '#fff', background: core.blue,
                   borderRadius: 4, padding: '2px 6px', whiteSpace: 'nowrap',
                 }}
               >Showroom</span>
@@ -176,7 +177,7 @@ const Layout = () => {
                     to={item.to}
                     style={{
                       display: 'inline-flex', alignItems: 'center', gap: 6,
-                      color: isActive ? '#003087' : '#525252',
+                      color: isActive ? core.blue : grays.neutral.gray600,
                       fontSize: 14, fontWeight: isActive ? 600 : 400,
                       textDecoration: 'none',
                     }}
@@ -190,7 +191,7 @@ const Layout = () => {
                 <Link
                   key={c.label}
                   to={`/shop?dept=${c.dept}`}
-                  style={{ color: '#525252', fontSize: 14, textDecoration: 'none' }}
+                  style={{ color: grays.neutral.gray600, fontSize: 14, textDecoration: 'none' }}
                 >{c.label}</Link>
               ))
             )}
@@ -208,7 +209,7 @@ const Layout = () => {
               errand. /connections is still in the account menu, where it
               belongs. */}
           {!isAccountManager && (
-            <Link to="/pros" className="hidden md:inline" style={{ color: '#525252', textDecoration: 'none' }}>Find a Pro</Link>
+            <Link to="/pros" className="hidden md:inline" style={{ color: grays.neutral.gray600, textDecoration: 'none' }}>Find a Pro</Link>
           )}
 
           {isLoggedIn && (
@@ -218,7 +219,7 @@ const Layout = () => {
             onMouseLeave={() => setHoveredIcon(null)}
             style={{
               position: 'relative',
-              color: isMessagesActive || hoveredIcon === 'messages' ? '#003087' : '#525252',
+              color: isMessagesActive || hoveredIcon === 'messages' ? core.blue : grays.neutral.gray600,
               display: 'flex',
               alignItems: 'center',
               transition: 'color 0.15s ease',
@@ -229,7 +230,7 @@ const Layout = () => {
               <span style={{
                 position: 'absolute', top: -4, right: -4,
                 width: 8, height: 8, borderRadius: '50%',
-                background: '#BA0C2F',
+                background: core.red,
               }} />
             )}
           </Link>
@@ -243,7 +244,7 @@ const Layout = () => {
             onMouseLeave={() => setHoveredIcon(null)}
             style={{
               position: 'relative',
-              color: location.pathname === '/cart' || location.pathname === '/carts' || hoveredIcon === 'cart' ? '#003087' : '#525252',
+              color: location.pathname === '/cart' || location.pathname === '/carts' || hoveredIcon === 'cart' ? core.blue : grays.neutral.gray600,
               display: 'flex',
               alignItems: 'center',
               transition: 'color 0.15s ease',
@@ -254,7 +255,7 @@ const Layout = () => {
             {cartItemCount > 0 && (
               <span style={{
                 position: 'absolute', top: -6, right: -8,
-                background: '#003087', color: '#fff',
+                background: core.blue, color: '#fff',
                 fontSize: 10, fontWeight: 700,
                 borderRadius: 10, padding: '1px 5px',
                 lineHeight: '14px',
@@ -270,7 +271,7 @@ const Layout = () => {
             onMouseLeave={() => setHoveredIcon(null)}
             style={{
               position: 'relative',
-              color: isNotificationsActive || hoveredIcon === 'notifications' ? '#003087' : '#525252',
+              color: isNotificationsActive || hoveredIcon === 'notifications' ? core.blue : grays.neutral.gray600,
               display: 'flex',
               alignItems: 'center',
               transition: 'color 0.15s ease',
@@ -280,7 +281,7 @@ const Layout = () => {
             {unreadNotificationCount > 0 && (
               <span style={{
                 position: 'absolute', top: -6, right: -8,
-                background: '#BA0C2F', color: '#fff',
+                background: core.red, color: '#fff',
                 fontSize: 10, fontWeight: 700,
                 borderRadius: 10, padding: '1px 5px',
                 lineHeight: '14px',
@@ -294,9 +295,9 @@ const Layout = () => {
               <Link
                 to="/sign-in"
                 style={{
-                  color: '#003087', fontWeight: 600, fontSize: 14,
+                  color: core.blue, fontWeight: 600, fontSize: 14,
                   textDecoration: 'none',
-                  padding: '6px 14px', border: '1px solid #003087', borderRadius: 6,
+                  padding: '6px 14px', border: `1px solid ${core.blue}`, borderRadius: 6,
                   whiteSpace: 'nowrap',
                 }}
               >Sign In</Link>
@@ -306,9 +307,9 @@ const Layout = () => {
                 to="/create-account"
                 className="hidden sm:inline-block"
                 style={{
-                  background: '#003087', color: '#fff', fontWeight: 600, fontSize: 14,
+                  background: core.blue, color: '#fff', fontWeight: 600, fontSize: 14,
                   textDecoration: 'none',
-                  padding: '7px 14px', border: '1px solid #003087', borderRadius: 6,
+                  padding: '7px 14px', border: `1px solid ${core.blue}`, borderRadius: 6,
                   whiteSpace: 'nowrap',
                 }}
               >Create Account</Link>
@@ -320,7 +321,7 @@ const Layout = () => {
               style={{
                 background: 'none',
                 border: 'none',
-                color: '#003087',
+                color: core.blue,
                 fontWeight: 600,
                 fontSize: 14,
                 cursor: 'pointer',
@@ -367,7 +368,7 @@ const Layout = () => {
                   </>
                 )}
                 <div style={{ borderTop: '1px solid #e5e5e5', margin: '8px 0' }} />
-                <button style={{ ...menuItemStyle, width: '100%', textAlign: 'left', background: 'none', border: 'none', color: '#BA0C2F', cursor: 'pointer' }} onClick={() => { setAccountMenuOpen(false); logout(); }}>Sign Out</button>
+                <button style={{ ...menuItemStyle, width: '100%', textAlign: 'left', background: 'none', border: 'none', color: core.red, cursor: 'pointer' }} onClick={() => { setAccountMenuOpen(false); logout(); }}>Sign Out</button>
               </div>
             )}
           </div>
@@ -380,7 +381,7 @@ const Layout = () => {
           <div className="absolute inset-0 bg-black/40" onClick={closeMobile} />
           <div className="absolute top-0 left-0 bottom-0 w-72 max-w-[80vw] bg-white shadow-xl flex flex-col">
             <div className="flex items-center justify-between px-4 py-3 border-b border-neutral-200">
-              <span style={{ fontSize: 16, fontWeight: 700, color: '#003087' }}>
+              <span style={{ fontSize: 16, fontWeight: 700, color: core.blue }}>
                 ProSource<span style={{ fontWeight: 400, fontSize: 11, marginLeft: 2 }}>WHOLESALE</span>
               </span>
               <button onClick={closeMobile} aria-label="Close menu" className="p-1 text-neutral-700">

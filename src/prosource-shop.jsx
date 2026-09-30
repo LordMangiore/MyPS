@@ -18,22 +18,9 @@ import {
   fetchCatalog, CATEGORIES, DEPARTMENTS, resolveProduct, migrateItemKeys,
   colorVariants,
 } from './shop-catalog';
+import { coreColors, grays } from './theme';
 
-const colors = {
-  red: '#BA0C2F',
-  darkBlue: '#003087',
-  lightBlue: '#6CACE4',
-  green: '#07542E',
-  gray50: '#f9f9f8',
-  gray100: '#f5f5f5',
-  gray200: '#e5e5e5',
-  gray300: '#d4d4d4',
-  gray400: '#a3a3a3',
-  gray500: '#737373',
-  gray600: '#525252',
-  gray700: '#404040',
-  gray900: '#171717',
-};
+const colors = { ...coreColors, ...grays.neutral, gray50: grays.warm.gray50 };
 
 // The catalog is served by /api/products and bundled as FALLBACK_PRODUCTS in
 // shop-catalog.js, which also owns SKU resolution for legacy stored cart keys.

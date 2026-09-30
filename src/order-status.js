@@ -22,6 +22,7 @@ import {
   Truck,
   XCircle,
 } from 'lucide-react';
+import { core } from './theme';
 
 // Internal RFMS status keys → customer-facing badge label.
 export const customerStatusLabel = (status) => {
@@ -84,17 +85,17 @@ const TONE = {
   requested: { bg: '#f1f5f9', fg: '#475569' },
   ready: { bg: '#fef3c7', fg: '#d97706' },
   declined: { bg: '#f1f5f9', fg: '#64748b' },
-  payment: { bg: '#fee2e2', fg: '#BA0C2F' },
-  processing: { bg: '#dbeafe', fg: '#003087' },
-  items: { bg: '#dbeafe', fg: '#003087' },
+  payment: { bg: '#fee2e2', fg: core.red },
+  processing: { bg: '#dbeafe', fg: core.blue },
+  items: { bg: '#dbeafe', fg: core.blue },
   pickup: { bg: '#ffedd5', fg: '#ea580c' },
-  complete: { bg: '#dcfce7', fg: '#07542E' },
+  complete: { bg: '#dcfce7', fg: core.green },
   // Line-item states
   pending: { bg: '#f5f5f5', fg: '#404040' },
-  'on-order': { bg: '#dbeafe', fg: '#003087' },
-  received: { bg: '#dbeafe', fg: '#003087' },
+  'on-order': { bg: '#dbeafe', fg: core.blue },
+  received: { bg: '#dbeafe', fg: core.blue },
   'ready-for-pickup': { bg: '#ffedd5', fg: '#ea580c' },
-  delivered: { bg: '#dcfce7', fg: '#07542E' },
+  delivered: { bg: '#dcfce7', fg: core.green },
 };
 
 export const statusTone = (status) => TONE[status] || { bg: '#f5f5f5', fg: '#404040' };
