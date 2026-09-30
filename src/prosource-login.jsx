@@ -18,6 +18,8 @@ const ProSourceLogin = ({ initialPage = 'email', initialMode = 'signin' }) => {
   const [page, setPage] = useState(initialPage); // email, auth, email-sent, step1..step4, hoStep1
   const [authMode, setAuthMode] = useState(initialMode); // 'signin' | 'signup'
   const [userType, setUserType] = useState('tradepro'); // 'tradepro' | 'homeowner'
+  // Which audience the landing page's How it works / What's included sections speak to.
+  const [landingAudience, setLandingAudience] = useState('tradepro');
   const [email, setEmail] = useState('');
   const [emailError, setEmailError] = useState(false);
   const [emailResent, setEmailResent] = useState(false);
@@ -1084,21 +1086,60 @@ const ProSourceLogin = ({ initialPage = 'email', initialMode = 'signin' }) => {
   // ---------- LANDING PAGE SECTIONS ----------
   const renderLanding = () => (
     <div style={{ background: colors.white }}>
-      {/* How it works */}
+      {/* How it works / What's included, for each audience.
+          Copy follows the 2026 brand guide: trade pros are spoken to peer to
+          peer with the account manager as partner; homeowners are never
+          framed as DIY or as buying direct, and their project is led by a pro. */}
       <section style={{ padding: '64px 24px' }}>
         <div style={{ maxWidth: 1100, margin: '0 auto' }}>
-          <div style={{ textAlign: 'center', marginBottom: 48 }}>
-            <div style={{ fontSize: 12, letterSpacing: 2, textTransform: 'uppercase', color: colors.red, fontWeight: 600, marginBottom: 12 }}>How it works</div>
-            <h2 style={{ fontFamily: fonts.display, fontSize: 36, color: colors.gray900, lineHeight: 1.15, margin: 0 }}>Three steps to wholesale pricing.</h2>
+          <div style={{ textAlign: 'center', marginBottom: 40 }}>
+            <div style={{ fontSize: 12, letterSpacing: 2, textTransform: 'uppercase', color: colors.red, fontWeight: 600, marginBottom: 12 }}>
+              How it works
+            </div>
+            <h2 style={{ fontFamily: fonts.display, fontSize: 36, color: colors.gray900, lineHeight: 1.15, margin: '0 0 24px' }}>
+              {landingAudience === 'tradepro' ? 'Three steps to your ProSource team.' : 'Three steps to your project team.'}
+            </h2>
+            <div role="tablist" aria-label="Who is this for" style={{
+              display: 'inline-flex', padding: 4, gap: 4, borderRadius: 999,
+              background: colors.gray100, border: `1px solid ${colors.gray200}`,
+            }}>
+              {[
+                { key: 'tradepro', label: 'For trade pros' },
+                { key: 'homeowner', label: 'For homeowners' },
+              ].map((t) => {
+                const on = landingAudience === t.key;
+                return (
+                  <button
+                    key={t.key}
+                    type="button"
+                    role="tab"
+                    aria-selected={on}
+                    onClick={() => setLandingAudience(t.key)}
+                    style={{
+                      border: 'none', borderRadius: 999, padding: '8px 18px',
+                      fontSize: 14, fontWeight: 600, fontFamily: 'inherit', cursor: 'pointer',
+                      background: on ? colors.blue : 'transparent',
+                      color: on ? colors.white : colors.gray700,
+                    }}
+                  >{t.label}</button>
+                );
+              })}
+            </div>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            {[
-              { n: '1', title: 'Apply online', body: 'Tell us about your business: trade type, projects, showroom preference. Takes about three minutes.' },
-              { n: '2', title: 'Visit your showroom', body: 'Your dedicated account manager finalizes your membership and walks you through products in person.' },
-              { n: '3', title: 'Start sourcing', body: 'Browse 50,000+ products at member pricing. Build quotes, manage projects, collaborate with clients, online or in the app.' },
-            ].map(step => (
-              <div key={step.n} style={{ textAlign: 'left' }}>
-                <div style={{
+            {(landingAudience === 'tradepro' ? [
+              { n: '1', title: 'Tell us about your business', body: 'Share your trade, the projects you take on, and the showroom closest to you.' },
+              { n: '2', title: 'Meet your account manager', body: "They'll walk the showroom with you, then pull samples, chase lead times, and handle the details that protect your time." },
+              { n: '3', title: 'Start your next project', body: 'Member pricing across flooring, kitchen, bath, and more. Build quotes, manage projects, and bring your clients in, online or in the app.' },
+            ] : [
+              { n: '1', title: 'Tell us about your project', body: "Share what you're planning, the rooms involved, and who you're working with." },
+              { n: '2', title: 'Connect with your pro', body: "Bring in the contractor or designer you already work with, or find a trade pro who's a member of your local showroom." },
+              { n: '3', title: 'Make your selections together', body: 'Explore products in a private showroom and online with your pro, and keep every decision in one shared project.' },
+            ]).map(step => (
+              // Stacked on phones under a centered heading, so centered there;
+              // left-aligned once they sit side by side.
+              <div key={step.n} className="text-center md:text-left">
+                <div className="mx-auto md:mx-0" style={{
                   width: 40, height: 40, borderRadius: '50%',
                   background: colors.bluePale, color: colors.blue,
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -1117,17 +1158,24 @@ const ProSourceLogin = ({ initialPage = 'email', initialMode = 'signin' }) => {
         <div style={{ maxWidth: 1100, margin: '0 auto' }}>
           <div style={{ textAlign: 'center', marginBottom: 48 }}>
             <div style={{ fontSize: 12, letterSpacing: 2, textTransform: 'uppercase', color: colors.red, fontWeight: 600, marginBottom: 12 }}>What's included</div>
-            <h2 style={{ fontFamily: fonts.display, fontSize: 36, color: colors.gray900, lineHeight: 1.15, margin: 0 }}>Built for trade professionals.</h2>
+            <h2 style={{ fontFamily: fonts.display, fontSize: 36, color: colors.gray900, lineHeight: 1.15, margin: 0 }}>
+              {landingAudience === 'tradepro' ? 'Built for trade professionals.' : 'Built for homeowners and their pros.'}
+            </h2>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-            {[
-              { title: 'Wholesale pricing', body: 'Save on flooring, cabinets, countertops, tile, and more. Every day, no negotiation needed.' },
+            {(landingAudience === 'tradepro' ? [
+              { title: 'Wholesale pricing', body: 'Competitive pricing on flooring, cabinets, countertops, tile, and more, every day.' },
               { title: 'Dedicated account manager', body: 'A real person at your local showroom who knows your business and helps you win bids.' },
-              { title: 'Project management', body: 'Organize quotes, products, clients, and team members on one canvas per project.' },
+              { title: 'Project management', body: 'Organize quotes, products, and your project team in one place per project.' },
               { title: 'Trade Pro App', body: 'Approve estimates, pay invoices, and schedule pickups from your phone, even when you’re on a jobsite.' },
               { title: 'Client collaboration', body: 'Share inspiration boards and product selections with clients without giving up your margins.' },
               { title: 'Referral bonuses', body: 'Earn back on every client purchase. Track your year-to-date credit right from your dashboard.' },
-            ].map(item => (
+            ] : [
+              { title: 'Trade access through your pro', body: 'Shop a private showroom that’s normally trade-only, alongside the pro leading your project.' },
+              { title: 'Find a Pro', body: 'Browse trade professionals who work with your local showroom and request a consultation.' },
+              { title: 'One shared project', body: 'Your pro, your selections, and your conversations in one place, from the first sketch to the last install.' },
+              { title: 'Showroom appointments', body: 'Book time at the showroom with your pro and see products in person before you decide.' },
+            ]).map(item => (
               <div key={item.title} style={{
                 background: colors.white,
                 border: `1px solid ${colors.gray200}`,
