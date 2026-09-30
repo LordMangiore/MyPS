@@ -23,3 +23,59 @@ button {
 .scrollbar-hide::-webkit-scrollbar {
   display: none;
 }
+
+/* ---------------------------------------------------------------------------
+   Interaction states, app-wide.
+   Most styling is inline, and inline styles can't express :hover. These rules
+   give every control a consistent hover, press, and keyboard-focus state
+   without touching each component. Brand values come from src/theme via CSS
+   variables set in main.jsx.
+   - Filled and outline buttons darken slightly on hover and more on press.
+     `filter` is used because it composes with any inline background.
+   - Anything with cursor: pointer that isn't a button or link (cards, chips,
+     rows) gets the same light treatment.
+   - Text links underline on hover. Links that wrap a block (whole-card links)
+     are excluded so card text doesn't underline.
+   - Keyboard focus always shows a blue ring, even where inline styles set
+     outline: none (that pattern hides focus for keyboard users).
+--------------------------------------------------------------------------- */
+button,
+a,
+[role='button'],
+[style*='cursor: pointer'] {
+  transition: filter 120ms ease, box-shadow 120ms ease, background-color 120ms ease,
+    border-color 120ms ease, color 120ms ease;
+}
+
+button:not(:disabled):hover,
+[role='button']:not([aria-disabled='true']):hover {
+  filter: brightness(0.93);
+}
+button:not(:disabled):active,
+[role='button']:not([aria-disabled='true']):active {
+  filter: brightness(0.86);
+}
+
+[style*='cursor: pointer']:not(button):not(a):not([role='button']):hover {
+  filter: brightness(0.97);
+}
+[style*='cursor: pointer']:not(button):not(a):not([role='button']):active {
+  filter: brightness(0.93);
+}
+
+a:not(:has(div, p, h1, h2, h3, img)):hover {
+  text-decoration: underline !important;
+  text-underline-offset: 3px;
+}
+a:has(> div):hover {
+  filter: brightness(0.98);
+}
+
+button:disabled {
+  cursor: not-allowed;
+}
+
+:focus-visible {
+  outline: 2px solid var(--ps-focus, #00468a) !important;
+  outline-offset: 2px !important;
+}
