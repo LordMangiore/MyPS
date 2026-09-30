@@ -5,6 +5,12 @@ import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-route
 import '@fontsource-variable/inter'
 import '@fontsource/dm-serif-display/400.css'
 import './index.css'
+import { core } from './theme'
+import { installInteractionStyles } from './theme/interaction-styles'
+
+// Expose brand values to the global stylesheet (hover and focus states).
+document.documentElement.style.setProperty('--ps-focus', core.blue)
+installInteractionStyles()
 import { AuthProvider, useAuth, safeReturnTo } from './auth-context'
 import Layout from './Layout'
 import ProSourceLogin from './prosource-login'
