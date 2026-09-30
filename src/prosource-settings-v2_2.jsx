@@ -1488,7 +1488,7 @@ export default function ProSourceSettingsRedesign() {
               Row 1: quick-access cards beside the carousel, stretched to one height.
               Row 2: activity beside the team cards, tops aligned. */}
           <div className="flex flex-col gap-6">
-            <div className="grid grid-cols-1 lg:grid-cols-[1fr_340px] gap-6 lg:gap-8 items-stretch">
+            <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_340px] gap-6 lg:gap-8 items-stretch">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 auto-rows-fr">
                   {/* Estimates and Orders Card */}
                   <Link
@@ -1707,7 +1707,7 @@ export default function ProSourceSettingsRedesign() {
                 })()}
               </div>
             </div>
-            <div className="grid grid-cols-1 lg:grid-cols-[1fr_340px] gap-6 lg:gap-8 items-start">
+            <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_340px] gap-6 lg:gap-8 items-start">
                 {/* Activity Feed */}
                 <div>
                   <div style={{
@@ -1730,9 +1730,13 @@ export default function ProSourceSettingsRedesign() {
                             borderBottom: i < arr.length - 1 ? `1px solid ${colors.gray100}` : 'none',
                           }}
                         >
-                          <div style={{ fontSize: 14, color: colors.gray900, marginBottom: 2, lineHeight: 1.45 }}>
-                            {item.actor && <strong>{item.actor}</strong>} {item.text}
-                            {item.target && <> <strong>{item.target}</strong></>}
+                          {/* The row's action sits on the first line, beside what happened. */}
+                          <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 16, marginBottom: 2 }}>
+                            <div style={{ fontSize: 14, color: colors.gray900, lineHeight: 1.45, minWidth: 0 }}>
+                              {item.actor && <strong>{item.actor}</strong>} {item.text}
+                              {item.target && <> <strong>{item.target}</strong></>}
+                            </div>
+                            <Link to={item.to} className="hidden sm:inline" style={{ fontSize: 13, color: colors.darkBlue, fontWeight: 500, textDecoration: 'none', whiteSpace: 'nowrap', flexShrink: 0 }}>{item.link}</Link>
                           </div>
                           {item.preview && (
                             <div style={{
@@ -1742,9 +1746,10 @@ export default function ProSourceSettingsRedesign() {
                               “{item.preview}”
                             </div>
                           )}
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          {/* On narrow screens the action drops to the bottom row, beside the date. */}
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16 }}>
                             <span style={{ fontSize: 12, color: colors.gray500 }}>{formatActivityDate(item.ts)}</span>
-                            <Link to={item.to} style={{ fontSize: 13, color: colors.darkBlue, fontWeight: 500, textDecoration: 'none' }}>{item.link}</Link>
+                            <Link to={item.to} className="sm:hidden" style={{ fontSize: 13, color: colors.darkBlue, fontWeight: 500, textDecoration: 'none', whiteSpace: 'nowrap' }}>{item.link}</Link>
                           </div>
                         </div>
                       ))
