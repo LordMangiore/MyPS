@@ -548,7 +548,7 @@ export default function ProSourceSettingsRedesign() {
   const prefsStatus = prefsSaving ? (
     <span style={{ fontSize: 13, color: colors.gray500 }}>Saving…</span>
   ) : prefsError ? (
-    <span style={{ fontSize: 13, color: colors.red, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+    <span style={{ fontSize: 13, color: colors.error, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
       <AlertCircle size={14} /> {prefsError}
     </span>
   ) : prefsSavedAt ? (
@@ -1155,7 +1155,7 @@ export default function ProSourceSettingsRedesign() {
       right: 20,
       top: '50%',
       transform: 'translateY(-50%)',
-      color: colors.gray300,
+      color: colors.gray400,
       fontSize: 20,
     },
     createProjectCard: {
@@ -2575,7 +2575,7 @@ export default function ProSourceSettingsRedesign() {
                         ? ' because email delivery is not configured in this environment.'
                         : '.'}
                       {inviteResult.error && (
-                        <><br /><span style={{ fontSize: 12, color: colors.red }}>{inviteResult.error}</span></>
+                        <><br /><span style={{ fontSize: 12, color: colors.error }}>{inviteResult.error}</span></>
                       )}
                     </>
                   )}

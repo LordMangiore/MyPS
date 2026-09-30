@@ -926,7 +926,7 @@ export default function ProSourceShop() {
                     </button>
                     {submitError && (
                       <div style={{
-                        fontSize: 13, color: colors.red, marginTop: 10, textAlign: 'center',
+                        fontSize: 13, color: colors.error, marginTop: 10, textAlign: 'center',
                         display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
                       }}>
                         <AlertTriangle size={14} /> {submitError}
@@ -976,7 +976,7 @@ export default function ProSourceShop() {
                       </div>
                     )}
                     {saveError && (
-                      <div style={{ fontSize: 12, color: colors.red, marginTop: 6, textAlign: 'center' }}>{saveError}</div>
+                      <div style={{ fontSize: 12, color: colors.error, marginTop: 6, textAlign: 'center' }}>{saveError}</div>
                     )}
                   </>
                 ) : (
@@ -1352,7 +1352,7 @@ export default function ProSourceShop() {
                   top: '100%', left: 0, right: 0,
                 })}
                 {saveError && (
-                  <div style={{ fontSize: 12, color: colors.red, marginBottom: 8 }}>{saveError}</div>
+                  <div style={{ fontSize: 12, color: colors.error, marginBottom: 8 }}>{saveError}</div>
                 )}
               </div>
 

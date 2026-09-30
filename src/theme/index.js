@@ -17,6 +17,8 @@ export const coreColors = {
   darkBlue: core.blue,
   lightBlue: core.lightBlue,
   green: core.green,
+  // Validation and failure states. Not the brand red.
+  error: tokens.status.error,
 }
 
 export default tokens

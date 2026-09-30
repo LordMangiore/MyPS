@@ -6,6 +6,7 @@ import {
   ensureConversation,
 } from "./lib/twilio.mjs";
 import { enqueueItem } from "./am-queue.mjs";
+import { EMAIL, emailLogo } from "./lib/email-brand.mjs";
 
 const FROM_ADDRESS = process.env.RESEND_FROM || "ProSource <onboarding@resend.dev>";
 const DEV_BYPASS = process.env.OTP_DEV_BYPASS === "true" || !process.env.RESEND_API_KEY;
@@ -187,23 +188,21 @@ export default async function handler(req) {
             to: proEmail,
             subject: `New consultation request from ${fromName}`,
             html: `
-              <div style="font-family: 'Open Sans', -apple-system, sans-serif; max-width: 520px; padding: 32px 24px; color: #171717;">
-                <div style="margin-bottom: 22px;">
-                  <span style="font-size: 20px; font-weight: 700; color: #003087;">ProSource</span>
-                </div>
+              <div style="font-family: ${EMAIL.font}; max-width: 520px; padding: 32px 24px; color: ${EMAIL.text};">
+                <div style="margin-bottom: 22px;">${emailLogo()}</div>
                 <h2 style="margin: 0 0 6px; font-size: 19px;">New lead</h2>
-                <p style="margin: 0 0 18px; color: #525252;">
+                <p style="margin: 0 0 18px; color: ${EMAIL.body};">
                   ${escapeHtml(fromName)} just sent a consultation request via your profile.
                 </p>
-                <div style="background: #f8f9fa; border-radius: 8px; padding: 14px 18px; margin-bottom: 18px;">
+                <div style="background: ${EMAIL.surface}; border-radius: 8px; padding: 14px 18px; margin-bottom: 18px;">
                   <p style="margin: 0 0 6px;"><strong>Project:</strong> ${escapeHtml(projectType)}</p>
                   ${zip ? `<p style="margin: 0 0 6px;"><strong>Zip:</strong> ${escapeHtml(zip)}</p>` : ""}
                   ${budget ? `<p style="margin: 0 0 6px;"><strong>Budget:</strong> ${escapeHtml(budget)}</p>` : ""}
                   ${timing ? `<p style="margin: 0 0 6px;"><strong>Timing:</strong> ${escapeHtml(timing)}</p>` : ""}
                   <p style="margin: 0 0 6px;"><strong>From:</strong> ${escapeHtml(fromName)} · ${escapeHtml(fromEmail)}${fromPhone ? " · " + escapeHtml(fromPhone) : ""}</p>
                 </div>
-                ${message ? `<div style="border-left: 3px solid #003087; padding: 4px 14px; color: #404040; font-size: 14px; line-height: 1.55; white-space: pre-wrap;">${escapeHtml(message)}</div>` : ""}
-                <p style="margin: 28px 0 0; color: #6b7280; font-size: 12px;">
+                ${message ? `<div style="border-left: 3px solid ${EMAIL.blue}; padding: 4px 14px; color: ${EMAIL.body}; font-size: 14px; line-height: 1.55; white-space: pre-wrap;">${escapeHtml(message)}</div>` : ""}
+                <p style="margin: 28px 0 0; color: ${EMAIL.muted}; font-size: 12px;">
                   Reply directly to start the conversation, or open the thread inside ProSource.
                 </p>
               </div>
@@ -217,14 +216,12 @@ export default async function handler(req) {
           to: fromEmail,
           subject: `Your request to ${toProName} is on the way`,
           html: `
-            <div style="font-family: 'Open Sans', -apple-system, sans-serif; max-width: 520px; padding: 32px 24px; color: #171717;">
-              <div style="margin-bottom: 22px;">
-                <span style="font-size: 20px; font-weight: 700; color: #003087;">ProSource</span>
-              </div>
+            <div style="font-family: ${EMAIL.font}; max-width: 520px; padding: 32px 24px; color: ${EMAIL.text};">
+              <div style="margin-bottom: 22px;">${emailLogo()}</div>
               <h2 style="margin: 0 0 12px; font-size: 19px;">We sent your request to ${escapeHtml(toProName)}.</h2>
-              <p style="margin: 0 0 14px; color: #525252; line-height: 1.55;">
+              <p style="margin: 0 0 14px; color: ${EMAIL.body}; line-height: 1.55;">
                 They'll reach out within a business day. Want to track the conversation in one place?
-                <a href="${process.env.URL || "https://myprosource.netlify.app"}/" style="color: #003087; font-weight: 600;">Claim your account</a>.
+                <a href="${process.env.URL || "https://myprosource.netlify.app"}/" style="color: ${EMAIL.blue}; font-weight: 600;">Claim your account</a>.
               </p>
             </div>
           `,

@@ -165,7 +165,7 @@ export default function RfmsActionModal({ isOpen, onClose, variant, amount, orde
                 <div style={{
                   display: 'flex', alignItems: 'flex-start', gap: 8,
                   background: '#fee2e2', borderRadius: 8, padding: '10px 12px',
-                  fontSize: 13, color: colors.red, marginBottom: 14, lineHeight: 1.5,
+                  fontSize: 13, color: colors.error, marginBottom: 14, lineHeight: 1.5,
                 }}>
                   <AlertCircle size={16} style={{ flexShrink: 0, marginTop: 1 }} />
                   <span>{error}</span>

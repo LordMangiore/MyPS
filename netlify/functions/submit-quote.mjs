@@ -1,6 +1,7 @@
 import { getStore } from "@netlify/blobs";
 import { Resend } from "resend";
 import { enqueueItem } from "./am-queue.mjs";
+import { EMAIL, emailLogo } from "./lib/email-brand.mjs";
 
 const FROM_ADDRESS = process.env.RESEND_FROM || "ProSource <onboarding@resend.dev>";
 const DEV_BYPASS = process.env.OTP_DEV_BYPASS === "true" || !process.env.RESEND_API_KEY;
@@ -315,7 +316,7 @@ export default async function handler(req) {
       try {
         const itemLines = cartItems
           .slice(0, 8)
-          .map((i) => `<li>${escapeHtml(i.name)} <span style="color:#6b7280;">(qty ${i.qty || 1}${i.price ? " · $" + i.price : ""})</span></li>`)
+          .map((i) => `<li>${escapeHtml(i.name)} <span style="color:${EMAIL.muted};">(qty ${i.qty || 1}${i.price ? " · $" + i.price : ""})</span></li>`)
           .join("");
         const subtotal = cartItems.reduce((s, i) => s + (i.price || 0) * (i.qty || 1), 0);
         await getResend().emails.send({
@@ -325,17 +326,15 @@ export default async function handler(req) {
             ? `New project from ${[firstName, lastName].filter(Boolean).join(" ") || normalizedEmail}: ${projectType} (no quote yet)`
             : `New lead from ${[firstName, lastName].filter(Boolean).join(" ") || normalizedEmail}: ${projectType}`,
           html: `
-            <div style="font-family: 'Open Sans', -apple-system, sans-serif; max-width: 560px; padding: 32px 24px; color: #171717;">
-              <div style="margin-bottom: 22px;">
-                <span style="font-size: 20px; font-weight: 700; color: #003087;">ProSource</span>
-              </div>
+            <div style="font-family: ${EMAIL.font}; max-width: 560px; padding: 32px 24px; color: ${EMAIL.text};">
+              <div style="margin-bottom: 22px;">${emailLogo()}</div>
               <h2 style="margin: 0 0 6px; font-size: 19px;">${isSave ? 'New project saved (warm lead)' : 'New lead from your profile'}</h2>
-              <p style="margin: 0 0 18px; color: #525252;">
+              <p style="margin: 0 0 18px; color: ${EMAIL.body};">
                 ${isSave
                   ? 'A homeowner built a project on ProSource and added products to it, but hasn\'t requested a quote yet. They picked you as their account manager. No immediate action needed, but say hi when you have a moment.'
                   : 'A homeowner submitted a quote request via ProSource. Project + cart already saved on their account.'}
               </p>
-              <div style="background:#f8f9fa;border-radius:8px;padding:14px 18px;margin-bottom:18px;">
+              <div style="background:${EMAIL.surface};border-radius:8px;padding:14px 18px;margin-bottom:18px;">
                 <p style="margin:0 0 6px;"><strong>Lead:</strong> ${escapeHtml([firstName, lastName].filter(Boolean).join(" ") || normalizedEmail)}</p>
                 <p style="margin:0 0 6px;"><strong>Email:</strong> ${escapeHtml(normalizedEmail)}${phone ? " · <strong>Phone:</strong> " + escapeHtml(phone) : ""}</p>
                 ${audience ? `<p style="margin:0 0 6px;"><strong>Buyer:</strong> ${escapeHtml(audience)}</p>` : ""}
@@ -345,8 +344,8 @@ export default async function handler(req) {
                 <p style="margin:0 0 6px;"><strong>Timing:</strong> ${escapeHtml(timing)}</p>
                 <p style="margin:0;"><strong>Cart subtotal:</strong> $${subtotal.toFixed(2)} (${cartItems.length} item${cartItems.length !== 1 ? "s" : ""})</p>
               </div>
-              ${itemLines ? `<div style="margin-bottom:18px;"><strong>Items:</strong><ul style="margin:6px 0 0;padding-left:18px;color:#374151;">${itemLines}</ul></div>` : ""}
-              ${notes ? `<div style="border-left:3px solid #003087;padding:6px 14px;color:#404040;font-size:14px;line-height:1.55;white-space:pre-wrap;">${escapeHtml(notes)}</div>` : ""}
+              ${itemLines ? `<div style="margin-bottom:18px;"><strong>Items:</strong><ul style="margin:6px 0 0;padding-left:18px;color:${EMAIL.body};">${itemLines}</ul></div>` : ""}
+              ${notes ? `<div style="border-left:3px solid ${EMAIL.blue};padding:6px 14px;color:${EMAIL.body};font-size:14px;line-height:1.55;white-space:pre-wrap;">${escapeHtml(notes)}</div>` : ""}
             </div>
           `,
         });
@@ -371,12 +370,10 @@ export default async function handler(req) {
             ? `Your project is saved: ${projectType}`
             : `Quote submitted: ${projectType}`,
           html: `
-            <div style="font-family: 'Open Sans', -apple-system, sans-serif; max-width: 480px; padding: 32px 24px; color: #171717;">
-              <div style="margin-bottom: 22px;">
-                <span style="font-size: 20px; font-weight: 700; color: #003087;">ProSource</span>
-              </div>
+            <div style="font-family: ${EMAIL.font}; max-width: 480px; padding: 32px 24px; color: ${EMAIL.text};">
+              <div style="margin-bottom: 22px;">${emailLogo()}</div>
               <h2 style="margin: 0 0 6px; font-size: 19px;">${isSave ? 'Your project is saved.' : 'Your quote is in.'}</h2>
-              <p style="margin: 0 0 14px; color: #525252; line-height: 1.55;">
+              <p style="margin: 0 0 14px; color: ${EMAIL.body}; line-height: 1.55;">
                 ${amIsReachable
                   ? escapeHtml(accountManager.name) + " at " + escapeHtml(showroom?.name || "your ProSource showroom") +
                     (isSave
@@ -386,8 +383,8 @@ export default async function handler(req) {
                       ? "We'll match you with your nearest showroom, and your account manager will pick this up whenever you're ready for pricing."
                       : "We'll match you with your nearest showroom and be in touch.")}
               </p>
-              <p style="margin: 0 0 14px; color: #525252; line-height: 1.55;">
-                In the meantime, you can <a href="${process.env.URL || "https://myprosource.netlify.app"}/projects/${projectId}" style="color:#003087;font-weight:600;">view your project</a> to add details, photos, or message your team.
+              <p style="margin: 0 0 14px; color: ${EMAIL.body}; line-height: 1.55;">
+                In the meantime, you can <a href="${process.env.URL || "https://myprosource.netlify.app"}/projects/${projectId}" style="color:${EMAIL.blue};font-weight:600;">view your project</a> to add details, photos, or message your team.
               </p>
             </div>
           `,

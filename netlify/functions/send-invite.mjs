@@ -1,6 +1,7 @@
 import { Resend } from "resend";
 import { getStore } from "@netlify/blobs";
 import { randomUUID } from "node:crypto";
+import { EMAIL, emailLogo } from "./lib/email-brand.mjs";
 
 const FROM_ADDRESS = process.env.RESEND_FROM || "ProSource <onboarding@resend.dev>";
 
@@ -126,25 +127,22 @@ export default async function handler(req) {
       to: toEmail,
       subject: `${fromName || "A trade pro"} invited you to ProSource`,
       html: `
-        <div style="font-family: 'Open Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 480px; margin: 0 auto; padding: 40px 24px; color: #171717;">
-          <div style="margin-bottom: 28px;">
-            <span style="font-size: 22px; font-weight: 700; color: #003087;">ProSource</span>
-            <span style="font-size: 11px; font-weight: 400; color: #003087; letter-spacing: 1.5px; margin-left: 4px;">WHOLESALE</span>
-          </div>
+        <div style="font-family: ${EMAIL.font}; max-width: 480px; margin: 0 auto; padding: 40px 24px; color: ${EMAIL.text};">
+          <div style="margin-bottom: 28px;">${emailLogo()}</div>
           <p style="font-size: 17px; line-height: 1.5; margin: 0 0 18px;">
             <strong>${fromLine}</strong> invited you to connect on ProSource.
           </p>
           ${safeMessage ? `
-            <div style="border-left: 3px solid #003087; padding: 10px 14px; margin: 0 0 22px; background: #f8faff; color: #374151; font-size: 14px; line-height: 1.55; white-space: pre-wrap;">${safeMessage}</div>
+            <div style="border-left: 3px solid ${EMAIL.blue}; padding: 10px 14px; margin: 0 0 22px; background: ${EMAIL.bluePale}; color: ${EMAIL.body}; font-size: 14px; line-height: 1.55; white-space: pre-wrap;">${safeMessage}</div>
           ` : ""}
-          <p style="font-size: 14px; color: #374151; line-height: 1.6; margin: 0 0 22px;">
+          <p style="font-size: 14px; color: ${EMAIL.body}; line-height: 1.6; margin: 0 0 22px;">
             ProSource is the wholesale platform trade pros and their clients use to manage projects, share product selections, and place orders together.
             Create your free account to accept the invitation.
           </p>
-          <a href="${linkUrl}" style="display: inline-block; background: #003087; color: #fff; padding: 12px 22px; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 14px;">
+          <a href="${linkUrl}" style="display: inline-block; background: ${EMAIL.blue}; color: #fff; padding: 12px 22px; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 14px;">
             Accept invitation
           </a>
-          <p style="color: #6b7280; font-size: 12px; line-height: 1.55; margin-top: 28px;">
+          <p style="color: ${EMAIL.muted}; font-size: 12px; line-height: 1.55; margin-top: 28px;">
             If you weren't expecting this, you can safely ignore the email.
           </p>
         </div>

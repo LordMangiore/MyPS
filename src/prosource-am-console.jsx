@@ -867,7 +867,7 @@ const ProSourceAmConsole = () => {
 
         {status === 'error' && (
           <div style={styles.panelState}>
-            <AlertCircle size={28} color={colors.red} style={{ marginBottom: 12 }} />
+            <AlertCircle size={28} color={colors.error} style={{ marginBottom: 12 }} />
             <div style={styles.stateTitle}>We couldn't load the queue</div>
             <div style={{ marginBottom: 16 }}>{error}</div>
             <button onClick={load} style={styles.btnOutline}>Try again</button>

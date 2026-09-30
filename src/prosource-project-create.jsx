@@ -727,7 +727,7 @@ export default function ProSourceProjectCreate() {
                         You can invite them to ProSource from Connections when you're ready.
                       </div>
                       {addPersonError && (
-                        <div style={{ fontSize: 13, color: colors.red }} role="alert">{addPersonError}</div>
+                        <div style={{ fontSize: 13, color: colors.error }} role="alert">{addPersonError}</div>
                       )}
                       <div style={{ display: 'flex', gap: 8 }}>
                         <button
@@ -787,7 +787,7 @@ export default function ProSourceProjectCreate() {
                   }
                 />
               </div>
-              {error && <div style={{ fontSize: 13, color: colors.red, marginTop: 12 }}>{error}</div>}
+              {error && <div style={{ fontSize: 13, color: colors.error, marginTop: 12 }}>{error}</div>}
             </Step>
           )}
 

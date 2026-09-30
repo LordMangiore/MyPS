@@ -270,7 +270,7 @@ const ProSourceOrderDetail = () => {
 
   if (loadStatus === 'error') {
     return messageState(
-      <AlertCircle size={32} color={colors.red} />,
+      <AlertCircle size={32} color={colors.error} />,
       "We couldn't load this order",
       loadError,
       <button onClick={reload} style={styles.btnOutline}>Try again</button>

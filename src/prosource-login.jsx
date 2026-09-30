@@ -257,7 +257,7 @@ const ProSourceLogin = ({ initialPage = 'email', initialMode = 'signin' }) => {
     setInterests(prev => ({ ...prev, [key]: !prev[key] }));
   };
 
-  const colors = { red: core.red, blue: core.blue, blueLight: core.blueMid, bluePale: core.bluePale, ...gray, green: core.green, greenPale: statusColors.greenPale, white: '#ffffff' };
+  const colors = { red: core.red, blue: core.blue, blueLight: core.blueMid, bluePale: core.bluePale, ...gray, green: core.green, greenPale: statusColors.greenPale, white: '#ffffff', error: statusColors.error };
 
   const s = {
     nav: {
@@ -458,7 +458,7 @@ const ProSourceLogin = ({ initialPage = 'email', initialMode = 'signin' }) => {
     },
     dividerText: {
       fontSize: 12,
-      color: colors.gray300,
+      color: colors.gray500,
       fontWeight: 500,
     },
     linkText: {
@@ -543,7 +543,7 @@ const ProSourceLogin = ({ initialPage = 'email', initialMode = 'signin' }) => {
       fontWeight: 600,
       letterSpacing: 1.5,
       textTransform: 'uppercase',
-      color: colors.gray300,
+      color: colors.gray500,
       marginBottom: 16,
       paddingBottom: 8,
       borderBottom: `1px solid ${colors.gray100}`,
@@ -811,7 +811,7 @@ const ProSourceLogin = ({ initialPage = 'email', initialMode = 'signin' }) => {
           <div
             key={key}
             role="alert"
-            style={{ marginTop: 6, fontSize: 12, color: colors.red, textAlign: 'center' }}
+            style={{ marginTop: 6, fontSize: 12, color: colors.error, textAlign: 'center' }}
           >
             {msg}
           </div>
@@ -829,7 +829,7 @@ const ProSourceLogin = ({ initialPage = 'email', initialMode = 'signin' }) => {
           width: '100%',
           padding: '10px 14px',
           background: 'transparent',
-          border: `1px dashed ${demoErrors.tradepro ? colors.red : colors.gray300}`,
+          border: `1px dashed ${demoErrors.tradepro ? colors.error : colors.gray300}`,
           borderRadius: 6,
           fontSize: 12,
           fontWeight: 500,
@@ -847,7 +847,7 @@ const ProSourceLogin = ({ initialPage = 'email', initialMode = 'signin' }) => {
         style={{
           marginTop: 8,
           fontSize: 11,
-          color: colors.gray300,
+          color: colors.gray500,
           textAlign: 'center',
         }}
       >
@@ -868,7 +868,7 @@ const ProSourceLogin = ({ initialPage = 'email', initialMode = 'signin' }) => {
               gap: 5,
               padding: '7px 8px',
               background: 'transparent',
-              border: `1px dashed ${demoErrors[key] ? colors.red : colors.gray300}`,
+              border: `1px dashed ${demoErrors[key] ? colors.error : colors.gray300}`,
               borderRadius: 6,
               fontSize: 11,
               fontWeight: 500,
@@ -971,7 +971,7 @@ const ProSourceLogin = ({ initialPage = 'email', initialMode = 'signin' }) => {
             flex: 1,
             padding: '14px 16px',
             borderRadius: 8,
-            border: `1.5px solid ${emailError ? colors.red : (darkBg ? 'transparent' : colors.gray200)}`,
+            border: `1.5px solid ${emailError ? colors.error : (darkBg ? 'transparent' : colors.gray200)}`,
             background: darkBg ? colors.white : colors.white,
             color: colors.gray900,
             fontSize: 15,
@@ -1004,7 +1004,7 @@ const ProSourceLogin = ({ initialPage = 'email', initialMode = 'signin' }) => {
         </button>
       </form>
       {emailError && (
-        <div style={{ color: darkBg ? '#ffb4b4' : colors.red, fontSize: 13, fontWeight: 500, marginTop: 8 }}>
+        <div style={{ color: darkBg ? '#ffb4b4' : colors.error, fontSize: 13, fontWeight: 500, marginTop: 8 }}>
           {emailErrorMsg || 'Please enter a valid email address to continue.'}
         </div>
       )}
@@ -1075,7 +1075,7 @@ const ProSourceLogin = ({ initialPage = 'email', initialMode = 'signin' }) => {
       {/* Footer */}
       <footer style={{ background: colors.gray900, padding: '24px', textAlign: 'center' }}>
         <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.6)' }}>
-          ProSource Wholesale &middot; Trade pricing on flooring, cabinets, and countertops
+          ProSource Wholesale&reg; &middot; Trade pricing on flooring, cabinets, and countertops
         </div>
       </footer>
     </>
@@ -1196,13 +1196,13 @@ const ProSourceLogin = ({ initialPage = 'email', initialMode = 'signin' }) => {
                   type="email"
                   autoFocus
                   autoComplete="email"
-                  style={{ ...s.input, borderColor: emailError ? colors.red : colors.gray200 }}
+                  style={{ ...s.input, borderColor: emailError ? colors.error : colors.gray200 }}
                   placeholder="you@yourbusiness.com"
                   value={email}
                   onChange={(e) => { setEmail(e.target.value); setEmailError(false); }}
                 />
                 {emailError && (
-                  <div style={{ color: colors.red, fontSize: 12, fontWeight: 500, marginTop: 8 }}>
+                  <div style={{ color: colors.error, fontSize: 12, fontWeight: 500, marginTop: 8 }}>
                     {emailErrorMsg || 'Please enter a valid email address to continue.'}
                   </div>
                 )}
@@ -1293,11 +1293,11 @@ const ProSourceLogin = ({ initialPage = 'email', initialMode = 'signin' }) => {
                   letterSpacing: 12,
                   fontWeight: 600,
                   padding: '14px',
-                  borderColor: codeError ? colors.red : colors.gray200,
+                  borderColor: codeError ? colors.error : colors.gray200,
                 }}
               />
               {codeError && (
-                <div style={{ color: colors.red, fontSize: 12, fontWeight: 500, marginTop: 8 }}>{codeError}</div>
+                <div style={{ color: colors.error, fontSize: 12, fontWeight: 500, marginTop: 8 }}>{codeError}</div>
               )}
             </div>
             <button

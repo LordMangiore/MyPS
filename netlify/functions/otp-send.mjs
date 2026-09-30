@@ -1,5 +1,6 @@
 import { getStore } from "@netlify/blobs";
 import { Resend } from "resend";
+import { EMAIL, emailLogo } from "./lib/email-brand.mjs";
 
 const FROM_ADDRESS = process.env.RESEND_FROM || "ProSource <onboarding@resend.dev>";
 
@@ -82,21 +83,20 @@ export default async function handler(req) {
       to: email,
       subject: `${code} is your ProSource login code`,
       html: `
-        <div style="font-family: 'Open Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 440px; margin: 0 auto; padding: 40px 20px; color: #171717;">
+        <div style="font-family: ${EMAIL.font}; max-width: 440px; margin: 0 auto; padding: 40px 20px; color: ${EMAIL.text};">
           <div style="text-align: center; margin-bottom: 30px;">
-            <span style="font-size: 22px; font-weight: 700; color: #003087;">ProSource</span>
-            <span style="font-size: 11px; font-weight: 400; color: #003087; letter-spacing: 1.5px; margin-left: 4px;">WHOLESALE</span>
+            ${emailLogo({ align: "center" })}
           </div>
-          <p style="color: #374151; font-size: 16px; margin-bottom: 8px;">Your login code:</p>
-          <div style="background: #f3f4f6; border-radius: 12px; padding: 24px; text-align: center; margin-bottom: 24px;">
-            <span style="font-size: 36px; font-weight: 700; letter-spacing: 8px; color: #003087;">${code}</span>
+          <p style="color: ${EMAIL.body}; font-size: 16px; margin-bottom: 8px;">Your login code:</p>
+          <div style="background: ${EMAIL.surface}; border-radius: 12px; padding: 24px; text-align: center; margin-bottom: 24px;">
+            <span style="font-size: 36px; font-weight: 700; letter-spacing: 8px; color: ${EMAIL.blue};">${code}</span>
           </div>
-          <p style="color: #6b7280; font-size: 14px; line-height: 1.5;">
+          <p style="color: ${EMAIL.muted}; font-size: 14px; line-height: 1.5;">
             This code expires in 10 minutes. If you didn't request this, ignore this email.
           </p>
-          <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 24px 0;" />
-          <p style="color: #9ca3af; font-size: 12px; text-align: center;">
-            ProSource Wholesale: trade pricing on flooring, cabinets, and countertops
+          <hr style="border: none; border-top: 1px solid ${EMAIL.border}; margin: 24px 0;" />
+          <p style="color: ${EMAIL.muted}; font-size: 12px; text-align: center;">
+            ProSource Wholesale&reg;: trade pricing on flooring, cabinets, and countertops
           </p>
         </div>
       `,

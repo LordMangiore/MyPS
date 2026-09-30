@@ -412,7 +412,7 @@ const QuoteWizard = ({ isOpen, onClose, cartItems = [], intent = 'quote' }) => {
                 </Field>
               </div>
 
-              {error && <div style={{ fontSize: 12, color: colors.red, marginTop: 10 }}>{error}</div>}
+              {error && <div style={{ fontSize: 12, color: colors.error, marginTop: 10 }}>{error}</div>}
             </Step>
           )}
 
@@ -434,7 +434,7 @@ const QuoteWizard = ({ isOpen, onClose, cartItems = [], intent = 'quote' }) => {
                 style={{ ...styles.bigInput, letterSpacing: 8, fontSize: 22, textAlign: 'center', maxWidth: 220 }}
                 onKeyDown={(e) => { if (e.key === 'Enter' && stepValid()) verifyAndSubmit(); }}
               />
-              {error && <div style={{ fontSize: 12, color: colors.red, marginTop: 10 }}>{error}</div>}
+              {error && <div style={{ fontSize: 12, color: colors.error, marginTop: 10 }}>{error}</div>}
               <div style={{ marginTop: 12, fontSize: 12, color: colors.gray500 }}>
                 Didn't get it?{' '}
                 <button
