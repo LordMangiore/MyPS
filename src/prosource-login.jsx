@@ -1913,7 +1913,7 @@ const ProSourceLogin = ({ initialPage = 'email', initialMode = 'signin' }) => {
 
         <div style={s.field}>
           <label style={s.fieldLabel}>Current flooring / surface suppliers <span style={{ fontWeight: 400, color: colors.gray500 }}>(optional)</span></label>
-          <input style={s.input} value={currentSuppliers} onChange={(e) => setCurrentSuppliers(e.target.value)} placeholder="e.g. Floor & Decor, local distributor, etc." />
+          <input style={s.input} value={currentSuppliers} onChange={(e) => setCurrentSuppliers(e.target.value)} placeholder="e.g. a local distributor or big-box store" />
         </div>
 
         <div style={s.field}>
