@@ -1730,9 +1730,13 @@ export default function ProSourceSettingsRedesign() {
                             borderBottom: i < arr.length - 1 ? `1px solid ${colors.gray100}` : 'none',
                           }}
                         >
-                          <div style={{ fontSize: 14, color: colors.gray900, marginBottom: 2, lineHeight: 1.45 }}>
-                            {item.actor && <strong>{item.actor}</strong>} {item.text}
-                            {item.target && <> <strong>{item.target}</strong></>}
+                          {/* The row's action sits on the first line, beside what happened. */}
+                          <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 16, marginBottom: 2 }}>
+                            <div style={{ fontSize: 14, color: colors.gray900, lineHeight: 1.45, minWidth: 0 }}>
+                              {item.actor && <strong>{item.actor}</strong>} {item.text}
+                              {item.target && <> <strong>{item.target}</strong></>}
+                            </div>
+                            <Link to={item.to} style={{ fontSize: 13, color: colors.darkBlue, fontWeight: 500, textDecoration: 'none', whiteSpace: 'nowrap', flexShrink: 0 }}>{item.link}</Link>
                           </div>
                           {item.preview && (
                             <div style={{
@@ -1742,10 +1746,7 @@ export default function ProSourceSettingsRedesign() {
                               “{item.preview}”
                             </div>
                           )}
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <span style={{ fontSize: 12, color: colors.gray500 }}>{formatActivityDate(item.ts)}</span>
-                            <Link to={item.to} style={{ fontSize: 13, color: colors.darkBlue, fontWeight: 500, textDecoration: 'none' }}>{item.link}</Link>
-                          </div>
+                          <div style={{ fontSize: 12, color: colors.gray500 }}>{formatActivityDate(item.ts)}</div>
                         </div>
                       ))
                     )}
