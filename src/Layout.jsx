@@ -4,6 +4,7 @@ import { Bell, MessageCircle, Menu, X, ShoppingCart, ClipboardList, FolderOpen }
 import { useAuth } from './auth-context'
 import { guestCartCount, subscribeGuestCart, syncActiveCartToAccount } from './guest-cart'
 import { core, grays } from './theme';
+import Logo from './components/Logo';
 
 const categories = [
   { label: 'Flooring', dept: 'Flooring' },
@@ -143,9 +144,7 @@ const Layout = () => {
 
           {/* Home for an account manager is her queue, not the storefront. */}
           <Link to={isAccountManager ? '/am' : '/'} className="no-underline shrink-0 flex items-center gap-2">
-            <span style={{ fontSize: 18, fontWeight: 700, color: core.blue }}>
-              ProSource<span style={{ fontWeight: 400, fontSize: 12, color: core.blue, marginLeft: 2 }}>WHOLESALE</span>
-            </span>
+            <Logo height={32} />
             {/* Says which side of the glass you are on. The app is otherwise
                 identical after sign-in, so without this the only clue that you
                 are staff is the nav quietly having fewer things in it. */}
@@ -381,9 +380,7 @@ const Layout = () => {
           <div className="absolute inset-0 bg-black/40" onClick={closeMobile} />
           <div className="absolute top-0 left-0 bottom-0 w-72 max-w-[80vw] bg-white shadow-xl flex flex-col">
             <div className="flex items-center justify-between px-4 py-3 border-b border-neutral-200">
-              <span style={{ fontSize: 16, fontWeight: 700, color: core.blue }}>
-                ProSource<span style={{ fontWeight: 400, fontSize: 11, marginLeft: 2 }}>WHOLESALE</span>
-              </span>
+              <Logo height={28} />
               <button onClick={closeMobile} aria-label="Close menu" className="p-1 text-neutral-700">
                 <X size={20} />
               </button>
