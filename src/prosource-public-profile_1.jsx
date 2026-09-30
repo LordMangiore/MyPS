@@ -39,7 +39,7 @@ import {
   Trash2,
   ArrowLeft
 } from 'lucide-react';
-import { coreColors, statusColors, gray, surface } from './theme';
+import { coreColors, statusColors, gray, surface, fonts } from './theme';
 
 const ProSourcePublicProfile = () => {
   const { profile, saveProfile: persistProfile, userId, showrooms } = useAuth();
@@ -242,7 +242,7 @@ const ProSourcePublicProfile = () => {
     wrapper: {
       background: surface.page,
       minHeight: '100vh',
-      fontFamily: "'Open Sans', -apple-system, BlinkMacSystemFont, sans-serif",
+      fontFamily: fonts.sans,
     },
     container: {
       maxWidth: 1140,
@@ -1466,11 +1466,11 @@ const ProSourcePublicProfile = () => {
               </div>
             </div>
 
-            {/* Contact & Business Info (edit mode only) */}
+            {/* Contact and Business Info (edit mode only) */}
             {isEditing && (
               <div style={styles.card}>
                 <div style={styles.cardHeader}>
-                  <h2 style={styles.cardTitle}>Contact & Business Info</h2>
+                  <h2 style={styles.cardTitle}>Contact and Business Info</h2>
                 </div>
                 <div style={styles.cardBody}>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
@@ -1530,11 +1530,11 @@ const ProSourcePublicProfile = () => {
               </div>
             )}
 
-            {/* Certifications & Licenses (edit mode only) */}
+            {/* Certifications and Licenses (edit mode only) */}
             {isEditing && (
               <div style={styles.card}>
                 <div style={styles.cardHeader}>
-                  <h2 style={styles.cardTitle}>Certifications & Licenses</h2>
+                  <h2 style={styles.cardTitle}>Certifications and Licenses</h2>
                   <button style={styles.addChipBtn} onClick={addCertification}>
                     <Plus size={12} /> Add
                   </button>
@@ -1579,7 +1579,7 @@ const ProSourcePublicProfile = () => {
             {/* Projects Gallery */}
             <div style={styles.card}>
               <div style={styles.cardHeader}>
-                <h2 style={styles.cardTitle}>Projects & Photos</h2>
+                <h2 style={styles.cardTitle}>Projects and Photos</h2>
               </div>
               <div style={styles.cardBody}>
                 {/* The grid used to render every photo and then offer a "View

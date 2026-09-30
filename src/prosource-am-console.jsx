@@ -15,7 +15,8 @@ import {
   DollarSign,
   MapPin,
 } from 'lucide-react';
-import { coreColors, statusColors, gray, surface } from './theme';
+import { coreColors, statusColors, gray, surface, fonts } from './theme';
+import { formatTime } from './format';
 
 /**
  * The account manager's console: the other side of the glass.
@@ -40,7 +41,7 @@ const styles = {
   wrapper: {
     background: surface.page,
     minHeight: '100vh',
-    fontFamily: "'Open Sans', -apple-system, BlinkMacSystemFont, sans-serif",
+    fontFamily: fonts.sans,
   },
   container: {
     maxWidth: 1140,
@@ -400,7 +401,7 @@ const relativeTime = (ts) => {
 };
 
 const absoluteTime = (ts) =>
-  ts ? new Date(ts).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) : '';
+  ts ? `${new Date(ts).toLocaleDateString(undefined, { dateStyle: 'medium' })}, ${formatTime(ts)}` : '';
 
 /**
  * Parse a money field the way the backend does: blank is not zero, it is

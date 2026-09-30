@@ -4,7 +4,7 @@ import { X, CheckCircle, Mail } from 'lucide-react';
 import { iconForProjectType } from './project-type-icons';
 import { useAuth } from './auth-context';
 import { clearGuestCart } from './guest-cart';
-import { coreColors, gray } from './theme';
+import { coreColors, gray, fonts } from './theme';
 
 const colors = { ...coreColors, ...gray };
 
@@ -563,7 +563,7 @@ const styles = {
     background: 'rgba(0,0,0,0.5)',
     display: 'flex', alignItems: 'center', justifyContent: 'center',
     padding: 16, zIndex: 1000,
-    fontFamily: "'Open Sans', -apple-system, BlinkMacSystemFont, sans-serif",
+    fontFamily: fonts.sans,
   },
   modal: {
     background: '#fff', borderRadius: 14,
@@ -591,7 +591,7 @@ const styles = {
     color: colors.red, marginBottom: 8,
   },
   title: {
-    fontFamily: "'DM Serif Display', Georgia, serif",
+    fontFamily: fonts.display,
     fontSize: 22, lineHeight: 1.2,
     color: colors.gray900, margin: 0,
   },

@@ -2,6 +2,8 @@ import React from 'react'
 import ReactDOM from 'react-dom/client'
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 
+import '@fontsource-variable/inter'
+import '@fontsource/dm-serif-display/400.css'
 import './index.css'
 import { AuthProvider, useAuth, safeReturnTo } from './auth-context'
 import Layout from './Layout'

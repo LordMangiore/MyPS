@@ -16,7 +16,8 @@ import {
   fmtDate,
   fmtPreviewTimestamp,
 } from './twilio-client';
-import { coreColors, gray, surface } from './theme';
+import { coreColors, gray, surface, fonts } from './theme';
+import { formatTime } from './format';
 
 const ProSourceMessages = () => {
   const { loadUserData, saveUserData, userId, homePath } = useAuth();
@@ -43,7 +44,7 @@ const ProSourceMessages = () => {
     wrapper: {
       background: surface.page,
       minHeight: '100vh',
-      fontFamily: "'Open Sans', -apple-system, BlinkMacSystemFont, sans-serif",
+      fontFamily: fonts.sans,
     },
     container: {
       maxWidth: 1140,
@@ -442,7 +443,7 @@ const ProSourceMessages = () => {
     // Blob mode. Store a real numeric timestamp: the literal 'Today' string
     // never ages, and notifications/activity sort it to epoch 0.
     const ts = Date.now();
-    const time = new Date(ts).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    const time = formatTime(new Date(ts));
     const next = threads.map((t) => {
       if (t.id !== selectedThread) return t;
       const lastId = (t.messages || []).reduce((m, x) => Math.max(m, x.id || 0), 0);

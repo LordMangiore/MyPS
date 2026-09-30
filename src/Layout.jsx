@@ -3,7 +3,7 @@ import { Link, Outlet, useLocation } from 'react-router-dom'
 import { Bell, MessageCircle, Menu, X, ShoppingCart, ClipboardList, FolderOpen } from 'lucide-react'
 import { useAuth } from './auth-context'
 import { guestCartCount, subscribeGuestCart, syncActiveCartToAccount } from './guest-cart'
-import { core, gray } from './theme';
+import { core, gray, fonts } from './theme';
 import Logo from './components/Logo';
 
 const categories = [
@@ -40,7 +40,7 @@ const Layout = () => {
    *
    * An account manager has no cart, buys nothing, and does not need a pro found
    * for her: she IS the showroom. So the member chrome (category nav, cart,
-   * Find a Pro, Saved Carts, Referral Bonus, Estimates & Orders) is dropped for
+   * Find a Pro, Saved Carts, Referral Bonus, Estimates and Orders) is dropped for
    * her and the work queue takes its place, because that is the one thing she
    * came here to do. What stays is what she genuinely uses: Messages and
    * Notifications (her book of business talks to her through both) and Account
@@ -133,7 +133,7 @@ const Layout = () => {
       <div className="bg-white border-b border-neutral-200">
       <header
         className="flex justify-between items-center px-4 md:px-6 py-3 max-w-[1140px] mx-auto"
-        style={{ fontFamily: "'Open Sans', -apple-system, BlinkMacSystemFont, sans-serif" }}
+        style={{ fontFamily: fonts.sans }}
       >
         <div className="flex items-center gap-4 md:gap-12 flex-1 min-w-0">
           <button
@@ -356,7 +356,7 @@ const Layout = () => {
                     <Link to={homePath} style={menuItemStyle} onClick={() => setAccountMenuOpen(false)}>Dashboard</Link>
                     <Link to="/projects" style={menuItemStyle} onClick={() => setAccountMenuOpen(false)}>My Projects</Link>
                     <Link to="/settings?section=referrals" style={menuItemStyle} onClick={() => setAccountMenuOpen(false)}>Referral Bonus</Link>
-                    <Link to="/orders" style={menuItemStyle} onClick={() => setAccountMenuOpen(false)}>Estimates & Orders</Link>
+                    <Link to="/orders" style={menuItemStyle} onClick={() => setAccountMenuOpen(false)}>Estimates and Orders</Link>
                     <div style={{ borderTop: `1px solid ${gray.gray200}`, margin: '8px 0' }} />
                     <Link to="/carts" style={menuItemStyle} onClick={() => setAccountMenuOpen(false)}>Saved Carts</Link>
                     <Link to="/connections" style={menuItemStyle} onClick={() => setAccountMenuOpen(false)}>Connections</Link>

@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { X, CheckCircle, AlertCircle } from 'lucide-react';
 import { useAuth } from './auth-context';
-import { coreColors, statusColors, gray } from './theme';
+import { coreColors, statusColors, gray, fonts } from './theme';
 
 const colors = { ...coreColors, ...gray, amber: statusColors.amber };
 
@@ -23,8 +23,8 @@ const HELP_OPTIONS = [
  * 10:30 was ever taken. The account manager settles the time from the queue, so
  * what the member picks here is a preference, and a preference cannot clash.
  */
-const MORNING_TIMES = ['9:00 AM', '9:30 AM', '10:00 AM', '10:30 AM', '11:00 AM', '11:30 AM'];
-const AFTERNOON_TIMES = ['1:00 PM', '1:30 PM', '2:00 PM', '2:30 PM', '3:00 PM', '3:30 PM'];
+const MORNING_TIMES = ['9:00 a.m.', '9:30 a.m.', '10:00 a.m.', '10:30 a.m.', '11:00 a.m.', '11:30 a.m.'];
+const AFTERNOON_TIMES = ['1:00 p.m.', '1:30 p.m.', '2:00 p.m.', '2:30 p.m.', '3:00 p.m.', '3:30 p.m.'];
 
 // Build a list of upcoming weekdays for the day picker.
 const upcomingDays = (count = 6) => {
@@ -539,7 +539,7 @@ const styles = {
     background: 'rgba(0,0,0,0.5)',
     display: 'flex', alignItems: 'center', justifyContent: 'center',
     padding: 16, zIndex: 1000,
-    fontFamily: "'Open Sans', -apple-system, BlinkMacSystemFont, sans-serif",
+    fontFamily: fonts.sans,
   },
   modal: {
     background: '#fff',
@@ -572,7 +572,7 @@ const styles = {
     color: colors.red, marginBottom: 8,
   },
   title: {
-    fontFamily: "'DM Serif Display', Georgia, serif",
+    fontFamily: fonts.display,
     fontSize: 22, lineHeight: 1.2,
     color: colors.gray900, margin: 0,
   },

@@ -396,3 +396,10 @@ export const colorVariants = (product, products) => {
   if (siblings.length < 2) return [];
   return [product, ...siblings.filter((p) => p.sku !== product.sku)];
 };
+
+/**
+ * Category names as shown on screen. The stored value stays "Tile & Stone"
+ * because saved carts, projects, and the products function all key on it;
+ * the brand guide wants "and" in copy, so display goes through here.
+ */
+export const categoryLabel = (c) => (c || '').replace(/ & /g, ' and ');
