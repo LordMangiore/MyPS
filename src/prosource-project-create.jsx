@@ -901,7 +901,7 @@ const styles = {
     marginBottom: 8,
   },
   title: {
-    fontFamily: fonts.flowDisplay,
+    fontFamily: fonts.display,
     fontSize: 28,
     lineHeight: 1.2,
     color: colors.gray900,

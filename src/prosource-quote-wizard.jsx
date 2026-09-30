@@ -591,7 +591,7 @@ const styles = {
     color: colors.red, marginBottom: 8,
   },
   title: {
-    fontFamily: fonts.flowDisplay,
+    fontFamily: fonts.display,
     fontSize: 22, lineHeight: 1.2,
     color: colors.gray900, margin: 0,
   },
