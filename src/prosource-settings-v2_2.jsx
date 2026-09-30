@@ -953,11 +953,13 @@ export default function ProSourceSettingsRedesign() {
       flexDirection: 'column',
       gap: 4,
     },
+    // Same size and weight as every other page title (Orders, Connections,
+    // Messages, Projects): 28/700.
     pageTitle: {
-      fontSize: 24,
-      fontWeight: 600,
+      fontSize: 28,
+      fontWeight: 700,
       color: colors.gray900,
-      margin: 0,
+      margin: '0 0 4px',
     },
     pageSubtitle: {
       fontSize: 14,
@@ -1074,7 +1076,9 @@ export default function ProSourceSettingsRedesign() {
       width: 48,
       height: 26,
       borderRadius: 13,
-      background: isOn ? colors.green : colors.gray300,
+      // Brand blue when on (green isn't in the brand palette); gray400 off so
+      // the track still meets 3:1 against white.
+      background: isOn ? colors.darkBlue : colors.gray400,
       border: 'none',
       cursor: 'pointer',
       position: 'relative',
@@ -1968,7 +1972,7 @@ export default function ProSourceSettingsRedesign() {
             <Link
               to="/projects/new"
               className="whitespace-nowrap shrink-0"
-              style={{ ...styles.btnPrimary, background: colors.green, textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }}
+              style={{ ...styles.btnPrimary, background: colors.darkBlue, textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }}
             >
               + New Project
             </Link>
@@ -2161,7 +2165,7 @@ export default function ProSourceSettingsRedesign() {
               fontSize: 14,
               color: colors.gray500,
             }}>
-              No referral bonuses recorded for this showroom yet.
+              {referralOptions.length > 1 ? 'No referral bonuses recorded for this showroom yet.' : 'No referral bonuses yet.'}
             </div>
           )}
 
@@ -2449,6 +2453,8 @@ export default function ProSourceSettingsRedesign() {
                 <button
                   onClick={() => savePrefs({ email: !prefs.email })}
                   disabled={prefsSaving}
+                  role="switch"
+                  aria-checked={!!prefs.email}
                   style={styles.toggle(prefs.email)}
                 >
                   <div style={styles.toggleKnob(prefs.email)} />
@@ -2462,6 +2468,8 @@ export default function ProSourceSettingsRedesign() {
                 <button
                   onClick={() => savePrefs({ sms: !prefs.sms })}
                   disabled={prefsSaving}
+                  role="switch"
+                  aria-checked={!!prefs.sms}
                   style={styles.toggle(prefs.sms)}
                 >
                   <div style={styles.toggleKnob(prefs.sms)} />
@@ -2522,6 +2530,8 @@ export default function ProSourceSettingsRedesign() {
                 <button
                   onClick={() => savePrefs({ acceptingLeads: !prefs.acceptingLeads })}
                   disabled={prefsSaving}
+                  role="switch"
+                  aria-checked={!!prefs.acceptingLeads}
                   style={styles.toggle(prefs.acceptingLeads)}
                 >
                   <div style={styles.toggleKnob(prefs.acceptingLeads)} />

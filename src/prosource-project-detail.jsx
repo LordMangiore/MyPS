@@ -1316,7 +1316,7 @@ export default function ProjectDetailPage() {
     },
     btnSuccess: {
       padding: '12px 24px',
-      background: colors.green,
+      background: colors.darkBlue,
       color: '#fff',
       border: 'none',
       borderRadius: 6,

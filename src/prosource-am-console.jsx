@@ -219,7 +219,7 @@ const styles = {
   },
   btnGreen: {
     padding: '8px 16px',
-    background: colors.green,
+    background: colors.darkBlue,
     color: '#fff',
     border: 'none',
     borderRadius: 6,

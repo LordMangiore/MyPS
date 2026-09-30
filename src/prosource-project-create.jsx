@@ -915,7 +915,8 @@ const styles = {
   },
   chipGrid: {
     display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))',
+    // 120px keeps two tiles per row on a phone instead of one long column.
+    gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))',
     gap: 10,
   },
   typeCard: {

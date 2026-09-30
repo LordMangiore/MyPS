@@ -48,7 +48,7 @@ const ProSourceLogin = ({ initialPage = 'email', initialMode = 'signin' }) => {
   const [hoBudget, setHoBudget] = useState('');
   const [hoTimeline, setHoTimeline] = useState('');
   const [hoRooms, setHoRooms] = useState({ kitchen: false, bath: false, living: false, bedroom: false, basement: false, outdoor: false });
-  const [hoWorkingWith, setHoWorkingWith] = useState({ designer: false, contractor: false, diy: false });
+  const [hoWorkingWith, setHoWorkingWith] = useState({ designer: false, contractor: false, lookingForPro: false });
   const [hoHearAbout, setHoHearAbout] = useState('');
   const [hoOptInMarketing, setHoOptInMarketing] = useState(true);
   const [hoOptInTerms, setHoOptInTerms] = useState(false);
@@ -1624,7 +1624,7 @@ const ProSourceLogin = ({ initialPage = 'email', initialMode = 'signin' }) => {
     const withOptions = [
       { value: 'designer', label: 'An interior designer' },
       { value: 'contractor', label: 'A contractor / builder' },
-      { value: 'diy', label: 'On my own (DIY)' },
+      { value: 'lookingForPro', label: "I'm looking for a pro" },
     ];
     const hearAboutOptions = ['A friend or family member', 'A contractor or designer', 'Google / web search', 'Social media', 'Drove past a showroom', 'Other'];
     return (

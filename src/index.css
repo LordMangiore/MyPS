@@ -79,3 +79,20 @@ button:disabled {
   outline: 2px solid var(--ps-focus, #00468a) !important;
   outline-offset: 2px !important;
 }
+
+/* Tailwind's preflight makes SVGs display: block, so text-align: center no
+   longer centers them. Icons placed directly inside a centered block (empty
+   states, loading states) center with the text again. */
+[style*='text-align: center'] > svg {
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* Horizontal tab strips that scroll on phones fade at the right edge so the
+   hidden tabs read as "more this way". */
+@media (max-width: 639px) {
+  .tab-strip {
+    -webkit-mask-image: linear-gradient(to right, #000 85%, transparent);
+    mask-image: linear-gradient(to right, #000 85%, transparent);
+  }
+}
