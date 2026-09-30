@@ -3252,7 +3252,7 @@ export default function ProjectDetailPage() {
               {ordersStatus === 'error' && (
                 <div style={styles.emptyState}>
                   <div style={styles.emptyIcon}><FileText size={40} color={colors.gray300} /></div>
-                  <h3 style={styles.emptyTitle}>Couldn't load estimates & orders</h3>
+                  <h3 style={styles.emptyTitle}>Couldn't load estimates and orders</h3>
                   <p style={styles.emptyText}>{ordersError}</p>
                   <button onClick={reloadOrders} style={styles.btnOutline}>Try again</button>
                 </div>

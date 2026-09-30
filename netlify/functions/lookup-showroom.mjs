@@ -121,7 +121,7 @@ const FALLBACK = {
       email: '',
       phone: '',
       initials: 'PS',
-      photoColor: '#003087',
+      photoColor: '#00468a',
       demoIdentity: null,
     },
   },
