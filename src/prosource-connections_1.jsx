@@ -694,7 +694,7 @@ const ProSourceConnections = () => {
       );
     }
     if (connection.type === 'prosource') {
-      return <span style={styles.projectCount}>ProSource Team Member</span>;
+      return <span style={styles.projectCount}>ProSource Team</span>;
     }
     if (typeof connection.projects === 'number') {
       return (
@@ -721,7 +721,7 @@ const ProSourceConnections = () => {
         <div className="flex-1 min-w-0">
           <h1 style={styles.pageTitle}>Connections</h1>
           <p style={styles.pageDesc}>
-            Manage your network of clients, subcontractors, and ProSource team members.
+            Manage your network of clients, subcontractors, and your ProSource team.
             Add connections to quickly invite them to projects.
           </p>
         </div>
@@ -1324,6 +1324,8 @@ const ProSourceConnections = () => {
                       <strong>No email was sent.</strong>{' '}
                       {inviteResult?.reason === 'email-not-configured'
                         ? 'Email delivery is not configured in this environment (no RESEND_API_KEY), so nothing was delivered to '
+                        : inviteResult?.reason === 'recipient-unavailable'
+                        ? 'That person has turned off email from myProSource, so nothing was delivered to '
                         : 'The email failed to send, so nothing was delivered to '}
                       <strong>{addModalEmail}</strong>.
                       <br /><br />

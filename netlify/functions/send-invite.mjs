@@ -2,6 +2,7 @@ import { Resend } from "resend";
 import { getStore } from "@netlify/blobs";
 import { randomUUID } from "node:crypto";
 import { EMAIL, emailLogo } from "./lib/email-brand.mjs";
+import { isDeactivatedEmail } from "./lib/account-status.mjs";
 
 const FROM_ADDRESS = process.env.RESEND_FROM || "ProSource <onboarding@resend.dev>";
 
@@ -96,6 +97,25 @@ export default async function handler(req) {
     const linkUrl =
       signupUrl ||
       (process.env.URL ? process.env.URL : "https://myprosource.netlify.app") + "/";
+
+    // A deactivated account has turned off email from myProSource.
+    // The invite is still recorded, so it shows as pending; only the email is skipped.
+    if (await isDeactivatedEmail(toEmail)) {
+      const record = await recordInvite({
+        toEmail,
+        fromName,
+        fromUserId,
+        message,
+        emailSent: false,
+      });
+      return Response.json({
+        success: true,
+        emailSent: false,
+        reason: "recipient-unavailable",
+        token: record?.token || null,
+        inviteUrl: record?.token ? `${linkUrl}?invite=${record.token}` : linkUrl,
+      });
+    }
 
     if (DEV_BYPASS) {
       console.log(

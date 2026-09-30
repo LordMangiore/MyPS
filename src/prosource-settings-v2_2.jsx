@@ -326,7 +326,32 @@ export default function ProSourceSettingsRedesign() {
     saveProfile,
     loadUserData,
     saveUserData,
+    logout,
   } = useAuth();
+
+  // Account deactivation: 'idle' → 'confirm' → 'working'. Deactivating signs
+  // the member out; signing back in reactivates (see otp-verify).
+  const [deactivateStep, setDeactivateStep] = useState('idle');
+  const [deactivateError, setDeactivateError] = useState(null);
+  const deactivateAccount = async () => {
+    setDeactivateStep('working');
+    setDeactivateError(null);
+    try {
+      const res = await fetch('/api/account-status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, action: 'deactivate' }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.success) throw new Error(data.error || 'Could not deactivate your account');
+      logout();
+      // Land on the public home page, not a sign-in prompt for the page they just left.
+      window.location.replace('/');
+    } catch (err) {
+      setDeactivateError(err.message);
+      setDeactivateStep('confirm');
+    }
+  };
 
   // Personal info editor state: seeded from the saved profile, edits flushed
   // back via saveProfile.
@@ -465,8 +490,11 @@ export default function ProSourceSettingsRedesign() {
       if (!last || last.isMe) return; // only show inbound messages as activity
       items.push({
         ts: last.timestamp || t.updatedAt || 0,
-        text: `${t.name} sent you a message:`,
-        target: last.text,
+        // Bold goes on who, not on the message: a whole sentence in bold
+        // makes every row heavy. The message shows as a one-line preview.
+        actor: t.name,
+        text: 'sent you a message',
+        preview: last.text,
         to: '/messages',
         link: 'View thread →',
       });
@@ -633,15 +661,6 @@ export default function ProSourceSettingsRedesign() {
     return [...byName.values()];
   }, [showrooms, connections]);
 
-  /**
-   * "Your Team Members": the real people you work with, i.e. every connection
-   * who is not ProSource staff (they have their own panel above). Every row
-   * here holds a connection id, so every chat bubble resolves.
-   */
-  const teamMemberConnections = useMemo(
-    () => connections.filter((c) => c.type && c.type !== 'prosource'),
-    [connections]
-  );
 
   // ---- My Projects -------------------------------------------------------
   const [projectQuery, setProjectQuery] = useState('');
@@ -724,7 +743,7 @@ export default function ProSourceSettingsRedesign() {
   const referralYtdYear = referralYears[0] || null;
   const openYear = expandedYear === 'auto' ? referralYtdYear?.year ?? null : expandedYear;
 
-  // ---- Manage Users ------------------------------------------------------
+  // ---- Team Members (Manage Users) --------------------------------------------------
   /** Write the account's user list to the `team` blob and mirror it locally. */
   const persistTeam = async (next) => {
     await saveUserData('team', { list: next });
@@ -1248,7 +1267,7 @@ export default function ProSourceSettingsRedesign() {
     dangerTitle: {
       fontSize: 16,
       fontWeight: 600,
-      color: colors.red,
+      color: colors.error,
       marginBottom: 8,
     },
   };
@@ -1271,7 +1290,7 @@ export default function ProSourceSettingsRedesign() {
              activeSection === 'projects' ? 'My Projects' :
              activeSection === 'referrals' ? 'Referral Bonus'
              : activeSection === 'account' ? 'Account Settings'
-             : activeSection === 'team' ? 'Manage Users'
+             : activeSection === 'team' ? 'Team Members'
              : 'Settings'}
           </h1>
           <p style={styles.pageSubtitle}>
@@ -1465,461 +1484,461 @@ export default function ProSourceSettingsRedesign() {
             </div>
           )}
 
-          {/* Main Dashboard Grid */}
-          <div className="grid grid-cols-1 lg:grid-cols-[1fr_340px] gap-6 lg:gap-8">
-            {/* Left Column - Quick Access */}
-            <div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {/* Estimates and Orders Card */}
-                <Link
-                  to="/orders"
-                  onMouseEnter={() => setHoveredCard('orders')}
-                  onMouseLeave={() => setHoveredCard(null)}
-                  style={{
-                    background: hoveredCard === 'orders' ? colors.darkBlue : '#fff',
-                    border: `1px solid ${hoveredCard === 'orders' ? colors.darkBlue : colors.gray200}`,
-                    borderRadius: 12,
-                    padding: 20,
-                    cursor: 'pointer',
-                    display: 'flex',
-                    gap: 16,
-                    alignItems: 'flex-start',
-                    textDecoration: 'none',
-                    transition: 'all 0.15s ease',
-                    transform: hoveredCard === 'orders' ? 'translateY(-2px)' : 'none',
-                    boxShadow: hoveredCard === 'orders' ? '0 4px 12px rgba(0,48,135,0.2)' : 'none',
-                  }}>
-                  <FileText size={28} color={hoveredCard === 'orders' ? '#fff' : colors.darkBlue} />
-                  <div>
-                    <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 4, color: hoveredCard === 'orders' ? '#fff' : colors.gray900 }}>Estimates and Orders</div>
-                    <div style={{ fontSize: 13, color: hoveredCard === 'orders' ? 'rgba(255,255,255,0.8)' : colors.gray500, marginBottom: 12 }}>Track open orders and view history</div>
-                    <span style={{ fontSize: 13, fontWeight: 500, color: hoveredCard === 'orders' ? '#fff' : colors.darkBlue }}>View orders →</span>
-                  </div>
-                </Link>
-
-                {/* My Projects Card */}
-                <Link
-                  to="/projects"
-                  onMouseEnter={() => setHoveredCard('projects')}
-                  onMouseLeave={() => setHoveredCard(null)}
-                  style={{
-                    background: hoveredCard === 'projects' ? colors.darkBlue : '#fff',
-                    border: `1px solid ${hoveredCard === 'projects' ? colors.darkBlue : colors.gray200}`,
-                    borderRadius: 12,
-                    padding: 20,
-                    cursor: 'pointer',
-                    display: 'flex',
-                    gap: 16,
-                    alignItems: 'flex-start',
-                    textDecoration: 'none',
-                    transition: 'all 0.15s ease',
-                    transform: hoveredCard === 'projects' ? 'translateY(-2px)' : 'none',
-                    boxShadow: hoveredCard === 'projects' ? '0 4px 12px rgba(0,48,135,0.2)' : 'none',
-                  }}
-                >
-                  <Lightbulb size={28} color={hoveredCard === 'projects' ? '#fff' : colors.darkBlue} />
-                  <div>
-                    <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 4, color: hoveredCard === 'projects' ? '#fff' : colors.gray900 }}>My Projects</div>
-                    <div style={{ fontSize: 13, color: hoveredCard === 'projects' ? 'rgba(255,255,255,0.8)' : colors.gray500, marginBottom: 12 }}>Track open projects and view history</div>
-                    <div style={{ display: 'flex', gap: 12 }}>
-                      <span style={{ fontSize: 13, color: hoveredCard === 'projects' ? '#fff' : colors.darkBlue, fontWeight: 500 }}>View projects →</span>
+          {/* Main Dashboard: two rows so left and right blocks line up.
+              Row 1: quick-access cards beside the carousel, stretched to one height.
+              Row 2: activity beside the team cards, tops aligned. */}
+          <div className="flex flex-col gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-[1fr_340px] gap-6 lg:gap-8 items-stretch">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 auto-rows-fr">
+                  {/* Estimates and Orders Card */}
+                  <Link
+                    to="/orders"
+                    onMouseEnter={() => setHoveredCard('orders')}
+                    onMouseLeave={() => setHoveredCard(null)}
+                    style={{
+                      background: hoveredCard === 'orders' ? colors.darkBlue : '#fff',
+                      border: `1px solid ${hoveredCard === 'orders' ? colors.darkBlue : colors.gray200}`,
+                      borderRadius: 12,
+                      padding: 20,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      gap: 16,
+                      alignItems: 'flex-start',
+                      textDecoration: 'none',
+                      transition: 'all 0.15s ease',
+                      transform: hoveredCard === 'orders' ? 'translateY(-2px)' : 'none',
+                      boxShadow: hoveredCard === 'orders' ? '0 4px 12px rgba(0,48,135,0.2)' : 'none',
+                    }}>
+                    <FileText size={28} color={hoveredCard === 'orders' ? '#fff' : colors.darkBlue} />
+                    <div>
+                      <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 4, color: hoveredCard === 'orders' ? '#fff' : colors.gray900 }}>Estimates and Orders</div>
+                      <div style={{ fontSize: 13, color: hoveredCard === 'orders' ? 'rgba(255,255,255,0.8)' : colors.gray500, marginBottom: 12 }}>Track open orders and view history</div>
+                      <span style={{ fontSize: 13, fontWeight: 500, color: hoveredCard === 'orders' ? '#fff' : colors.darkBlue }}>View orders →</span>
                     </div>
-                  </div>
-                </Link>
+                  </Link>
 
-                {/* Connections Card */}
-                <Link
-                  to="/connections"
-                  onMouseEnter={() => setHoveredCard('connections')}
-                  onMouseLeave={() => setHoveredCard(null)}
-                  style={{
-                    background: hoveredCard === 'connections' ? colors.darkBlue : '#fff',
-                    border: `1px solid ${hoveredCard === 'connections' ? colors.darkBlue : colors.gray200}`,
-                    borderRadius: 12,
-                    padding: 20,
-                    cursor: 'pointer',
-                    display: 'flex',
-                    gap: 16,
-                    alignItems: 'flex-start',
-                    textDecoration: 'none',
-                    transition: 'all 0.15s ease',
-                    transform: hoveredCard === 'connections' ? 'translateY(-2px)' : 'none',
-                    boxShadow: hoveredCard === 'connections' ? '0 4px 12px rgba(0,48,135,0.2)' : 'none',
-                  }}>
-                  <Handshake size={28} color={hoveredCard === 'connections' ? '#fff' : colors.darkBlue} />
-                  <div>
-                    <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 4, color: hoveredCard === 'connections' ? '#fff' : colors.gray900 }}>Connections</div>
-                    <div style={{ fontSize: 13, color: hoveredCard === 'connections' ? 'rgba(255,255,255,0.8)' : colors.gray500, marginBottom: 12 }}>The people that make projects happen</div>
-                    <div style={{ display: 'flex', gap: 12 }}>
-                      <span style={{ fontSize: 13, color: hoveredCard === 'connections' ? '#fff' : colors.darkBlue, fontWeight: 500 }}>Add connection →</span>
+                  {/* My Projects Card */}
+                  <Link
+                    to="/projects"
+                    onMouseEnter={() => setHoveredCard('projects')}
+                    onMouseLeave={() => setHoveredCard(null)}
+                    style={{
+                      background: hoveredCard === 'projects' ? colors.darkBlue : '#fff',
+                      border: `1px solid ${hoveredCard === 'projects' ? colors.darkBlue : colors.gray200}`,
+                      borderRadius: 12,
+                      padding: 20,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      gap: 16,
+                      alignItems: 'flex-start',
+                      textDecoration: 'none',
+                      transition: 'all 0.15s ease',
+                      transform: hoveredCard === 'projects' ? 'translateY(-2px)' : 'none',
+                      boxShadow: hoveredCard === 'projects' ? '0 4px 12px rgba(0,48,135,0.2)' : 'none',
+                    }}
+                  >
+                    <Lightbulb size={28} color={hoveredCard === 'projects' ? '#fff' : colors.darkBlue} />
+                    <div>
+                      <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 4, color: hoveredCard === 'projects' ? '#fff' : colors.gray900 }}>My Projects</div>
+                      <div style={{ fontSize: 13, color: hoveredCard === 'projects' ? 'rgba(255,255,255,0.8)' : colors.gray500, marginBottom: 12 }}>Track open projects and view history</div>
+                      <div style={{ display: 'flex', gap: 12 }}>
+                        <span style={{ fontSize: 13, color: hoveredCard === 'projects' ? '#fff' : colors.darkBlue, fontWeight: 500 }}>View projects →</span>
+                      </div>
                     </div>
-                  </div>
-                </Link>
+                  </Link>
 
-                {/* Saved Carts Card */}
-                <Link
-                  to="/carts"
-                  onMouseEnter={() => setHoveredCard('carts')}
-                  onMouseLeave={() => setHoveredCard(null)}
-                  style={{
-                    background: hoveredCard === 'carts' ? colors.darkBlue : '#fff',
-                    border: `1px solid ${hoveredCard === 'carts' ? colors.darkBlue : colors.gray200}`,
-                    borderRadius: 12,
-                    padding: 20,
-                    cursor: 'pointer',
-                    display: 'flex',
-                    gap: 16,
-                    alignItems: 'flex-start',
-                    textDecoration: 'none',
-                    transition: 'all 0.15s ease',
-                    transform: hoveredCard === 'carts' ? 'translateY(-2px)' : 'none',
-                    boxShadow: hoveredCard === 'carts' ? '0 4px 12px rgba(0,48,135,0.2)' : 'none',
-                  }}>
-                  <ShoppingCart size={28} color={hoveredCard === 'carts' ? '#fff' : colors.darkBlue} />
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 4, color: hoveredCard === 'carts' ? '#fff' : colors.gray900 }}>Saved Carts</div>
-                    <div style={{ fontSize: 13, color: hoveredCard === 'carts' ? 'rgba(255,255,255,0.8)' : colors.gray500, marginBottom: 12 }}>View and manage your saved carts</div>
-                    <span style={{ fontSize: 13, color: hoveredCard === 'carts' ? '#fff' : colors.darkBlue, fontWeight: 500 }}>My Carts →</span>
-                  </div>
-                </Link>
-              </div>
-
-              {/* Activity Feed */}
-              <div style={{ marginTop: 32 }}>
-                <h3 style={{ fontSize: 18, fontWeight: 600, marginBottom: 16 }}>Your Activity</h3>
-                <div style={{
-                  background: '#fff',
-                  border: `1px solid ${colors.gray200}`,
-                  borderRadius: 12,
-                  overflow: 'hidden',
-                }}>
-                  {activityItems.length === 0 ? (
-                    <div style={{ padding: 24, fontSize: 14, color: colors.gray500, textAlign: 'center' }}>
-                      No recent activity yet. Create a project or chat with your account manager to see updates here.
+                  {/* Connections Card */}
+                  <Link
+                    to="/connections"
+                    onMouseEnter={() => setHoveredCard('connections')}
+                    onMouseLeave={() => setHoveredCard(null)}
+                    style={{
+                      background: hoveredCard === 'connections' ? colors.darkBlue : '#fff',
+                      border: `1px solid ${hoveredCard === 'connections' ? colors.darkBlue : colors.gray200}`,
+                      borderRadius: 12,
+                      padding: 20,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      gap: 16,
+                      alignItems: 'flex-start',
+                      textDecoration: 'none',
+                      transition: 'all 0.15s ease',
+                      transform: hoveredCard === 'connections' ? 'translateY(-2px)' : 'none',
+                      boxShadow: hoveredCard === 'connections' ? '0 4px 12px rgba(0,48,135,0.2)' : 'none',
+                    }}>
+                    <Handshake size={28} color={hoveredCard === 'connections' ? '#fff' : colors.darkBlue} />
+                    <div>
+                      <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 4, color: hoveredCard === 'connections' ? '#fff' : colors.gray900 }}>Connections</div>
+                      <div style={{ fontSize: 13, color: hoveredCard === 'connections' ? 'rgba(255,255,255,0.8)' : colors.gray500, marginBottom: 12 }}>The people that make projects happen</div>
+                      <div style={{ display: 'flex', gap: 12 }}>
+                        <span style={{ fontSize: 13, color: hoveredCard === 'connections' ? '#fff' : colors.darkBlue, fontWeight: 500 }}>Add connection →</span>
+                      </div>
                     </div>
-                  ) : (
-                    activityItems.map((item, i, arr) => (
-                      <div
-                        key={i}
-                        style={{
-                          padding: 16,
-                          borderBottom: i < arr.length - 1 ? `1px solid ${colors.gray100}` : 'none',
-                        }}
-                      >
-                        <div
-                          style={{
-                            fontSize: 14, color: colors.gray900, marginBottom: 4,
-                            display: '-webkit-box',
-                            WebkitLineClamp: 2,
-                            WebkitBoxOrient: 'vertical',
-                            overflow: 'hidden',
-                            lineHeight: 1.45,
-                          }}
-                        >
-                          {item.text} {item.target && <strong>{item.target}</strong>}
-                        </div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <span style={{ fontSize: 12, color: colors.gray500 }}>{formatActivityDate(item.ts)}</span>
-                          <Link to={item.to} style={{ fontSize: 13, color: colors.darkBlue, fontWeight: 500, textDecoration: 'none' }}>{item.link}</Link>
+                  </Link>
+
+                  {/* Saved Carts Card */}
+                  <Link
+                    to="/carts"
+                    onMouseEnter={() => setHoveredCard('carts')}
+                    onMouseLeave={() => setHoveredCard(null)}
+                    style={{
+                      background: hoveredCard === 'carts' ? colors.darkBlue : '#fff',
+                      border: `1px solid ${hoveredCard === 'carts' ? colors.darkBlue : colors.gray200}`,
+                      borderRadius: 12,
+                      padding: 20,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      gap: 16,
+                      alignItems: 'flex-start',
+                      textDecoration: 'none',
+                      transition: 'all 0.15s ease',
+                      transform: hoveredCard === 'carts' ? 'translateY(-2px)' : 'none',
+                      boxShadow: hoveredCard === 'carts' ? '0 4px 12px rgba(0,48,135,0.2)' : 'none',
+                    }}>
+                    <ShoppingCart size={28} color={hoveredCard === 'carts' ? '#fff' : colors.darkBlue} />
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 4, color: hoveredCard === 'carts' ? '#fff' : colors.gray900 }}>Saved Carts</div>
+                      <div style={{ fontSize: 13, color: hoveredCard === 'carts' ? 'rgba(255,255,255,0.8)' : colors.gray500, marginBottom: 12 }}>View and manage your saved carts</div>
+                      <span style={{ fontSize: 13, color: hoveredCard === 'carts' ? '#fff' : colors.darkBlue, fontWeight: 500 }}>My Carts →</span>
+                    </div>
+                  </Link>
+                </div>
+              <div>
+                {/* Tips / Shop / Promos Carousel */}
+                {(() => {
+                  const slides = [
+                    {
+                      title: 'Shop Products',
+                      bg: '#e8f0fe',
+                      icon: <Search size={32} color={colors.darkBlue} style={{ marginBottom: 12 }} />,
+                      heading: 'Browse 50,000+ products',
+                      sub: 'Member pricing on flooring, cabinets, and countertops',
+                      linkText: 'Shop Now →',
+                      linkTo: '/shop',
+                    },
+                    {
+                      // Was a "Spring Flooring Event, save up to 30%" promo. The
+                      // brand guide rules out discount and urgency CTAs, and there
+                      // was no promo behind it. The showroom visit is real: this
+                      // opens the same appointment request as the team card.
+                      title: 'Your Showroom',
+                      bg: gray.gray100,
+                      icon: <Store size={32} color={colors.darkBlue} style={{ marginBottom: 12 }} />,
+                      heading: 'See it in person',
+                      sub: 'Walk the showroom with your account manager and bring your client along.',
+                      linkText: 'Explore the showroom →',
+                      onClick: () => setAppointmentModalOpen(true),
+                    },
+                    {
+                      // Was "Create your first room visualization" pointing at
+                      // nothing, because there is no visualizer to point at.
+                      // Rooms are real project entities, so this now promises the
+                      // thing the app can actually do and links to where it happens.
+                      title: 'Tips and Resources',
+                      bg: '#e3f2fd',
+                      icon: <Home size={32} color={colors.darkBlue} style={{ marginBottom: 12 }} />,
+                      heading: 'Set up your first project',
+                      sub: 'Add rooms, invite your client, and keep selections in one place',
+                      linkText: 'Start a Project →',
+                      linkTo: '/projects/new',
+                    },
+                  ];
+                  const slide = slides[tipSlide];
+                  return (
+                    <div style={{
+                      background: '#fff',
+                      border: `1px solid ${colors.gray200}`,
+                      borderRadius: 12,
+                      padding: 20,
+                      height: '100%',
+                      display: 'flex',
+                      flexDirection: 'column',
+                    }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                        <h3 style={{ fontSize: 16, fontWeight: 600, color: colors.gray900, margin: 0 }}>{slide.title}</h3>
+                        <div style={{ display: 'flex', gap: 4 }}>
+                          <button
+                            onClick={() => setTipSlide((tipSlide + slides.length - 1) % slides.length)}
+                            style={{
+                              width: 28, height: 28, borderRadius: '50%',
+                              border: `1px solid ${colors.gray300}`, background: '#fff',
+                              cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            }}
+                          ><ChevronLeft size={16} /></button>
+                          <button
+                            onClick={() => setTipSlide((tipSlide + 1) % slides.length)}
+                            style={{
+                              width: 28, height: 28, borderRadius: '50%',
+                              border: `1px solid ${colors.gray300}`, background: '#fff',
+                              cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            }}
+                          ><ChevronRight size={16} /></button>
                         </div>
                       </div>
-                    ))
-                  )}
-                </div>
+                      <div style={{ padding: 20, background: slide.bg, borderRadius: 8, flex: 1 }}>
+                        {slide.icon}
+                        <div style={{ fontSize: 14, fontWeight: 600, color: colors.gray900, marginBottom: 4 }}>{slide.heading}</div>
+                        <div style={{ fontSize: 13, color: colors.gray500, marginBottom: 12 }}>{slide.sub}</div>
+                        {/* Every slide links somewhere real. The old `linkTo: null`
+                            fallback rendered a bare <a> that looked like a link and
+                            did nothing, so it is gone rather than left waiting to
+                            catch the next slide someone adds without a destination. */}
+                        {slide.onClick ? (
+                          <button type="button" onClick={slide.onClick} style={{ fontSize: 13, color: colors.darkBlue, fontWeight: 500, background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontFamily: 'inherit' }}>{slide.linkText}</button>
+                        ) : (
+                          <Link to={slide.linkTo} style={{ fontSize: 13, color: colors.darkBlue, fontWeight: 500, textDecoration: 'none' }}>{slide.linkText}</Link>
+                        )}
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'center', gap: 6, marginTop: 12 }}>
+                        {slides.map((_, i) => (
+                          <div
+                            key={i}
+                            onClick={() => setTipSlide(i)}
+                            style={{
+                              width: 8, height: 8, borderRadius: '50%',
+                              background: i === tipSlide ? colors.darkBlue : colors.gray300,
+                              cursor: 'pointer',
+                            }}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
             </div>
-
-            {/* Right Column - Tips, Team & Leads */}
-            <div>
-              {/* Tips / Shop / Promos Carousel */}
-              {(() => {
-                const slides = [
-                  {
-                    title: 'Shop Products',
-                    bg: '#e8f0fe',
-                    icon: <Search size={32} color={colors.darkBlue} style={{ marginBottom: 12 }} />,
-                    heading: 'Browse 50,000+ products',
-                    sub: 'Member pricing on flooring, cabinets, and countertops',
-                    linkText: 'Shop Now →',
-                    linkTo: '/shop',
-                  },
-                  {
-                    // Was a "Spring Flooring Event, save up to 30%" promo. The
-                    // brand guide rules out discount and urgency CTAs, and there
-                    // was no promo behind it. The showroom visit is real: this
-                    // opens the same appointment request as the team card.
-                    title: 'Your Showroom',
-                    bg: gray.gray100,
-                    icon: <Store size={32} color={colors.darkBlue} style={{ marginBottom: 12 }} />,
-                    heading: 'See it in person',
-                    sub: 'Walk the showroom with your account manager and bring your client along.',
-                    linkText: 'Explore the showroom →',
-                    onClick: () => setAppointmentModalOpen(true),
-                  },
-                  {
-                    // Was "Create your first room visualization" pointing at
-                    // nothing, because there is no visualizer to point at.
-                    // Rooms are real project entities, so this now promises the
-                    // thing the app can actually do and links to where it happens.
-                    title: 'Tips and Resources',
-                    bg: '#e3f2fd',
-                    icon: <Home size={32} color={colors.darkBlue} style={{ marginBottom: 12 }} />,
-                    heading: 'Set up your first project',
-                    sub: 'Add rooms, invite your client, and keep selections in one place',
-                    linkText: 'Start a Project →',
-                    linkTo: '/projects/new',
-                  },
-                ];
-                const slide = slides[tipSlide];
-                return (
+            <div className="grid grid-cols-1 lg:grid-cols-[1fr_340px] gap-6 lg:gap-8 items-start">
+                {/* Activity Feed */}
+                <div>
                   <div style={{
                     background: '#fff',
                     border: `1px solid ${colors.gray200}`,
                     borderRadius: 12,
-                    padding: 20,
-                    marginBottom: 24,
+                    overflow: 'hidden',
                   }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                      <h3 style={{ fontSize: 16, fontWeight: 600, color: colors.gray900, margin: 0 }}>{slide.title}</h3>
-                      <div style={{ display: 'flex', gap: 4 }}>
-                        <button
-                          onClick={() => setTipSlide((tipSlide + slides.length - 1) % slides.length)}
-                          style={{
-                            width: 28, height: 28, borderRadius: '50%',
-                            border: `1px solid ${colors.gray300}`, background: '#fff',
-                            cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                          }}
-                        ><ChevronLeft size={16} /></button>
-                        <button
-                          onClick={() => setTipSlide((tipSlide + 1) % slides.length)}
-                          style={{
-                            width: 28, height: 28, borderRadius: '50%',
-                            border: `1px solid ${colors.gray300}`, background: '#fff',
-                            cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                          }}
-                        ><ChevronRight size={16} /></button>
+                    <h3 style={{ fontSize: 16, fontWeight: 600, color: colors.gray900, margin: 0, padding: '20px 16px 4px' }}>Your Activity</h3>
+                    {activityItems.length === 0 ? (
+                      <div style={{ padding: 24, fontSize: 14, color: colors.gray500, textAlign: 'center' }}>
+                        No recent activity yet. Create a project or chat with your account manager to see updates here.
                       </div>
-                    </div>
-                    <div style={{ padding: 20, background: slide.bg, borderRadius: 8 }}>
-                      {slide.icon}
-                      <div style={{ fontSize: 14, fontWeight: 600, color: colors.gray900, marginBottom: 4 }}>{slide.heading}</div>
-                      <div style={{ fontSize: 13, color: colors.gray500, marginBottom: 12 }}>{slide.sub}</div>
-                      {/* Every slide links somewhere real. The old `linkTo: null`
-                          fallback rendered a bare <a> that looked like a link and
-                          did nothing, so it is gone rather than left waiting to
-                          catch the next slide someone adds without a destination. */}
-                      {slide.onClick ? (
-                        <button type="button" onClick={slide.onClick} style={{ fontSize: 13, color: colors.darkBlue, fontWeight: 500, background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontFamily: 'inherit' }}>{slide.linkText}</button>
-                      ) : (
-                        <Link to={slide.linkTo} style={{ fontSize: 13, color: colors.darkBlue, fontWeight: 500, textDecoration: 'none' }}>{slide.linkText}</Link>
-                      )}
-                    </div>
-                    <div style={{ display: 'flex', justifyContent: 'center', gap: 6, marginTop: 12 }}>
-                      {slides.map((_, i) => (
+                    ) : (
+                      activityItems.map((item, i, arr) => (
                         <div
                           key={i}
-                          onClick={() => setTipSlide(i)}
                           style={{
-                            width: 8, height: 8, borderRadius: '50%',
-                            background: i === tipSlide ? colors.darkBlue : colors.gray300,
-                            cursor: 'pointer',
+                            padding: 16,
+                            borderBottom: i < arr.length - 1 ? `1px solid ${colors.gray100}` : 'none',
                           }}
-                        />
-                      ))}
-                    </div>
-                  </div>
-                );
-              })()}
-
-              {/* Your ProSource Team */}
-              <div style={{
-                background: '#fff',
-                border: `1px solid ${colors.gray200}`,
-                borderRadius: 12,
-                padding: 20,
-                marginBottom: 24,
-              }}>
-                <h3 style={{ fontSize: 16, fontWeight: 600, marginBottom: 16, color: colors.gray900 }}>Your ProSource Team</h3>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                  {prosourceTeam.length === 0 && (
-                    <div style={{ fontSize: 13, color: colors.gray500 }}>
-                      Your showroom team will appear here once your account is matched to a showroom.
-                    </div>
-                  )}
-                  {prosourceTeam.map((person) => (
-                    <div key={person.name} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                      <Avatar name={person.name} initials={person.initials} color={person.photoColor} />
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: 14, fontWeight: 600, color: colors.gray900 }}>{person.name}</div>
-                        <div style={{ fontSize: 12, color: colors.gray500 }}>
-                          {[person.role, person.location].filter(Boolean).join(' • ')}
+                        >
+                          <div style={{ fontSize: 14, color: colors.gray900, marginBottom: 2, lineHeight: 1.45 }}>
+                            {item.actor && <strong>{item.actor}</strong>} {item.text}
+                            {item.target && <> <strong>{item.target}</strong></>}
+                          </div>
+                          {item.preview && (
+                            <div style={{
+                              fontSize: 14, color: colors.gray600, marginBottom: 4, lineHeight: 1.45,
+                              whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                            }}>
+                              “{item.preview}”
+                            </div>
+                          )}
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <span style={{ fontSize: 12, color: colors.gray500 }}>{formatActivityDate(item.ts)}</span>
+                            <Link to={item.to} style={{ fontSize: 13, color: colors.darkBlue, fontWeight: 500, textDecoration: 'none' }}>{item.link}</Link>
+                          </div>
                         </div>
-                      </div>
-                      {/* Messageable only with a real connection id. Otherwise
-                          their real email, rather than a bubble to nowhere. */}
-                      {person.connectionId != null ? (
-                        <ContactLink
-                          to={`/messages?connection=${person.connectionId}`}
-                          title={`Message ${person.name}`}
-                        />
-                      ) : person.email ? (
-                        <ContactLink
-                          to={`mailto:${person.email}`}
-                          title={`Email ${person.name}`}
-                          icon={Mail}
-                        />
-                      ) : null}
-                    </div>
-                  ))}
+                      ))
+                    )}
+                  </div>
                 </div>
-                <button
-                  onClick={() => setAppointmentModalOpen(true)}
-                  onMouseEnter={() => setAppointmentBtnHover(true)}
-                  onMouseLeave={() => setAppointmentBtnHover(false)}
-                  style={{
-                    width: '100%',
-                    padding: '12px',
-                    marginTop: 16,
-                    border: `1px solid ${colors.darkBlue}`,
-                    borderRadius: 6,
-                    background: appointmentBtnHover ? colors.darkBlue : '#fff',
-                    color: appointmentBtnHover ? '#fff' : colors.darkBlue,
-                    fontSize: 14,
-                    fontWeight: 500,
-                    cursor: 'pointer',
-                    transition: 'all 0.15s ease',
-                  }}>Make an Appointment</button>
-              </div>
-
-              {/* Upcoming Appointments (only when the user has booked) */}
-              {upcomingAppointments.length > 0 && (
+              <div>
+                {/* Your ProSource Team */}
                 <div style={{
                   background: '#fff',
                   border: `1px solid ${colors.gray200}`,
                   borderRadius: 12,
                   padding: 20,
-                  marginBottom: 16,
+                  marginBottom: 24,
                 }}>
-                  <h3 style={{ fontSize: 15, fontWeight: 600, marginBottom: 12, color: colors.gray900 }}>
-                    Upcoming Appointments
-                  </h3>
+                  <h3 style={{ fontSize: 16, fontWeight: 600, marginBottom: 16, color: colors.gray900 }}>Your ProSource Team</h3>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                    {upcomingAppointments.slice(0, 3).map((appt) => (
-                      <div key={appt.id} style={{
-                        display: 'flex',
-                        gap: 12,
-                        padding: 12,
-                        background: '#f8faff',
-                        border: `1px solid #dbeafe`,
-                        borderRadius: 8,
-                      }}>
-                        <div style={{
-                          minWidth: 48,
-                          textAlign: 'center',
-                          padding: '4px 0',
-                          background: colors.darkBlue,
-                          color: '#fff',
-                          borderRadius: 6,
-                          fontSize: 11,
-                          fontWeight: 600,
-                        }}>
-                          <div style={{ fontSize: 10, opacity: 0.9 }}>{appt.day}</div>
-                          <div style={{ fontSize: 13, fontWeight: 700 }}>{(appt.date || '').replace(/^[A-Za-z]+ /, '')}</div>
-                        </div>
+                    {prosourceTeam.length === 0 && (
+                      <div style={{ fontSize: 13, color: colors.gray500 }}>
+                        Your showroom team will appear here once your account is matched to a showroom.
+                      </div>
+                    )}
+                    {prosourceTeam.map((person) => (
+                      <div key={person.name} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                        <Avatar name={person.name} initials={person.initials} color={person.photoColor} />
                         <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ fontSize: 13, fontWeight: 600, color: colors.gray900, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                            <span>{appt.time} with {appt.person}</span>
-                            {/* A requested time is not an agreed one, and this
-                                card is the screen the member lands on straight
-                                after asking for it. Without the pill the ask and
-                                the confirmed seeded appointment render
-                                identically, so the booking modal's "nothing is
-                                booked until they confirm" would be contradicted
-                                by the very next thing the member sees. */}
-                            {appt.status === 'requested' && (
-                              <span style={{
-                                fontSize: 10, fontWeight: 700, textTransform: 'uppercase',
-                                color: '#92400e', background: '#fef3c7',
-                                padding: '2px 6px', borderRadius: 3,
-                              }}>Requested</span>
-                            )}
-                            {appt.status === 'confirmed' && (
-                              <span style={{
-                                fontSize: 10, fontWeight: 700, textTransform: 'uppercase',
-                                color: colors.green, background: '#dcfce7',
-                                padding: '2px 6px', borderRadius: 3,
-                              }}>Confirmed</span>
-                            )}
-                          </div>
-                          <div style={{ fontSize: 12, color: colors.gray500, marginTop: 2 }}>
-                            {appt.personRole} · {appt.showroom}
+                          <div style={{ fontSize: 14, fontWeight: 600, color: colors.gray900 }}>{person.name}</div>
+                          <div style={{ fontSize: 12, color: colors.gray500 }}>
+                            {[person.role, person.location].filter(Boolean).join(' • ')}
                           </div>
                         </div>
+                        {/* Messageable only with a real connection id. Otherwise
+                            their real email, rather than a bubble to nowhere. */}
+                        {person.connectionId != null ? (
+                          <ContactLink
+                            to={`/messages?connection=${person.connectionId}`}
+                            title={`Message ${person.name}`}
+                          />
+                        ) : person.email ? (
+                          <ContactLink
+                            to={`mailto:${person.email}`}
+                            title={`Email ${person.name}`}
+                            icon={Mail}
+                          />
+                        ) : null}
                       </div>
                     ))}
                   </div>
+                  <button
+                    onClick={() => setAppointmentModalOpen(true)}
+                    onMouseEnter={() => setAppointmentBtnHover(true)}
+                    onMouseLeave={() => setAppointmentBtnHover(false)}
+                    style={{
+                      width: '100%',
+                      padding: '12px',
+                      marginTop: 16,
+                      border: `1px solid ${colors.darkBlue}`,
+                      borderRadius: 6,
+                      background: appointmentBtnHover ? colors.darkBlue : '#fff',
+                      color: appointmentBtnHover ? '#fff' : colors.darkBlue,
+                      fontSize: 14,
+                      fontWeight: 500,
+                      cursor: 'pointer',
+                      transition: 'all 0.15s ease',
+                    }}>Make an Appointment</button>
                 </div>
-              )}
 
-              {/* Your Team Members */}
-              <div style={{
-                background: '#fff',
-                border: `1px solid ${colors.gray200}`,
-                borderRadius: 12,
-                padding: 20,
-                marginBottom: 24,
-              }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                  <h3 style={{ fontSize: 16, fontWeight: 600, color: colors.gray900, margin: 0 }}>Your Team Members</h3>
-                  {/* Points at /connections, which is what this panel now lists.
-                      It used to point at Manage Users, a different dataset
-                      entirely (people with a login on your account). That page
-                      is still one click away in the account menu. */}
-                  <Link
-                    to="/connections"
-                    style={{ fontSize: 13, color: colors.darkBlue, textDecoration: 'none', fontWeight: 500 }}
-                  >
-                    Manage →
-                  </Link>
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                  {teamMemberConnections.length === 0 && (
-                    <div style={{ fontSize: 13, color: colors.gray500 }}>
-                      No connections yet.{' '}
-                      <Link to="/connections" style={{ color: colors.darkBlue, fontWeight: 500 }}>
-                        Add the clients and trade pros you work with
-                      </Link>
-                      {' '}and they will show up here.
-                    </div>
-                  )}
-                  {teamMemberConnections.slice(0, 4).map((person) => (
-                    <div key={person.id} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                      <Avatar
-                        name={person.name}
-                        initials={person.initials}
-                        color={person.type === 'client' ? colors.darkBlue : colors.green}
-                      />
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: 14, fontWeight: 600, color: colors.gray900 }}>{person.name}</div>
-                        <div style={{ fontSize: 12, color: colors.gray500 }}>
-                          {[person.role, person.location].filter(Boolean).join(' • ')}
+                {/* Upcoming Appointments (only when the user has booked) */}
+                {upcomingAppointments.length > 0 && (
+                  <div style={{
+                    background: '#fff',
+                    border: `1px solid ${colors.gray200}`,
+                    borderRadius: 12,
+                    padding: 20,
+                    marginBottom: 16,
+                  }}>
+                    <h3 style={{ fontSize: 15, fontWeight: 600, marginBottom: 12, color: colors.gray900 }}>
+                      Upcoming Appointments
+                    </h3>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                      {upcomingAppointments.slice(0, 3).map((appt) => (
+                        <div key={appt.id} style={{
+                          display: 'flex',
+                          gap: 12,
+                          padding: 12,
+                          background: '#f8faff',
+                          border: `1px solid #dbeafe`,
+                          borderRadius: 8,
+                        }}>
+                          <div style={{
+                            minWidth: 48,
+                            textAlign: 'center',
+                            padding: '4px 0',
+                            background: colors.darkBlue,
+                            color: '#fff',
+                            borderRadius: 6,
+                            fontSize: 11,
+                            fontWeight: 600,
+                          }}>
+                            <div style={{ fontSize: 10, opacity: 0.9 }}>{appt.day}</div>
+                            <div style={{ fontSize: 13, fontWeight: 700 }}>{(appt.date || '').replace(/^[A-Za-z]+ /, '')}</div>
+                          </div>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontSize: 13, fontWeight: 600, color: colors.gray900, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                              <span>{appt.time} with {appt.person}</span>
+                              {/* A requested time is not an agreed one, and this
+                                  card is the screen the member lands on straight
+                                  after asking for it. Without the pill the ask and
+                                  the confirmed seeded appointment render
+                                  identically, so the booking modal's "nothing is
+                                  booked until they confirm" would be contradicted
+                                  by the very next thing the member sees. */}
+                              {appt.status === 'requested' && (
+                                <span style={{
+                                  fontSize: 10, fontWeight: 700, textTransform: 'uppercase',
+                                  color: '#92400e', background: '#fef3c7',
+                                  padding: '2px 6px', borderRadius: 3,
+                                }}>Requested</span>
+                              )}
+                              {appt.status === 'confirmed' && (
+                                <span style={{
+                                  fontSize: 10, fontWeight: 700, textTransform: 'uppercase',
+                                  color: colors.green, background: '#dcfce7',
+                                  padding: '2px 6px', borderRadius: 3,
+                                }}>Confirmed</span>
+                              )}
+                            </div>
+                            <div style={{ fontSize: 12, color: colors.gray500, marginTop: 2 }}>
+                              {appt.personRole} · {appt.showroom}
+                            </div>
+                          </div>
                         </div>
-                      </div>
-                      {/* ?connection=<id> is the form that actually resolves. */}
-                      <ContactLink
-                        to={`/messages?connection=${person.id}`}
-                        title={`Message ${person.name}`}
-                      />
+                      ))}
                     </div>
-                  ))}
-                  {teamMemberConnections.length > 4 && (
+                  </div>
+                )}
+
+                {/* Your Team Members.
+                    The people added to this account (the Team Members page, the `team`
+                    blob): staff who can view orders and estimates. Not
+                    connections. Connections are the clients and trade pros
+                    you work with, and they have their own card and page. */}
+                <div style={{
+                  background: '#fff',
+                  border: `1px solid ${colors.gray200}`,
+                  borderRadius: 12,
+                  padding: 20,
+                  marginBottom: 24,
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                    <h3 style={{ fontSize: 16, fontWeight: 600, color: colors.gray900, margin: 0 }}>Your Team Members</h3>
                     <Link
-                      to="/connections"
+                      to="/settings?section=team"
                       style={{ fontSize: 13, color: colors.darkBlue, textDecoration: 'none', fontWeight: 500 }}
                     >
-                      View all {teamMemberConnections.length} connections →
+                      Manage →
                     </Link>
-                  )}
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                    {teamLoading ? (
+                      <div style={{ fontSize: 13, color: colors.gray500 }}>Loading…</div>
+                    ) : teamUsers.length === 0 ? (
+                      <div style={{ fontSize: 13, color: colors.gray500 }}>
+                        No one else is on your account yet.{' '}
+                        <Link to="/settings?section=team" style={{ color: colors.darkBlue, fontWeight: 500 }}>
+                          Add a team member
+                        </Link>
+                        {' '}to let them view your orders and estimates.
+                      </div>
+                    ) : (
+                      teamUsers.slice(0, 4).map((u) => (
+                        <div key={u.id} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                          <Avatar name={u.name} initials={u.initials} />
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontSize: 14, fontWeight: 600, color: colors.gray900, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{u.name}</div>
+                            <div style={{ fontSize: 12, color: colors.gray500 }}>
+                              {[u.role, ACCESS_LABEL[u.access] || u.access].filter(Boolean).join(' • ')}
+                            </div>
+                          </div>
+                          {u.status === 'invited' && (
+                            <span style={styles.statusBadge(u.status)}>{STATUS_LABEL[u.status]}</span>
+                          )}
+                        </div>
+                      ))
+                    )}
+                    {teamUsers.length > 4 && (
+                      <Link
+                        to="/settings?section=team"
+                        style={{ fontSize: 13, color: colors.darkBlue, textDecoration: 'none', fontWeight: 500 }}
+                      >
+                        View all {teamUsers.length} team members →
+                      </Link>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
@@ -2522,23 +2541,59 @@ export default function ProSourceSettingsRedesign() {
           </div>
 
           {/* Danger Zone.
-              The button is gone rather than wired. Nothing in this app reads a
-              "deactivated" flag, so a self-serve button could only ever set a
-              field no code enforces: it would report success and leave the
-              account fully working, which is a worse lie than the dead button
-              it replaced. Deactivation is a real support operation, so this
-              points at the person who can actually do it. */}
+              Deactivation is real now: account-status sets `deactivatedAt`,
+              lookup-user hides the account from other members, send-invite
+              stops emailing it, and otp-verify reactivates on sign-in. It is
+              the member's myProSource account only. Their ProSource membership
+              belongs to the showroom, so this says it is left alone. */}
           <div style={styles.dangerZone}>
             <div style={styles.dangerTitle}>Deactivate Account</div>
-            <p style={{ fontSize: 14, color: colors.gray500, margin: 0 }}>
-              Deactivating hides your profile and stops all notifications. Your account manager
-              handles this for you: contact
-              {accountManager?.name ? ` ${accountManager.name}` : ' your account manager'}
-              {accountManager?.email ? (
-                <> at <a href={`mailto:${accountManager.email}?subject=Deactivate%20my%20account`} style={{ color: colors.red, fontWeight: 500 }}>{accountManager.email}</a></>
-              ) : null}
-              {showroom?.phone ? ` or call ${showroom.phone}` : ''} and they will close it.
+            <p style={{ fontSize: 14, color: colors.gray700, margin: '0 0 8px', lineHeight: 1.55 }}>
+              Deactivating hides your profile from other members and stops email notifications
+              from myProSource. You can reactivate anytime by signing back in.
             </p>
+            <p style={{ fontSize: 14, color: colors.gray500, margin: '0 0 16px', lineHeight: 1.55 }}>
+              This doesn't cancel your ProSource membership.
+            </p>
+            {deactivateStep === 'idle' ? (
+              <button
+                type="button"
+                onClick={() => setDeactivateStep('confirm')}
+                style={{
+                  background: '#fff', color: colors.error, border: `1px solid ${colors.error}`,
+                  borderRadius: 6, padding: '8px 16px', fontSize: 14, fontWeight: 600,
+                  cursor: 'pointer', fontFamily: 'inherit',
+                }}
+              >Deactivate account</button>
+            ) : (
+              <div role="alertdialog" aria-label="Confirm account deactivation" style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 12 }}>
+                <span style={{ fontSize: 14, fontWeight: 600, color: colors.gray900 }}>
+                  Deactivate your account? You'll be signed out.
+                </span>
+                <button
+                  type="button"
+                  onClick={deactivateAccount}
+                  disabled={deactivateStep === 'working'}
+                  style={{
+                    background: colors.error, color: '#fff', border: `1px solid ${colors.error}`,
+                    borderRadius: 6, padding: '8px 16px', fontSize: 14, fontWeight: 600,
+                    cursor: 'pointer', fontFamily: 'inherit', opacity: deactivateStep === 'working' ? 0.7 : 1,
+                  }}
+                >{deactivateStep === 'working' ? 'Deactivating…' : 'Yes, deactivate'}</button>
+                <button
+                  type="button"
+                  onClick={() => { setDeactivateStep('idle'); setDeactivateError(null); }}
+                  disabled={deactivateStep === 'working'}
+                  style={{
+                    background: 'none', color: colors.gray700, border: 'none', padding: '8px 4px',
+                    fontSize: 14, fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit',
+                  }}
+                >Cancel</button>
+                {deactivateError && (
+                  <div role="alert" style={{ width: '100%', fontSize: 13, color: colors.error }}>{deactivateError}</div>
+                )}
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -2576,6 +2631,8 @@ export default function ProSourceSettingsRedesign() {
                       {inviteResult.token ? ' and a real invite token' : ''}, but no email went out
                       {inviteResult.reason === 'email-not-configured'
                         ? ' because email delivery is not configured in this environment.'
+                        : inviteResult.reason === 'recipient-unavailable'
+                        ? ' because that person has turned off email from myProSource.'
                         : '.'}
                       {inviteResult.error && (
                         <><br /><span style={{ fontSize: 12, color: colors.error }}>{inviteResult.error}</span></>

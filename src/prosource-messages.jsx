@@ -641,7 +641,7 @@ const ProSourceMessages = () => {
         <div>
           <h1 style={styles.pageTitle}>Messages</h1>
           <p style={styles.pageDesc}>
-            Communicate with your clients, trade pros, and ProSource team members.
+            Communicate with your clients, trade pros, and your ProSource team.
           </p>
         </div>
         <button
