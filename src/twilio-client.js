@@ -1,3 +1,4 @@
+import { formatTime } from './format';
 /**
  * Twilio Conversations Client wrapper for the demo.
  *
@@ -182,7 +183,7 @@ const fetchAiReply = async ({ identity, message, history, context }) => {
 };
 
 const fmtTime = (ts) =>
-  new Date(ts).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  formatTime(new Date(ts));
 
 export const fmtDate = (ts) => {
   const d = new Date(ts);

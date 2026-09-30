@@ -61,6 +61,8 @@ import {
   money,
 } from './order-model';
 import { coreColors, gray, surface } from './theme';
+import { categoryLabel } from './shop-catalog';
+import { formatTime } from './format';
 
 // ProSource Brand Colors
 const colors = { ...coreColors, ...gray };
@@ -203,7 +205,7 @@ const pickResponder = (message, candidates, preferredName = null) => {
 
 export default function ProjectDetailPage() {
   const { loadUserData, saveUserData, userId, userName, userType, accountManager, showrooms } = useAuth();
-  // Estimates & Orders tab. Reads the same `orders` blob as /orders. Seeded
+  // Estimates and Orders tab. Reads the same `orders` blob as /orders. Seeded
   // documents already carry a projectId, it just had nothing reading it.
   const {
     orders: allOrderDocs,
@@ -924,7 +926,7 @@ export default function ProjectDetailPage() {
   const formatCommentDate = (ts) => {
     const d = new Date(ts);
     return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) +
-      ' at ' + d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+      ' at ' + formatTime(d);
   };
 
   // -------- Rooms + products --------
@@ -1149,7 +1151,7 @@ export default function ProjectDetailPage() {
   }, [activeTab, activity, activitySeenAt, activitySeenKey]);
 
   /**
-   * Estimates & Orders is dropped for a guest.
+   * Estimates and Orders is dropped for a guest.
    *
    * Not because she should not see them (they are her job), but because this tab
    * cannot show them: `useOrders` reads the SIGNED-IN account's orders blob, and
@@ -1165,7 +1167,7 @@ export default function ProjectDetailPage() {
     { id: 'products', label: 'Products', icon: ShoppingCart, count: products.length || null },
     { id: 'designs', label: 'Designs', icon: Palette },
     { id: 'photos', label: 'Photos', icon: Camera },
-    ...(isGuest ? [] : [{ id: 'estimates', label: 'Estimates & Orders', icon: FileText }]),
+    ...(isGuest ? [] : [{ id: 'estimates', label: 'Estimates and Orders', icon: FileText }]),
     { id: 'activity', label: 'Activity', icon: Bell, count: unreadActivity || null },
   ];
 
@@ -1756,7 +1758,7 @@ export default function ProjectDetailPage() {
           {product.name}
         </div>
         <div style={styles.productMeta}>
-          {[product.category, product.colorName].filter(Boolean).join(' • ') || 'No details'}
+          {[categoryLabel(product.category), product.colorName].filter(Boolean).join(' • ') || 'No details'}
         </div>
         <div style={{ fontSize: 13, color: colors.gray700, marginTop: 6 }}>
           {product.isSample
@@ -2262,10 +2264,10 @@ export default function ProjectDetailPage() {
                 </div>
               </div>
 
-              {/* Rooms & Areas: real entities. Products hang off these. */}
+              {/* Rooms and Areas: real entities. Products hang off these. */}
               <div style={{ ...styles.card, marginBottom: 24 }}>
                 <div style={styles.cardHeader}>
-                  <h3 style={styles.cardTitle}>Rooms &amp; Areas</h3>
+                  <h3 style={styles.cardTitle}>Rooms and Areas</h3>
                   <span style={{ fontSize: 13, color: colors.gray500 }}>
                     {rooms.length > 0
                       ? `${rooms.length} room${rooms.length !== 1 ? 's' : ''}`
@@ -2401,7 +2403,7 @@ export default function ProjectDetailPage() {
                                     onClick={() => startEditRoom(room)}
                                     style={{ alignSelf: 'flex-start', marginLeft: 26, background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontSize: 12, color: colors.darkBlue, fontFamily: 'inherit' }}
                                   >
-                                    + Add size, budget &amp; notes
+                                    + Add size, budget, and notes
                                   </button>
                                 )}
                               </>
@@ -2675,7 +2677,7 @@ export default function ProjectDetailPage() {
                             padding: '2px 6px',
                             borderRadius: 3,
                           }}>CLIENT</span>
-                          <span style={{ fontSize: 12, color: colors.gray500 }}>Dec 19, 2025 at 9:15 AM</span>
+                          <span style={{ fontSize: 12, color: colors.gray500 }}>Dec 19, 2025 at 9:15 a.m.</span>
                         </div>
                         <p style={{ fontSize: 14, color: colors.gray700, margin: 0, lineHeight: 1.6 }}>
                           Love the knob selection! My wife and I were just discussing this last night. Can we also look at some matching drawer pulls?
@@ -2697,7 +2699,7 @@ export default function ProjectDetailPage() {
                             padding: '2px 6px',
                             borderRadius: 3,
                           }}>PROSOURCE</span>
-                          <span style={{ fontSize: 12, color: colors.gray500 }}>Dec 18, 2025 at 2:34 PM</span>
+                          <span style={{ fontSize: 12, color: colors.gray500 }}>Dec 18, 2025 at 2:34 p.m.</span>
                         </div>
                         <p style={{ fontSize: 14, color: colors.gray700, margin: 0, lineHeight: 1.6 }}>
                           Absolutely! I'll put together some drawer pull options that match the polished nickel finish. I'll have those added to the project by end of day.
@@ -2722,7 +2724,7 @@ export default function ProjectDetailPage() {
                             padding: '2px 6px',
                             borderRadius: 3,
                           }}>TRADE PRO</span>
-                          <span style={{ fontSize: 12, color: colors.gray500 }}>Dec 17, 2025 at 10:15 AM</span>
+                          <span style={{ fontSize: 12, color: colors.gray500 }}>Dec 17, 2025 at 10:15 a.m.</span>
                         </div>
                         <p style={{ fontSize: 14, color: colors.gray700, margin: '0 0 12px', lineHeight: 1.6 }}>
                           Here's the floor plan from the client. They want to keep the island but are open to changing the cabinet layout on the north wall.
@@ -2774,7 +2776,7 @@ export default function ProjectDetailPage() {
                             padding: '2px 8px',
                             borderRadius: 4,
                           }}><Lock size={12} style={{ marginRight: 4 }} /> PRIVATE</span>
-                          <span style={{ fontSize: 12, color: colors.gray500 }}>Dec 16, 2025 at 4:22 PM</span>
+                          <span style={{ fontSize: 12, color: colors.gray500 }}>Dec 16, 2025 at 4:22 p.m.</span>
                         </div>
                         <p style={{ fontSize: 14, color: colors.gray700, margin: 0, lineHeight: 1.6 }}>
                           Kim - heads up, the client has a tight budget (~$8k for cabinets). Let's try to keep recommendations in that range. Don't mention this to them directly.
@@ -2799,7 +2801,7 @@ export default function ProjectDetailPage() {
                             padding: '2px 6px',
                             borderRadius: 3,
                           }}>PROSOURCE</span>
-                          <span style={{ fontSize: 12, color: colors.gray500 }}>Dec 15, 2025 at 11:00 AM</span>
+                          <span style={{ fontSize: 12, color: colors.gray500 }}>Dec 15, 2025 at 11:00 a.m.</span>
                         </div>
                         <p style={{ fontSize: 14, color: colors.gray700, margin: '0 0 12px', lineHeight: 1.6 }}>
                           Welcome to the project! Here's a photo of the current kitchen for reference. I'll have some initial design concepts ready by next week.
@@ -2982,7 +2984,7 @@ export default function ProjectDetailPage() {
                 </div>
                 <div style={styles.cardBody}>
                   {/* Both requests are a conversation with the account manager,
-                      the same answer the Estimates & Orders tab already gives:
+                      the same answer the Estimates and Orders tab already gives:
                       no endpoint takes an estimate or a design request, and the
                       showroom fields both in Messages. Two links to /messages
                       with different labels is not a duplicate, it is two asks
@@ -3036,7 +3038,7 @@ export default function ProjectDetailPage() {
                 >
                   <Plus size={14} /> Add Product
                 </button>
-                {/* Same answer as the Estimates & Orders tab: the request is a
+                {/* Same answer as the Estimates and Orders tab: the request is a
                     message to the account manager, so it goes where that
                     conversation already happens. */}
                 <Link
@@ -3106,7 +3108,7 @@ export default function ProjectDetailPage() {
             <p style={styles.emptyText}>
               {isGuest
                 ? `Shared designs aren't part of the app yet, so ${ownerName}'s designs live with their designer for now.`
-                : "Shared designs aren't part of the app yet. Your ProSource Kitchen & Bath Designer will get them to you directly, and you can ask for one here."}
+                : "Shared designs aren't part of the app yet. Your ProSource Kitchen and Bath Designer will get them to you directly, and you can ask for one here."}
             </p>
             {/* The design request is a conversation, same as the estimate: no
                 endpoint takes one. Owner only, and for the same reason Quick
@@ -3151,7 +3153,7 @@ export default function ProjectDetailPage() {
           </div>
         )}
 
-        {/* Estimates & Orders Tab. `!isGuest` as well as the tab check: ?tab=
+        {/* Estimates and Orders Tab. `!isGuest` as well as the tab check: ?tab=
             comes from the URL, so the panel has to refuse on its own rather than
             trust that the tab strip never offered it. */}
         {activeTab === 'estimates' && !isGuest && (() => {
@@ -3226,7 +3228,7 @@ export default function ProjectDetailPage() {
             <div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16, marginBottom: 24, flexWrap: 'wrap' }}>
                 <div>
-                  <h2 style={{ fontSize: 20, fontWeight: 600, margin: 0 }}>Estimates & Orders</h2>
+                  <h2 style={{ fontSize: 20, fontWeight: 600, margin: 0 }}>Estimates and Orders</h2>
                   <p style={{ color: colors.gray500, fontSize: 14, margin: '4px 0 0' }}>
                     Track all estimates and orders for this project
                   </p>

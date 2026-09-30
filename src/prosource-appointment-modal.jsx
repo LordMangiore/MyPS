@@ -23,8 +23,8 @@ const HELP_OPTIONS = [
  * 10:30 was ever taken. The account manager settles the time from the queue, so
  * what the member picks here is a preference, and a preference cannot clash.
  */
-const MORNING_TIMES = ['9:00 AM', '9:30 AM', '10:00 AM', '10:30 AM', '11:00 AM', '11:30 AM'];
-const AFTERNOON_TIMES = ['1:00 PM', '1:30 PM', '2:00 PM', '2:30 PM', '3:00 PM', '3:30 PM'];
+const MORNING_TIMES = ['9:00 a.m.', '9:30 a.m.', '10:00 a.m.', '10:30 a.m.', '11:00 a.m.', '11:30 a.m.'];
+const AFTERNOON_TIMES = ['1:00 p.m.', '1:30 p.m.', '2:00 p.m.', '2:30 p.m.', '3:00 p.m.', '3:30 p.m.'];
 
 // Build a list of upcoming weekdays for the day picker.
 const upcomingDays = (count = 6) => {

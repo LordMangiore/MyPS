@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from './auth-context';
 import { coreColors, statusColors, gray, surface } from './theme';
+import { formatTime } from './format';
 
 const ProSourceNotifications = () => {
   const { userId, loadUserData, saveUserData, homePath } = useAuth();
@@ -203,7 +204,7 @@ const ProSourceNotifications = () => {
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const that = new Date(d.getFullYear(), d.getMonth(), d.getDate());
     const diff = Math.round((today - that) / 86400000);
-    if (diff === 0) return d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    if (diff === 0) return formatTime(d);
     if (diff === 1) return 'Yesterday';
     if (diff < 7) return d.toLocaleDateString([], { weekday: 'short' });
     return d.toLocaleDateString([], { month: 'short', day: 'numeric' });
@@ -307,7 +308,7 @@ const ProSourceNotifications = () => {
       iconBg: '#dbeafe',
       title: 'New message from Kim Marks',
       description: 'Hi Suzie! The tile samples for the Wilson project are ready for pickup at the showroom.',
-      timestamp: '10:32 AM',
+      timestamp: '10:32 a.m.',
       date: 'Today',
       read: false,
       link: '/messages',
@@ -320,7 +321,7 @@ const ProSourceNotifications = () => {
       iconBg: '#dcfce7',
       title: 'Project update: Beans Kitchen Remodel',
       description: 'Kim Marks added a comment to the project.',
-      timestamp: '9:15 AM',
+      timestamp: '9:15 a.m.',
       date: 'Today',
       read: false,
       link: '/project',

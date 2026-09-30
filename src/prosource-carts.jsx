@@ -25,6 +25,7 @@ import {
   X,
 } from 'lucide-react';
 import { coreColors, gray, surface } from './theme';
+import { categoryLabel } from './shop-catalog';
 
 const ProSourceCarts = () => {
   const { userId, userName, loadUserData, saveUserData } = useAuth();
@@ -805,7 +806,7 @@ const ProSourceCarts = () => {
                         </div>
                         <div style={styles.productSku}>SKU: {product.sku}</div>
                         <div style={styles.productCategory}>
-                          {product.category}
+                          {categoryLabel(product.category)}
                           {product.colorName ? ` · ${product.colorName}` : ''}
                         </div>
                         <div className="flex sm:hidden flex-wrap gap-x-4 gap-y-1 mt-2 text-sm">

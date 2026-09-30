@@ -16,6 +16,7 @@ import {
   MapPin,
 } from 'lucide-react';
 import { coreColors, statusColors, gray, surface } from './theme';
+import { formatTime } from './format';
 
 /**
  * The account manager's console: the other side of the glass.
@@ -400,7 +401,7 @@ const relativeTime = (ts) => {
 };
 
 const absoluteTime = (ts) =>
-  ts ? new Date(ts).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) : '';
+  ts ? `${new Date(ts).toLocaleDateString(undefined, { dateStyle: 'medium' })}, ${formatTime(ts)}` : '';
 
 /**
  * Parse a money field the way the backend does: blank is not zero, it is

@@ -15,7 +15,7 @@ import QuoteWizard from './prosource-quote-wizard';
 import Select from './components/Select';
 import { normalizeStored, mergeCartItemsIntoProducts } from './project-model';
 import {
-  fetchCatalog, CATEGORIES, DEPARTMENTS, resolveProduct, migrateItemKeys,
+  fetchCatalog, CATEGORIES, DEPARTMENTS, categoryLabel, resolveProduct, migrateItemKeys,
   colorVariants,
 } from './shop-catalog';
 import { coreColors, gray, surface } from './theme';
@@ -302,7 +302,7 @@ export default function ProSourceShop() {
    * This used to flip a local flag and clear the cart. The "your account
    * manager will review your cart" confirmation was a lie, and `quoteNotes`
    * went in the bin. It now writes a real quote record into the user's
-   * `orders` blob (the same collection Estimates & Orders reads), carrying the
+   * `orders` blob (the same collection Estimates and Orders reads), carrying the
    * notes and the full item snapshot, and only clears the cart once the write
    * has actually landed.
    *
@@ -726,7 +726,7 @@ export default function ProSourceShop() {
                       <>your account manager</>
                     )}
                     , who reviews it with member pricing and a pickup time. You can see it any
-                    time under Estimates &amp; Orders.
+                    time under Estimates and Orders.
                   </>
                 ) : (
                   <>We'll match you to the nearest ProSource showroom and an account manager will reach out within 1 business day with pricing and a pickup time.</>
@@ -745,7 +745,7 @@ export default function ProSourceShop() {
                     fontSize: 14, fontWeight: 500, color: colors.gray700, textDecoration: 'none',
                     display: 'flex', alignItems: 'center', gap: 8, background: '#fff',
                   }}>
-                    View in Estimates &amp; Orders
+                    View in Estimates and Orders
                   </Link>
                 )}
               </div>
@@ -1108,7 +1108,7 @@ export default function ProSourceShop() {
               <Home size={14} style={{ marginBottom: -2 }} />
             </span>
             <ChevronRight size={12} />
-            <span style={s.breadcrumbLink} onClick={() => { setSelectedCategory(p.category); navigate('/shop'); }}>{p.category}</span>
+            <span style={s.breadcrumbLink} onClick={() => { setSelectedCategory(p.category); navigate('/shop'); }}>{categoryLabel(p.category)}</span>
             <ChevronRight size={12} />
             <span style={{ color: colors.gray700 }}>{p.name}</span>
           </div>
@@ -1635,7 +1635,7 @@ export default function ProSourceShop() {
                 style={{ ...s.addToQuoteBtn, marginBottom: 8 }}
                 onClick={goToQuotePage}
               >
-                <ShoppingCart size={16} /> Review &amp; Submit Quote
+                <ShoppingCart size={16} /> Review and Submit Quote
               </button>
               <button
                 style={{ ...s.addToProjectBtn, justifyContent: 'center', gap: 8 }}
@@ -1713,7 +1713,7 @@ export default function ProSourceShop() {
         <div style={s.categoryTabs}>
           {categories.map(cat => (
             <button key={cat} style={s.categoryTab(selectedCategory === cat)} onClick={() => setSelectedCategory(cat)}>
-              {cat}
+              {categoryLabel(cat)}
             </button>
           ))}
         </div>

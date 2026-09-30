@@ -2,7 +2,7 @@
  * Shared order + estimate data model.
  *
  * ONE source of truth. /orders, /orders/:id and the project detail page's
- * "Estimates & Orders" tab all read the same per-user `orders` blob through
+ * "Estimates and Orders" tab all read the same per-user `orders` blob through
  * `useOrders()`. They used to carry two independent hardcoded datasets that
  * disagreed with each other (different line items, different totals, and no
  * link to the project the order belonged to).

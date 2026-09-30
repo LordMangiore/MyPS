@@ -1234,7 +1234,7 @@ const ProSourceConnections = () => {
                       cursor: addModalBusy ? 'wait' : 'pointer',
                       fontFamily: 'inherit', opacity: addModalBusy ? 0.7 : 1,
                     }}
-                  >{addModalBusy ? 'Connecting…' : 'Connect & send'}</button>
+                  >{addModalBusy ? 'Connecting…' : 'Connect and send'}</button>
                 </div>
               </div>
             )}

@@ -522,7 +522,7 @@ const ProSourceOrders = () => {
 
       {/* Page Header */}
       <div style={styles.pageHeader}>
-        <h1 style={styles.pageTitle}>Estimates & Orders</h1>
+        <h1 style={styles.pageTitle}>Estimates and Orders</h1>
         <p style={styles.pageDesc}>
           Track open orders and view history for the last three years. Use the filters to narrow down results
           by showroom, status and timeframe. Certain actions like approving and paying for orders and

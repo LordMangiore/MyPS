@@ -47,12 +47,12 @@
  * is a list with extra steps.
  */
 const TRADES = {
-  kitchenBath: 'Kitchen & Bath',
+  kitchenBath: 'Kitchen and Bath',
   flooring: 'Flooring',
-  tileStone: 'Tile & Stone',
-  cabinets: 'Cabinets & Millwork',
+  tileStone: 'Tile and Stone',
+  cabinets: 'Cabinets and Millwork',
   countertops: 'Countertops',
-  design: 'Design & Build',
+  design: 'Design and Build',
 };
 
 /** One review. `tags` drive the filter chips, so they are the review's own. */

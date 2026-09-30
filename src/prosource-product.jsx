@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { categoryLabel } from './shop-catalog';
 
 /**
  * Admin Product Manager. Reads and writes the real catalog behind
@@ -361,7 +362,7 @@ export default function ProductManager() {
               className="px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="all">All Categories</option>
-              {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+              {CATEGORIES.map((c) => <option key={c} value={c}>{categoryLabel(c)}</option>)}
             </select>
             <select
               value={filterStatus}
@@ -425,7 +426,7 @@ export default function ProductManager() {
                     </td>
                     <td className="p-4">
                       <span className="px-2 py-1 bg-gray-100 rounded text-sm">
-                        {product.category}
+                        {categoryLabel(product.category)}
                       </span>
                     </td>
                     <td className="p-4">
@@ -589,7 +590,7 @@ export default function ProductManager() {
                     onChange={(e) => setEditingProduct({ ...editingProduct, category: e.target.value })}
                     className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                   >
-                    {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+                    {CATEGORIES.map((c) => <option key={c} value={c}>{categoryLabel(c)}</option>)}
                   </select>
                 </div>
 

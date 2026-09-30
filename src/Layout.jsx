@@ -40,7 +40,7 @@ const Layout = () => {
    *
    * An account manager has no cart, buys nothing, and does not need a pro found
    * for her: she IS the showroom. So the member chrome (category nav, cart,
-   * Find a Pro, Saved Carts, Referral Bonus, Estimates & Orders) is dropped for
+   * Find a Pro, Saved Carts, Referral Bonus, Estimates and Orders) is dropped for
    * her and the work queue takes its place, because that is the one thing she
    * came here to do. What stays is what she genuinely uses: Messages and
    * Notifications (her book of business talks to her through both) and Account
@@ -356,7 +356,7 @@ const Layout = () => {
                     <Link to={homePath} style={menuItemStyle} onClick={() => setAccountMenuOpen(false)}>Dashboard</Link>
                     <Link to="/projects" style={menuItemStyle} onClick={() => setAccountMenuOpen(false)}>My Projects</Link>
                     <Link to="/settings?section=referrals" style={menuItemStyle} onClick={() => setAccountMenuOpen(false)}>Referral Bonus</Link>
-                    <Link to="/orders" style={menuItemStyle} onClick={() => setAccountMenuOpen(false)}>Estimates & Orders</Link>
+                    <Link to="/orders" style={menuItemStyle} onClick={() => setAccountMenuOpen(false)}>Estimates and Orders</Link>
                     <div style={{ borderTop: `1px solid ${gray.gray200}`, margin: '8px 0' }} />
                     <Link to="/carts" style={menuItemStyle} onClick={() => setAccountMenuOpen(false)}>Saved Carts</Link>
                     <Link to="/connections" style={menuItemStyle} onClick={() => setAccountMenuOpen(false)}>Connections</Link>

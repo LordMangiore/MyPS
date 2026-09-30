@@ -1075,7 +1075,7 @@ const ProSourceLogin = ({ initialPage = 'email', initialMode = 'signin' }) => {
       {/* Footer */}
       <footer style={{ background: colors.gray900, padding: '24px', textAlign: 'center' }}>
         <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.6)' }}>
-          ProSource Wholesale &middot; Trade pricing on flooring, cabinets &amp; countertops
+          ProSource Wholesale &middot; Trade pricing on flooring, cabinets, and countertops
         </div>
       </footer>
     </>
@@ -1796,7 +1796,7 @@ const ProSourceLogin = ({ initialPage = 'email', initialMode = 'signin' }) => {
           </div>
         </div>
 
-        <div style={{ ...s.sectionLabel, marginTop: 28 }}>Scale & spending</div>
+        <div style={{ ...s.sectionLabel, marginTop: 28 }}>Scale and spending</div>
         <div style={s.fieldRow} className={s.fieldRowClass}>
           <div style={s.field}>
             <label style={s.fieldLabel}>Number of employees</label>
@@ -1897,7 +1897,7 @@ const ProSourceLogin = ({ initialPage = 'email', initialMode = 'signin' }) => {
             {[
               { key: 'hardwood', label: 'Flooring: Hardwood' },
               { key: 'lvp', label: 'Flooring: LVP / LVT' },
-              { key: 'tile', label: 'Flooring: Tile & Stone' },
+              { key: 'tile', label: 'Flooring: Tile and Stone' },
               { key: 'carpet', label: 'Flooring: Carpet' },
               { key: 'cabinets', label: 'Cabinets' },
               { key: 'countertops', label: 'Countertops' },

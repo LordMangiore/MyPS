@@ -15,10 +15,10 @@ import {
   Check,
   X,
   ArrowLeft,
-  Tag,
   Search,
   Mail,
-  AlertCircle
+  AlertCircle,
+  Store,
 } from 'lucide-react';
 import AppointmentModal from './prosource-appointment-modal';
 import Select from './components/Select';
@@ -1467,7 +1467,7 @@ export default function ProSourceSettingsRedesign() {
             {/* Left Column - Quick Access */}
             <div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {/* Estimates & Orders Card */}
+                {/* Estimates and Orders Card */}
                 <Link
                   to="/orders"
                   onMouseEnter={() => setHoveredCard('orders')}
@@ -1488,7 +1488,7 @@ export default function ProSourceSettingsRedesign() {
                   }}>
                   <FileText size={28} color={hoveredCard === 'orders' ? '#fff' : colors.darkBlue} />
                   <div>
-                    <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 4, color: hoveredCard === 'orders' ? '#fff' : colors.gray900 }}>Estimates & Orders</div>
+                    <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 4, color: hoveredCard === 'orders' ? '#fff' : colors.gray900 }}>Estimates and Orders</div>
                     <div style={{ fontSize: 13, color: hoveredCard === 'orders' ? 'rgba(255,255,255,0.8)' : colors.gray500, marginBottom: 12 }}>Track open orders and view history</div>
                     <span style={{ fontSize: 13, fontWeight: 500, color: hoveredCard === 'orders' ? '#fff' : colors.darkBlue }}>View orders →</span>
                   </div>
@@ -1636,25 +1636,29 @@ export default function ProSourceSettingsRedesign() {
                     bg: '#e8f0fe',
                     icon: <Search size={32} color={colors.darkBlue} style={{ marginBottom: 12 }} />,
                     heading: 'Browse 50,000+ products',
-                    sub: 'Member pricing on flooring, cabinets & countertops',
+                    sub: 'Member pricing on flooring, cabinets, and countertops',
                     linkText: 'Shop Now →',
                     linkTo: '/shop',
                   },
                   {
-                    title: 'Promos',
-                    bg: '#fef3c7',
-                    icon: <Tag size={32} color="#92400e" style={{ marginBottom: 12 }} />,
-                    heading: 'Spring Flooring Event',
-                    sub: 'Save up to 30% on select hardwood & LVP through April',
-                    linkText: 'View Promos →',
-                    linkTo: '/shop',
+                    // Was a "Spring Flooring Event, save up to 30%" promo. The
+                    // brand guide rules out discount and urgency CTAs, and there
+                    // was no promo behind it. The showroom visit is real: this
+                    // opens the same appointment request as the team card.
+                    title: 'Your Showroom',
+                    bg: gray.gray100,
+                    icon: <Store size={32} color={colors.darkBlue} style={{ marginBottom: 12 }} />,
+                    heading: 'See it in person',
+                    sub: 'Walk the showroom with your account manager and bring your client along.',
+                    linkText: 'Explore the showroom →',
+                    onClick: () => setAppointmentModalOpen(true),
                   },
                   {
                     // Was "Create your first room visualization" pointing at
                     // nothing, because there is no visualizer to point at.
                     // Rooms are real project entities, so this now promises the
                     // thing the app can actually do and links to where it happens.
-                    title: 'Tips & Resources',
+                    title: 'Tips and Resources',
                     bg: '#e3f2fd',
                     icon: <Home size={32} color={colors.darkBlue} style={{ marginBottom: 12 }} />,
                     heading: 'Set up your first project',
@@ -1701,7 +1705,11 @@ export default function ProSourceSettingsRedesign() {
                           fallback rendered a bare <a> that looked like a link and
                           did nothing, so it is gone rather than left waiting to
                           catch the next slide someone adds without a destination. */}
-                      <Link to={slide.linkTo} style={{ fontSize: 13, color: colors.darkBlue, fontWeight: 500, textDecoration: 'none' }}>{slide.linkText}</Link>
+                      {slide.onClick ? (
+                        <button type="button" onClick={slide.onClick} style={{ fontSize: 13, color: colors.darkBlue, fontWeight: 500, background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontFamily: 'inherit' }}>{slide.linkText}</button>
+                      ) : (
+                        <Link to={slide.linkTo} style={{ fontSize: 13, color: colors.darkBlue, fontWeight: 500, textDecoration: 'none' }}>{slide.linkText}</Link>
+                      )}
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'center', gap: 6, marginTop: 12 }}>
                       {slides.map((_, i) => (
@@ -2361,7 +2369,7 @@ export default function ProSourceSettingsRedesign() {
             </div>
           </div>
 
-          {/* Login & Security.
+          {/* Login and Security.
               Both controls here used to be dead, and the password one was worse
               than dead: this app is OTP-only and has no password, so a row of
               dots above an "Update" button described an account that does not
@@ -2371,7 +2379,7 @@ export default function ProSourceSettingsRedesign() {
               support operation, not a self-serve toggle. */}
           <div style={styles.card}>
             <div style={styles.cardHeader}>
-              <h3 style={styles.cardTitle}>Login & Security</h3>
+              <h3 style={styles.cardTitle}>Login and Security</h3>
             </div>
             <div style={styles.cardBody}>
               <div style={styles.settingRow}>
