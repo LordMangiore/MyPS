@@ -1136,8 +1136,10 @@ const ProSourceLogin = ({ initialPage = 'email', initialMode = 'signin' }) => {
               { n: '2', title: 'Connect with your pro', body: "Bring in the contractor or designer you already work with, or find a trade pro who's a member of your local showroom." },
               { n: '3', title: 'Make your selections together', body: 'Explore products in a private showroom and online with your pro, and keep every decision in one shared project.' },
             ]).map(step => (
-              <div key={step.n} style={{ textAlign: 'left' }}>
-                <div style={{
+              // Stacked on phones under a centered heading, so centered there;
+              // left-aligned once they sit side by side.
+              <div key={step.n} className="text-center md:text-left">
+                <div className="mx-auto md:mx-0" style={{
                   width: 40, height: 40, borderRadius: '50%',
                   background: colors.bluePale, color: colors.blue,
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
