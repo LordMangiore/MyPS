@@ -19,6 +19,8 @@ import {
   Mail,
   AlertCircle,
   Store,
+  Users,
+  CalendarDays,
 } from 'lucide-react';
 import AppointmentModal from './prosource-appointment-modal';
 import Select from './components/Select';
@@ -548,7 +550,7 @@ export default function ProSourceSettingsRedesign() {
   const prefsStatus = prefsSaving ? (
     <span style={{ fontSize: 13, color: colors.gray500 }}>Saving…</span>
   ) : prefsError ? (
-    <span style={{ fontSize: 13, color: colors.red, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+    <span style={{ fontSize: 13, color: colors.error, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
       <AlertCircle size={14} /> {prefsError}
     </span>
   ) : prefsSavedAt ? (
@@ -1155,7 +1157,7 @@ export default function ProSourceSettingsRedesign() {
       right: 20,
       top: '50%',
       transform: 'translateY(-50%)',
-      color: colors.gray300,
+      color: colors.gray400,
       fontSize: 20,
     },
     createProjectCard: {
@@ -1426,14 +1428,15 @@ export default function ProSourceSettingsRedesign() {
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                     {[
-                      { icon: '🛒', text: 'Browse products with member pricing' },
-                      { icon: '📋', text: 'Create estimates and place orders' },
-                      { icon: '👥', text: 'Connect with clients and share projects' },
-                      { icon: '📅', text: 'Schedule showroom appointments' },
-                    ].map((item, i) => (
+                      // Brand guide: one icon style, primary red, used like bullets.
+                      { Icon: ShoppingCart, text: 'Browse products with member pricing' },
+                      { Icon: FileText, text: 'Create estimates and place orders' },
+                      { Icon: Users, text: 'Connect with clients and share projects' },
+                      { Icon: CalendarDays, text: 'Schedule showroom appointments' },
+                    ].map(({ Icon, text }, i) => (
                       <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                        <span style={{ fontSize: 16 }}>{item.icon}</span>
-                        <span style={{ fontSize: 13, color: colors.gray700 }}>{item.text}</span>
+                        <Icon size={18} color={colors.red} strokeWidth={2} aria-hidden="true" style={{ flexShrink: 0 }} />
+                        <span style={{ fontSize: 13, color: colors.gray700 }}>{text}</span>
                       </div>
                     ))}
                   </div>
@@ -2575,7 +2578,7 @@ export default function ProSourceSettingsRedesign() {
                         ? ' because email delivery is not configured in this environment.'
                         : '.'}
                       {inviteResult.error && (
-                        <><br /><span style={{ fontSize: 12, color: colors.red }}>{inviteResult.error}</span></>
+                        <><br /><span style={{ fontSize: 12, color: colors.error }}>{inviteResult.error}</span></>
                       )}
                     </>
                   )}

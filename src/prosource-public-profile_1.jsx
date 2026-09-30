@@ -1633,7 +1633,7 @@ const ProSourcePublicProfile = () => {
               </div>
               <div style={styles.cardBody}>
                 <p style={styles.reviewHighlights}>
-                  Customers rated this pro highly for{' '}
+                  Clients rated this pro highly for{' '}
                   <span style={styles.highlightBold}>work quality</span>,{' '}
                   <span style={styles.highlightBold}>professionalism</span>, and{' '}
                   <span style={styles.highlightBold}>value</span>.

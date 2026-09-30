@@ -749,7 +749,7 @@ const ProSourceConnections = () => {
         <div style={{
           display: 'flex', alignItems: 'center', gap: 8,
           padding: '10px 14px', marginBottom: 16,
-          background: '#fef2f2', border: `1px solid ${colors.red}`,
+          background: '#fef2f2', border: `1px solid ${colors.error}`,
           borderRadius: 6, fontSize: 13, color: colors.red,
         }}>
           <AlertCircle size={15} /> {actionError}
@@ -1137,12 +1137,12 @@ const ProSourceConnections = () => {
                     onKeyDown={(e) => { if (e.key === 'Enter') lookupEmail(); }}
                     style={{
                       width: '100%', padding: '12px 14px',
-                      border: `1px solid ${addError ? colors.red : colors.gray300}`,
+                      border: `1px solid ${addError ? colors.error : colors.gray300}`,
                       borderRadius: 6, fontSize: 14, outline: 'none',
                       boxSizing: 'border-box', fontFamily: 'inherit',
                     }}
                   />
-                  {addError && <div style={{ fontSize: 12, color: colors.red, marginTop: 6 }}>{addError}</div>}
+                  {addError && <div style={{ fontSize: 12, color: colors.error, marginTop: 6 }}>{addError}</div>}
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <button
@@ -1211,7 +1211,7 @@ const ProSourceConnections = () => {
                     Saved as the opening message of your conversation with them.
                   </div>
                 </div>
-                {addError && <div style={{ fontSize: 12, color: colors.red, marginBottom: 12 }}>{addError}</div>}
+                {addError && <div style={{ fontSize: 12, color: colors.error, marginBottom: 12 }}>{addError}</div>}
                 <div style={{ display: 'flex', gap: 12 }}>
                   <button
                     onClick={() => { setAddModalStep('search'); setAddError(''); }}
@@ -1272,7 +1272,7 @@ const ProSourceConnections = () => {
                     Included in the invitation email they receive.
                   </div>
                 </div>
-                {addError && <div style={{ fontSize: 12, color: colors.red, marginBottom: 12 }}>{addError}</div>}
+                {addError && <div style={{ fontSize: 12, color: colors.error, marginBottom: 12 }}>{addError}</div>}
                 <div style={{ display: 'flex', gap: 12 }}>
                   <button
                     onClick={() => { setAddModalStep('search'); setAddError(''); }}
@@ -1332,7 +1332,7 @@ const ProSourceConnections = () => {
                       <strong>{addModalEmail.split('@')[0]}</strong> now shows in your list as a pending
                       invite{inviteMessage.trim() ? ', along with your note' : ''}. They stay pending until they join.
                       {inviteResult?.error && (
-                        <><br /><span style={{ fontSize: 12, color: colors.red }}>{inviteResult.error}</span></>
+                        <><br /><span style={{ fontSize: 12, color: colors.error }}>{inviteResult.error}</span></>
                       )}
                     </>
                   )}

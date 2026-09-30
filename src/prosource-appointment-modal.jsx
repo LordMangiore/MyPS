@@ -382,7 +382,7 @@ const AppointmentModal = ({ isOpen, onClose }) => {
                 style={styles.textarea}
               />
               {submitError && (
-                <div style={{ ...styles.statusNote, color: colors.red }}>
+                <div style={{ ...styles.statusNote, color: colors.error }}>
                   <AlertCircle size={18} style={{ flexShrink: 0 }} />
                   <span>Nothing was sent. {submitError}.</span>
                 </div>

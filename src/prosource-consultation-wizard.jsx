@@ -350,7 +350,7 @@ const ConsultationWizard = ({ isOpen, onClose, pro = null }) => {
                   />
                 </Field>
               </div>
-              {error && <div style={{ fontSize: 12, color: colors.red, marginTop: 10 }}>{error}</div>}
+              {error && <div style={{ fontSize: 12, color: colors.error, marginTop: 10 }}>{error}</div>}
             </Step>
           )}
 

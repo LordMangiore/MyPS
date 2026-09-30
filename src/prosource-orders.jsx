@@ -646,7 +646,7 @@ const ProSourceOrders = () => {
 
       {loadStatus === 'error' && (
         <div style={styles.emptyState}>
-          <AlertCircle size={28} color={colors.red} style={{ marginBottom: 12 }} />
+          <AlertCircle size={28} color={colors.error} style={{ marginBottom: 12 }} />
           <div style={styles.emptyTitle}>We couldn't load your {activeType}</div>
           <div style={{ marginBottom: 16 }}>{loadError}</div>
           <button onClick={reload} style={styles.btnOutline}>Try again</button>

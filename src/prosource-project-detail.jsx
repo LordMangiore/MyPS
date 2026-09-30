@@ -1838,7 +1838,7 @@ export default function ProjectDetailPage() {
           <div style={styles.breadcrumb}>{backLink}</div>
           <div style={styles.emptyState}>
             <div style={styles.emptyIcon}>
-              <AlertCircle size={40} color={loadError ? colors.red : colors.gray300} />
+              <AlertCircle size={40} color={loadError ? colors.error : colors.gray300} />
             </div>
             <h3 style={styles.emptyTitle}>
               {loadError ? "We couldn't load this project" : 'Project not found'}

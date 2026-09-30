@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { categoryLabel } from './shop-catalog';
+import { FileSpreadsheet } from 'lucide-react';
 
 /**
  * Admin Product Manager. Reads and writes the real catalog behind
@@ -322,7 +323,7 @@ export default function ProductManager() {
               onClick={() => { setShowUpload(true); setImportResult(null); setImportError(null); }}
               className="bg-blue-700 hover:bg-blue-600 px-4 py-2 rounded flex items-center gap-2"
             >
-              <span>📄</span> Upload CSV
+              <FileSpreadsheet size={16} aria-hidden="true" /> Upload CSV
             </button>
             <button
               onClick={handleAddProduct}
@@ -420,7 +421,7 @@ export default function ProductManager() {
                     </td>
                     <td className="p-4">
                       <div className="font-mono text-sm">{product.sku}</div>
-                      <div className="text-xs text-gray-400">
+                      <div className="text-xs text-gray-500">
                         {product.parentSku ? `Parent: ${product.parentSku}` : 'No parent'}
                       </div>
                     </td>
@@ -431,7 +432,7 @@ export default function ProductManager() {
                     </td>
                     <td className="p-4">
                       <div className="font-medium">{money(product.listPrice)}</div>
-                      <div className="text-xs text-gray-400">per {product.unit}</div>
+                      <div className="text-xs text-gray-500">per {product.unit}</div>
                     </td>
                     <td className="p-4">
                       <button
@@ -504,7 +505,7 @@ export default function ProductManager() {
                       className="w-32 h-32 object-cover rounded bg-gray-100 shrink-0"
                     />
                   ) : (
-                    <div className="w-32 h-32 rounded bg-gray-100 shrink-0 flex items-center justify-center text-gray-400 text-sm">
+                    <div className="w-32 h-32 rounded bg-gray-100 shrink-0 flex items-center justify-center text-gray-500 text-sm">
                       No image
                     </div>
                   )}
@@ -519,7 +520,7 @@ export default function ProductManager() {
                       placeholder="https://…"
                       className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
-                    <p className="text-xs text-gray-400 mt-1">
+                    <p className="text-xs text-gray-500 mt-1">
                       Paste a hosted image URL. The preview updates as you type.
                     </p>
                   </div>
@@ -552,7 +553,7 @@ export default function ProductManager() {
                     }`}
                   />
                   {isNewProduct && (
-                    <p className="text-xs text-gray-400 mt-1">Letters, digits, dot, dash, underscore.</p>
+                    <p className="text-xs text-gray-500 mt-1">Letters, digits, dot, dash, underscore.</p>
                   )}
                 </div>
 
@@ -685,7 +686,7 @@ export default function ProductManager() {
                 <div className="col-span-2 border-t pt-4 mt-2">
                   <h3 className="font-medium mb-3">Specifications</h3>
                   {Object.keys(editingProduct.specs || {}).length === 0 && (
-                    <p className="text-sm text-gray-400 mb-3">No specifications yet.</p>
+                    <p className="text-sm text-gray-500 mb-3">No specifications yet.</p>
                   )}
                   <div className="grid grid-cols-3 gap-3">
                     {Object.entries(editingProduct.specs || {}).map(([key, value]) => (
@@ -696,7 +697,7 @@ export default function ProductManager() {
                           </label>
                           <button
                             onClick={() => removeSpec(key)}
-                            className="text-xs text-gray-400 hover:text-red-600"
+                            className="text-xs text-gray-500 hover:text-red-600"
                             title={`Remove ${key}`}
                           >
                             ×
@@ -798,13 +799,13 @@ export default function ProductManager() {
                   dragOver ? 'border-blue-500 bg-blue-50' : ''
                 }`}
               >
-                <div className="text-4xl mb-3">📄</div>
+                <FileSpreadsheet size={40} className="mx-auto mb-3 text-gray-400" aria-hidden="true" />
                 {importing ? (
                   <p className="text-gray-600">Importing…</p>
                 ) : (
                   <>
                     <p className="text-gray-600 mb-2">Drag and drop your CSV file here</p>
-                    <p className="text-gray-400 text-sm mb-4">or</p>
+                    <p className="text-gray-500 text-sm mb-4">or</p>
                     <button
                       onClick={() => fileInputRef.current?.click()}
                       className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
@@ -841,7 +842,7 @@ export default function ProductManager() {
                 <p className="text-xs text-gray-500 font-mono">
                   sku, parent_sku, name, brand, category, subcategory, price, unit, sf_per_box, image, color_name, status
                 </p>
-                <p className="text-xs text-gray-400 mt-2">
+                <p className="text-xs text-gray-500 mt-2">
                   Only <span className="font-mono">sku</span> is required. Rows matching an existing SKU update
                   just the columns present. Category must be one of: {CATEGORIES.join(', ')}.
                 </p>
