@@ -2876,7 +2876,7 @@ export default function ProjectDetailPage() {
                     <div style={{ fontSize: 13, color: colors.gray500, textAlign: 'center', padding: '12px 0' }}>
                       {isGuest
                         ? 'Nobody has been added to this project team yet.'
-                        : 'No team members yet. Click + Add to bring people in.'}
+                        : 'No one on the project team yet. Click + Add to bring in your connections.'}
                     </div>
                   ) : (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
