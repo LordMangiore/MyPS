@@ -490,8 +490,11 @@ export default function ProSourceSettingsRedesign() {
       if (!last || last.isMe) return; // only show inbound messages as activity
       items.push({
         ts: last.timestamp || t.updatedAt || 0,
-        text: `${t.name} sent you a message:`,
-        target: last.text,
+        // Bold goes on who, not on the message: a whole sentence in bold
+        // makes every row heavy. The message shows as a one-line preview.
+        actor: t.name,
+        text: 'sent you a message',
+        preview: last.text,
         to: '/messages',
         link: 'View thread →',
       });
@@ -1713,7 +1716,7 @@ export default function ProSourceSettingsRedesign() {
                     borderRadius: 12,
                     overflow: 'hidden',
                   }}>
-                    <h3 style={{ fontSize: 16, fontWeight: 600, color: colors.gray900, margin: 0, padding: '20px 20px 4px' }}>Your Activity</h3>
+                    <h3 style={{ fontSize: 16, fontWeight: 600, color: colors.gray900, margin: 0, padding: '20px 16px 4px' }}>Your Activity</h3>
                     {activityItems.length === 0 ? (
                       <div style={{ padding: 24, fontSize: 14, color: colors.gray500, textAlign: 'center' }}>
                         No recent activity yet. Create a project or chat with your account manager to see updates here.
@@ -1727,18 +1730,18 @@ export default function ProSourceSettingsRedesign() {
                             borderBottom: i < arr.length - 1 ? `1px solid ${colors.gray100}` : 'none',
                           }}
                         >
-                          <div
-                            style={{
-                              fontSize: 14, color: colors.gray900, marginBottom: 4,
-                              display: '-webkit-box',
-                              WebkitLineClamp: 2,
-                              WebkitBoxOrient: 'vertical',
-                              overflow: 'hidden',
-                              lineHeight: 1.45,
-                            }}
-                          >
-                            {item.text} {item.target && <strong>{item.target}</strong>}
+                          <div style={{ fontSize: 14, color: colors.gray900, marginBottom: 2, lineHeight: 1.45 }}>
+                            {item.actor && <strong>{item.actor}</strong>} {item.text}
+                            {item.target && <> <strong>{item.target}</strong></>}
                           </div>
+                          {item.preview && (
+                            <div style={{
+                              fontSize: 14, color: colors.gray600, marginBottom: 4, lineHeight: 1.45,
+                              whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                            }}>
+                              “{item.preview}”
+                            </div>
+                          )}
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                             <span style={{ fontSize: 12, color: colors.gray500 }}>{formatActivityDate(item.ts)}</span>
                             <Link to={item.to} style={{ fontSize: 13, color: colors.darkBlue, fontWeight: 500, textDecoration: 'none' }}>{item.link}</Link>
